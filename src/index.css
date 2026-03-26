@@ -1,7 +1,53 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* Typography */
+  --font-sans:     "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:     "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-headline: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* IFES Design System — Tonal Palette */
+  --color-primary:                  #006b1f;
+  --color-on-primary:               #ffffff;
+  --color-primary-container:        #0b872b;
+  --color-primary-fixed:            #8dfa8f;
+  --color-on-primary-fixed:         #002205;
+
+  --color-secondary:                #ba0816;
+  --color-on-secondary:             #ffffff;
+  --color-secondary-container:      #de2c2b;
+
+  --color-surface:                  #f8f9fa;
+  --color-surface-bright:           #f8f9fa;
+  --color-surface-dim:              #d9dadb;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low:    #f3f4f5;
+  --color-surface-container:        #edeeef;
+  --color-surface-container-high:   #e7e8e9;
+  --color-surface-container-highest:#e1e3e4;
+
+  --color-on-surface:               #191c1d;
+  --color-on-surface-variant:       #3f4a3c;
+  --color-outline:                  #6f7a6b;
+  --color-outline-variant:          #becab9;
+
+  --color-error:                    #ba1a1a;
+  --color-error-container:          #ffdad6;
+  --color-on-error-container:       #93000a;
+}
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Elevation helpers */
+.ghost-lift {
+  box-shadow: 0 10px 40px rgba(25, 28, 29, 0.04);
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
