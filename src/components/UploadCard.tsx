@@ -27,24 +27,20 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
 
-  // Auto-calculate quantity based on dates
+  // Auto-calculate quantity based on dates (only for items with quantidade_automatica)
   useEffect(() => {
-    if (dataInicio && dataFim && !isUnlocked) {
+    if (!item.quantidade_automatica || isUnlocked) return;
+    if (dataInicio && dataFim) {
       const start = parseISO(dataInicio);
       const end = parseISO(dataFim);
       if (isValid(start) && isValid(end) && end >= start) {
         const days = differenceInDays(end, start) + 1;
-        // Regra de 1 mês = 30 dias
-        if (item.unidade_medida === 'mês') {
-          setQuantidade(Math.floor(days / 30));
-        } else {
-          setQuantidade(1); // Default para outras unidades
-        }
+        setQuantidade(parseFloat((days / 30).toFixed(2)));
       } else {
         setQuantidade(0);
       }
     }
-  }, [dataInicio, dataFim, isUnlocked, item.unidade_medida]);
+  }, [dataInicio, dataFim, isUnlocked, item.quantidade_automatica]);
 
   const handleSave = () => {
     if (!servidor) return;
@@ -127,8 +123,15 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
             transition={{ duration: 0.2 }}
           >
             <CardContent className="pt-0 pb-4 px-4 border-t border-gray-100">
-              <div className="mt-4 p-3 bg-blue-50 text-blue-800 text-sm italic rounded-md border border-blue-100 mb-6">
-                <strong>Regra de Aceite:</strong> {item.regra_aceite}
+              <div className="mt-4 space-y-2 mb-6">
+                <div className="p-3 bg-blue-50 text-blue-800 text-sm italic rounded-md border border-blue-100">
+                  <strong>Regra de Aceite:</strong> {item.regra_aceite}
+                </div>
+                {item.documentos_comprobatorios && (
+                  <div className="p-3 bg-amber-50 text-amber-800 text-sm rounded-md border border-amber-100">
+                    <strong>Documentos comprobatórios:</strong> {item.documentos_comprobatorios}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
