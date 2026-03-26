@@ -1,12 +1,13 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { RSC_THRESHOLDS } from '../data/mock';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { AlertCircle, CheckCircle2, Lock, LogOut } from 'lucide-react';
 
 export default function Dashboard() {
-  const { servidor, logout } = useAppContext();
+  const { servidor, lancamentos, logout } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -17,6 +18,22 @@ export default function Dashboard() {
     logout();
     navigate('/');
   };
+
+  const totalPontos = lancamentos
+    .filter(l => l.servidor_id === servidor.id)
+    .reduce((acc, l) => acc + l.pontos_calculados, 0);
+
+  const getRscProgress = (nivel: keyof typeof RSC_THRESHOLDS) => {
+    const threshold = RSC_THRESHOLDS[nivel];
+    const pct = Math.min(100, Math.round((totalPontos / threshold) * 100));
+    const faltam = Math.max(0, threshold - totalPontos);
+    const atingido = totalPontos >= threshold;
+    return { pct, faltam, atingido, threshold };
+  };
+
+  const rsc1 = getRscProgress('RSC-I');
+  const rsc2 = getRscProgress('RSC-II');
+  const rsc3 = getRscProgress('RSC-III');
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -73,54 +90,79 @@ export default function Dashboard() {
 
         {/* Área Central (Cards de Resumo) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
+          {/* RSC-I */}
+          <Card className={!rsc1.atingido ? '' : ''}>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg text-gray-700">RSC-I</CardTitle>
-              <CardDescription>Progresso para o nível I</CardDescription>
+              <CardDescription>Mínimo: {RSC_THRESHOLDS['RSC-I']} pts</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-2 mb-2">
-                <span className="text-4xl font-bold text-gray-900">100%</span>
+                <span className="text-4xl font-bold text-gray-900">{rsc1.pct}%</span>
+                <span className="text-sm text-gray-500 mb-1">/ {RSC_THRESHOLDS['RSC-I']} pts</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-green-600 h-2.5 rounded-full" style={{ width: '100%' }}></div>
+                <div className="bg-green-600 h-2.5 rounded-full transition-all" style={{ width: `${rsc1.pct}%` }}></div>
               </div>
-              <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
-                <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
-              </p>
+              {rsc1.atingido ? (
+                <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
+                  <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-2">Faltam {rsc1.faltam.toFixed(2)} pontos</p>
+              )}
             </CardContent>
           </Card>
 
-          <Card>
+          {/* RSC-II */}
+          <Card className={!rsc1.atingido ? 'opacity-60' : ''}>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg text-gray-700">RSC-II</CardTitle>
-              <CardDescription>Progresso para o nível II</CardDescription>
+              <CardDescription>Mínimo: {RSC_THRESHOLDS['RSC-II']} pts</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-2 mb-2">
-                <span className="text-4xl font-bold text-gray-900">45%</span>
-                <span className="text-sm text-gray-500 mb-1">/ 100 pts</span>
+                <span className="text-4xl font-bold text-gray-900">{rsc2.pct}%</span>
+                <span className="text-sm text-gray-500 mb-1">/ {RSC_THRESHOLDS['RSC-II']} pts</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: '45%' }}></div>
+                <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: `${rsc2.pct}%` }}></div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">Faltam 55 pontos</p>
+              {rsc2.atingido ? (
+                <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
+                  <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-2">
+                  {!rsc1.atingido ? 'Requer RSC-I concluído' : `Faltam ${rsc2.faltam.toFixed(2)} pontos`}
+                </p>
+              )}
             </CardContent>
           </Card>
 
-          <Card className="opacity-60">
+          {/* RSC-III */}
+          <Card className={!rsc2.atingido ? 'opacity-60' : ''}>
             <CardHeader className="pb-2">
               <CardTitle className="text-lg text-gray-700">RSC-III</CardTitle>
-              <CardDescription>Progresso para o nível III</CardDescription>
+              <CardDescription>Mínimo: {RSC_THRESHOLDS['RSC-III']} pts</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-end gap-2 mb-2">
-                <span className="text-4xl font-bold text-gray-900">0%</span>
+                <span className="text-4xl font-bold text-gray-900">{rsc3.pct}%</span>
+                <span className="text-sm text-gray-500 mb-1">/ {RSC_THRESHOLDS['RSC-III']} pts</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-gray-300 h-2.5 rounded-full" style={{ width: '0%' }}></div>
+                <div className="bg-purple-600 h-2.5 rounded-full transition-all" style={{ width: `${rsc3.pct}%` }}></div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">Requer RSC-II concluído</p>
+              {rsc3.atingido ? (
+                <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
+                  <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-2">
+                  {!rsc2.atingido ? 'Requer RSC-II concluído' : `Faltam ${rsc3.faltam.toFixed(2)} pontos`}
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
