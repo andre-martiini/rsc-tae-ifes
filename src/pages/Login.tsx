@@ -1,29 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppContext } from '../context/AppContext';
 import { toast } from 'sonner';
 
 export default function Login() {
-  const [identifier, setIdentifier] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAppContext();
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!identifier.trim()) return;
-
+  const handleAccess = () => {
     setLoading(true);
-    if (login(identifier.trim())) {
-      toast.success('Link de acesso enviado para seu e-mail institucional!');
-      setTimeout(() => {
-        setLoading(false);
-        navigate('/create-password');
-      }, 1500);
-    } else {
+    toast.success('Acesso direto liberado no protótipo.');
+
+    window.setTimeout(() => {
       setLoading(false);
-      toast.error('SIAPE ou e-mail não encontrado na base do SIGRH.');
-    }
+      navigate('/dashboard');
+    }, 500);
   };
 
   return (
@@ -31,7 +21,6 @@ export default function Login() {
       className="min-h-screen flex flex-col items-center justify-center p-6"
       style={{ background: 'var(--color-surface)' }}
     >
-      {/* Background decorative blobs */}
       <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
         <div
           className="absolute -top-[10%] -right-[5%] w-[40%] h-[40%] rounded-full"
@@ -44,7 +33,6 @@ export default function Login() {
       </div>
 
       <main className="w-full max-w-xl flex flex-col items-center">
-        {/* Logo */}
         <div className="mb-12 flex justify-center">
           <div
             className="relative w-24 h-24 rounded-full flex items-center justify-center ghost-lift"
@@ -52,7 +40,7 @@ export default function Login() {
           >
             <img
               src="/logo_ifes.png"
-              alt="Logo IFES — Instituto Federal do Espírito Santo"
+              alt="Logo IFES - Instituto Federal do Espirito Santo"
               className="w-16 h-16 object-contain"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
@@ -69,13 +57,12 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Heading */}
         <header className="text-center mb-10">
           <h1
             className="font-headline font-black text-3xl md:text-4xl tracking-tighter leading-tight mb-4"
             style={{ color: 'var(--color-on-surface)' }}
           >
-            Reconhecimento de Saberes e Competências — RSC-TAE
+            Reconhecimento de Saberes e Competencias - RSC-TAE
           </h1>
           <div
             className="h-1 w-16 mx-auto rounded-full"
@@ -83,7 +70,6 @@ export default function Login() {
           />
         </header>
 
-        {/* Card */}
         <div
           className="w-full p-8 md:p-12 rounded-xl ghost-lift"
           style={{
@@ -91,49 +77,15 @@ export default function Login() {
             border: '1px solid rgba(190,202,185,0.15)',
           }}
         >
-          <form className="space-y-8" onSubmit={handleLogin}>
-            {/* Input */}
-            <div className="space-y-3">
-              <label
-                htmlFor="siape"
-                className="block text-xs font-bold uppercase tracking-widest ml-1"
-                style={{ color: 'var(--color-on-surface-variant)', fontFamily: 'var(--font-headline)' }}
-              >
-                SIAPE ou E-mail Institucional
-              </label>
-              <div className="relative">
-                <div
-                  className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"
-                  style={{ color: 'var(--color-outline)' }}
-                >
-                  <span className="material-symbols-outlined text-[20px]">account_circle</span>
-                </div>
-                <input
-                  id="siape"
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="0000000 ou nome.sobrenome@ifes.edu.br"
-                  required
-                  className="block w-full pl-12 pr-4 py-4 rounded-lg font-medium transition-all outline-none focus:ring-0"
-                  style={{
-                    background: 'var(--color-surface-container-low)',
-                    border: '0',
-                    borderBottom: '2px solid transparent',
-                    color: 'var(--color-on-surface)',
-                  }}
-                  onFocus={(e) => (e.target.style.borderBottomColor = 'var(--color-primary)')}
-                  onBlur={(e) => (e.target.style.borderBottomColor = 'transparent')}
-                />
-              </div>
-              <p className="text-xs ml-1" style={{ color: 'var(--color-outline)' }}>
-                Dica: use <strong>1234567</strong> ou <strong>joao.silva@ifes.edu.br</strong> para testar.
-              </p>
-            </div>
+          <div className="space-y-8">
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
+              O prototipo esta com acesso livre nesta etapa. O mock de login e a criacao de senha
+              foram temporariamente desativados para facilitar a validacao do sistema.
+            </p>
 
-            {/* Submit button */}
             <button
-              type="submit"
+              type="button"
+              onClick={handleAccess}
               disabled={loading}
               className="w-full py-5 rounded-xl font-headline font-bold text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-60"
               style={{
@@ -142,12 +94,11 @@ export default function Login() {
                 boxShadow: '0 4px 24px rgba(0,107,31,0.12)',
               }}
             >
-              <span>{loading ? 'Enviando...' : 'Receber Link de Acesso'}</span>
+              <span>{loading ? 'Acessando...' : 'Acessar sistema'}</span>
               {!loading && <span className="material-symbols-outlined">arrow_forward</span>}
             </button>
-          </form>
+          </div>
 
-          {/* Security footnote */}
           <div
             className="mt-10 pt-8 flex gap-4 items-start"
             style={{ borderTop: '1px solid rgba(190,202,185,0.25)' }}
@@ -164,10 +115,8 @@ export default function Login() {
               </span>
             </div>
             <p className="text-xs md:text-sm leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-              Este sistema utiliza autenticação segura via e-mail institucional. Para garantir a
-              integridade do processo de RSC, certifique-se de que seus dados no SIAPE estejam
-              atualizados. Seus dados são processados em conformidade com a LGPD e normativas
-              internas do IFES.
+              Este fluxo ainda opera como prototipo. A autenticacao institucional, as validacoes
+              definitivas e a integracao com as bases oficiais serao conectadas em outra etapa.
             </p>
           </div>
 
@@ -182,13 +131,12 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="mt-12 text-center">
           <p
             className="text-[0.7rem] uppercase tracking-widest font-semibold"
             style={{ color: 'var(--color-outline)', fontFamily: 'var(--font-headline)' }}
           >
-            Instituto Federal do Espírito Santo
+            Instituto Federal do Espirito Santo
           </p>
         </footer>
       </main>
