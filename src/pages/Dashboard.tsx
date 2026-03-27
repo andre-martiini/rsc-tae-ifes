@@ -1,13 +1,41 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { BookOpenText, CheckCircle2, ChevronRight } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
-import { RSC_THRESHOLDS } from '../data/mock';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { AlertCircle, CheckCircle2, Lock, LogOut } from 'lucide-react';
+import { RSC_LEVELS } from '../data/mock';
+import { Card, CardContent } from '../components/ui/card';
+import { getEligibleRscLevel } from '../lib/rsc';
+import AppHeader from '../components/AppHeader';
+
+const levelAccentClasses = [
+  {
+    bar: 'bg-emerald-600',
+    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  {
+    bar: 'bg-sky-600',
+    chip: 'bg-sky-50 text-sky-700 border-sky-200',
+  },
+  {
+    bar: 'bg-indigo-600',
+    chip: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+  {
+    bar: 'bg-amber-600',
+    chip: 'bg-amber-50 text-amber-700 border-amber-200',
+  },
+  {
+    bar: 'bg-rose-600',
+    chip: 'bg-rose-50 text-rose-700 border-rose-200',
+  },
+  {
+    bar: 'bg-slate-700',
+    chip: 'bg-slate-100 text-slate-700 border-slate-200',
+  },
+];
 
 export default function Dashboard() {
-  const { servidor, lancamentos, logout } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo, logout } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -19,164 +47,217 @@ export default function Dashboard() {
     navigate('/');
   };
 
-  const totalPontos = lancamentos
-    .filter(l => l.servidor_id === servidor.id)
-    .reduce((acc, l) => acc + l.pontos_calculados, 0);
+  const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
+  const totalPontos = lancamentosDoServidor.reduce((acc, lancamento) => acc + lancamento.pontos_calculados, 0);
+  const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
+  const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
 
-  const getRscProgress = (nivel: keyof typeof RSC_THRESHOLDS) => {
-    const threshold = RSC_THRESHOLDS[nivel];
-    const pct = Math.min(100, Math.round((totalPontos / threshold) * 100));
-    const faltam = Math.max(0, threshold - totalPontos);
-    const atingido = totalPontos >= threshold;
-    return { pct, faltam, atingido, threshold };
-  };
+  const nivelPleiteavel = nivelElegivel
+    ? RSC_LEVELS.map((nivel, index) => ({
+        ...nivel,
+        accent: levelAccentClasses[index],
+        pontosPct: Math.min(100, Math.round((totalPontos / nivel.pontosMinimos) * 100)),
+        itensPct: Math.min(100, Math.round((itensDistintos / nivel.itensMinimos) * 100)),
+        pontosFaltantes: Math.max(0, nivel.pontosMinimos - totalPontos),
+        itensFaltantes: Math.max(0, nivel.itensMinimos - itensDistintos),
+        atingido: totalPontos >= nivel.pontosMinimos && itensDistintos >= nivel.itensMinimos,
+      })).find((nivel) => nivel.id === nivelElegivel.id) ?? null
+    : null;
 
-  const rsc1 = getRscProgress('RSC-I');
-  const rsc2 = getRscProgress('RSC-II');
-  const rsc3 = getRscProgress('RSC-III');
+  const resumoItensLancados = useMemo(() => {
+    const itemMap = new Map<
+      string,
+      {
+        itemId: string;
+        numero: number;
+        descricao: string;
+        pontos: number;
+      }
+    >();
+
+    lancamentosDoServidor.forEach((lancamento) => {
+      const item = itensRSC.find((candidate) => candidate.id === lancamento.item_rsc_id);
+
+      if (!item) {
+        return;
+      }
+
+      const current = itemMap.get(item.id);
+
+      itemMap.set(item.id, {
+        itemId: item.id,
+        numero: item.numero,
+        descricao: item.descricao,
+        pontos: Number(((current?.pontos ?? 0) + lancamento.pontos_calculados).toFixed(2)),
+      });
+    });
+
+    return Array.from(itemMap.values()).sort((a, b) => a.numero - b.numero);
+  }, [itensRSC, lancamentosDoServidor]);
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div className="h-10 w-10 bg-green-700 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold">IFES</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">RSC-TAE</h1>
-            <p className="text-sm text-gray-500">Reconhecimento de Saberes e Competências</p>
-          </div>
-        </div>
-        <Button variant="ghost" onClick={handleLogout} className="text-gray-500 hover:text-gray-900">
-          <LogOut className="w-4 h-4 mr-2" />
-          Sair
-        </Button>
-      </header>
+      <AppHeader
+        activeView="dashboard"
+        onNavigateDashboard={() => undefined}
+        onNavigateCatalog={() => navigate('/itens')}
+        onNavigateWorkspace={() => navigate('/workspace')}
+        onNavigateConsolidate={() => navigate('/consolidar')}
+        onLogout={handleLogout}
+        secondaryContent={
+          <>
+            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+              <span className="font-semibold text-gray-900">Status:</span> {processo.status}
+            </div>
+            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+              <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
+            </div>
+            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+              <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
+              {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
+            </div>
+          </>
+        }
+      />
 
-      <main className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Exibição Passiva (Cabeçalho) */}
-        <Card className="bg-white shadow-sm border-gray-200">
+      <main className="mx-auto max-w-7xl space-y-6 p-6">
+        <Card className="border-gray-200 bg-white shadow-sm">
           <CardContent className="p-6">
-            <div className="flex flex-col md:flex-row justify-between gap-4">
+            <div className="flex flex-col justify-between gap-4 md:flex-row">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{servidor.nome_completo}</h2>
                 <p className="text-gray-500">Lotação: {servidor.lotacao}</p>
                 <p className="text-gray-500">SIAPE: {servidor.siape}</p>
               </div>
-              <div className="flex flex-col gap-2">
-                <div className="bg-gray-100 rounded-lg p-3 flex items-center gap-3 border border-gray-200">
-                  <Lock className="w-5 h-5 text-gray-500" />
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Nível de Escolaridade Detectado</p>
-                    <p className="text-sm font-medium text-gray-900">{servidor.escolaridade_atual} - Fonte: SIGRH</p>
+              <div className="md:max-w-sm">
+                <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <div className="rounded-full bg-primary/10 p-2 text-primary">
+                    <BookOpenText className="h-5 w-5" />
                   </div>
-                </div>
-                <div className="bg-amber-50 rounded-lg p-3 flex items-start gap-3 border border-amber-200">
-                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-xs text-amber-800 font-medium">Trava de Segurança Ativa</p>
-                    <p className="text-xs text-amber-700">Itens utilizados para o Incentivo à Qualificação (IQ) atual estão bloqueados para evitar dupla contagem.</p>
+                    <p className="text-xs font-semibold uppercase text-gray-500">Formação atual</p>
+                    <p className="text-sm font-medium text-gray-900">
+                      {servidor.escolaridade_atual} - referência do protótipo
+                    </p>
                   </div>
                 </div>
               </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end">
-              <Button variant="link" className="text-sm text-green-700 p-0 h-auto">
-                Atualização de Cadastro (Novo Título)
-              </Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* Área Central (Cards de Resumo) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* RSC-I */}
-          <Card className={!rsc1.atingido ? '' : ''}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-gray-700">RSC-I</CardTitle>
-              <CardDescription>Mínimo: {RSC_THRESHOLDS['RSC-I']} pts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end gap-2 mb-2">
-                <span className="text-4xl font-bold text-gray-900">{rsc1.pct}%</span>
-                <span className="text-sm text-gray-500 mb-1">/ {RSC_THRESHOLDS['RSC-I']} pts</span>
+        {nivelPleiteavel && (
+          <Card className="border-primary/30 bg-white shadow-sm shadow-primary/10">
+            <CardContent className="p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-xl font-bold text-gray-900">{nivelPleiteavel.label}</h3>
+                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${nivelPleiteavel.accent.chip}`}>
+                      {nivelPleiteavel.atingido ? 'Pronto para envio' : 'Nível em foco'}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-gray-500">
+                    Equivalência pretendida: {nivelPleiteavel.equivalencia}
+                  </p>
+                </div>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-green-600 h-2.5 rounded-full transition-all" style={{ width: `${rsc1.pct}%` }}></div>
+
+              <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
+                    {nivelPleiteavel.atingido && (
+                      <p className="flex items-center gap-2 text-sm font-medium text-green-700">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Meta atingida
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-end justify-between gap-4">
+                    <p className="text-3xl font-black text-gray-900">
+                      {totalPontos.toFixed(2)}
+                      <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.pontosMinimos} pts</span>
+                    </p>
+                    <p className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                      Faltam {nivelPleiteavel.pontosFaltantes.toFixed(2)} pontos
+                    </p>
+                  </div>
+                  <div className="h-3 w-full rounded-full bg-gray-200">
+                    <div
+                      className={`h-3 rounded-full transition-all ${nivelPleiteavel.accent.bar}`}
+                      style={{ width: `${nivelPleiteavel.pontosPct}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Itens distintos</p>
+                  <div className="flex items-end justify-between gap-4">
+                    <p className="text-3xl font-black text-gray-900">
+                      {itensDistintos}
+                      <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.itensMinimos} itens</span>
+                    </p>
+                    <p className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                      Faltam {nivelPleiteavel.itensFaltantes} itens
+                    </p>
+                  </div>
+                  <div className="h-3 w-full rounded-full bg-gray-200">
+                    <div
+                      className={`h-3 rounded-full transition-all ${nivelPleiteavel.accent.bar}`}
+                      style={{ width: `${nivelPleiteavel.itensPct}%` }}
+                    ></div>
+                  </div>
+                </div>
               </div>
-              {rsc1.atingido ? (
-                <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500 mt-2">Faltam {rsc1.faltam.toFixed(2)} pontos</p>
-              )}
             </CardContent>
           </Card>
+        )}
 
-          {/* RSC-II */}
-          <Card className={!rsc1.atingido ? 'opacity-60' : ''}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-gray-700">RSC-II</CardTitle>
-              <CardDescription>Mínimo: {RSC_THRESHOLDS['RSC-II']} pts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end gap-2 mb-2">
-                <span className="text-4xl font-bold text-gray-900">{rsc2.pct}%</span>
-                <span className="text-sm text-gray-500 mb-1">/ {RSC_THRESHOLDS['RSC-II']} pts</span>
+        {resumoItensLancados.length > 0 && (
+          <Card className="border-gray-200 bg-white shadow-sm">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Itens já lançados</h3>
+                  <p className="text-xs text-gray-500">
+                    Resumo rápido dos itens já marcados e da pontuação acumulada em cada um.
+                  </p>
+                </div>
+                <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+                  {resumoItensLancados.length} itens
+                </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-blue-600 h-2.5 rounded-full transition-all" style={{ width: `${rsc2.pct}%` }}></div>
+
+              <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {resumoItensLancados.map((item) => (
+                  <button
+                    key={item.itemId}
+                    type="button"
+                    onClick={() => navigate(`/workspace?item=${item.itemId}`)}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white hover:shadow-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="rounded-md bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                          Item {item.numero}
+                        </span>
+                      </div>
+                      <p className="line-clamp-2 text-sm font-medium leading-snug text-gray-800">{item.descricao}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3 text-right">
+                      <ChevronRight className="h-4 w-4 text-gray-300" />
+                      <p className="text-lg font-black text-gray-900">{item.pontos.toFixed(2)}</p>
+                      <div>
+                        <p className="text-[11px] text-gray-500">pts</p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
               </div>
-              {rsc2.atingido ? (
-                <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500 mt-2">
-                  {!rsc1.atingido ? 'Requer RSC-I concluído' : `Faltam ${rsc2.faltam.toFixed(2)} pontos`}
-                </p>
-              )}
             </CardContent>
           </Card>
-
-          {/* RSC-III */}
-          <Card className={!rsc2.atingido ? 'opacity-60' : ''}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg text-gray-700">RSC-III</CardTitle>
-              <CardDescription>Mínimo: {RSC_THRESHOLDS['RSC-III']} pts</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end gap-2 mb-2">
-                <span className="text-4xl font-bold text-gray-900">{rsc3.pct}%</span>
-                <span className="text-sm text-gray-500 mb-1">/ {RSC_THRESHOLDS['RSC-III']} pts</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="bg-purple-600 h-2.5 rounded-full transition-all" style={{ width: `${rsc3.pct}%` }}></div>
-              </div>
-              {rsc3.atingido ? (
-                <p className="text-xs text-green-600 mt-2 flex items-center gap-1 font-medium">
-                  <CheckCircle2 className="w-3 h-3" /> Requisitos atingidos
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500 mt-2">
-                  {!rsc2.atingido ? 'Requer RSC-II concluído' : `Faltam ${rsc3.faltam.toFixed(2)} pontos`}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Ação Principal */}
-        <div className="flex justify-center pt-8">
-          <Button 
-            size="lg" 
-            className="bg-green-700 hover:bg-green-800 text-lg px-8 py-6 rounded-xl shadow-lg hover:shadow-xl transition-all"
-            onClick={() => navigate('/workspace')}
-          >
-            Iniciar/Continuar Lançamento de Documentos
-          </Button>
-        </div>
+        )}
       </main>
     </div>
   );

@@ -1,11 +1,49 @@
 export type Inciso = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI';
 
-// Limiares de pontuação para cada nível RSC (ajustáveis conforme legislação)
-export const RSC_THRESHOLDS = {
-  'RSC-I':   20,
-  'RSC-II':  50,
-  'RSC-III': 80,
-};
+export const RSC_LEVELS = [
+  {
+    id: 'RSC-I',
+    label: 'RSC-TAE I',
+    equivalencia: 'Ensino Fundamental',
+    pontosMinimos: 10,
+    itensMinimos: 2,
+  },
+  {
+    id: 'RSC-II',
+    label: 'RSC-TAE II',
+    equivalencia: 'Ensino Médio',
+    pontosMinimos: 20,
+    itensMinimos: 3,
+  },
+  {
+    id: 'RSC-III',
+    label: 'RSC-TAE III',
+    equivalencia: 'Graduação',
+    pontosMinimos: 25,
+    itensMinimos: 4,
+  },
+  {
+    id: 'RSC-IV',
+    label: 'RSC-TAE IV',
+    equivalencia: 'Especialização',
+    pontosMinimos: 30,
+    itensMinimos: 5,
+  },
+  {
+    id: 'RSC-V',
+    label: 'RSC-TAE V',
+    equivalencia: 'Mestrado',
+    pontosMinimos: 52,
+    itensMinimos: 8,
+  },
+  {
+    id: 'RSC-VI',
+    label: 'RSC-TAE VI',
+    equivalencia: 'Doutorado',
+    pontosMinimos: 75,
+    itensMinimos: 12,
+  },
+] as const;
 
 export interface Servidor {
   id: string;
@@ -35,6 +73,8 @@ export interface Documento {
   nome_arquivo: string;
   hash_arquivo?: string;
   caminho_storage?: string;
+  mime_type?: string;
+  tamanho_bytes?: number;
   data_upload: string;
 }
 
@@ -49,6 +89,14 @@ export interface Lancamento {
   justificativa_alteracao?: string;
   pontos_calculados: number;
   status_auditoria: 'Pendente' | 'Aprovado' | 'Rejeitado';
+}
+
+export interface ProcessoRSC {
+  status: 'Rascunho' | 'Enviado';
+  nivel_pleiteado_id?: string;
+  pontos_total_submissao?: number;
+  itens_distintos_submissao?: number;
+  submitted_at?: string;
 }
 
 export const mockServidor: Servidor = {
@@ -69,6 +117,8 @@ export const mockDocumentos: Documento[] = [
     nome_arquivo: 'portaria_cpa_2022.pdf',
     hash_arquivo: 'sha256-placeholder-001',
     caminho_storage: 'uploads/srv-001/portaria_cpa_2022.pdf',
+    mime_type: 'application/pdf',
+    tamanho_bytes: 182340,
     data_upload: '2023-01-15T10:00:00Z',
   },
   {
@@ -77,6 +127,8 @@ export const mockDocumentos: Documento[] = [
     nome_arquivo: 'declaracao_extensao.pdf',
     hash_arquivo: 'sha256-placeholder-002',
     caminho_storage: 'uploads/srv-001/declaracao_extensao.pdf',
+    mime_type: 'application/pdf',
+    tamanho_bytes: 148220,
     data_upload: '2023-02-20T14:30:00Z',
   },
 ];
@@ -94,3 +146,7 @@ export const mockLancamentos: Lancamento[] = [
     status_auditoria: 'Aprovado',
   },
 ];
+
+export const mockProcessoRSC: ProcessoRSC = {
+  status: 'Rascunho',
+};

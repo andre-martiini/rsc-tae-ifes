@@ -10,7 +10,9 @@ import { Toaster } from 'sonner';
 import Login from './pages/Login';
 import CreatePassword from './pages/CreatePassword';
 import Dashboard from './pages/Dashboard';
+import ItemCatalog from './pages/ItemCatalog';
 import Workspace from './pages/Workspace';
+import Consolidation from './pages/Consolidation';
 
 export default function App() {
   return (
@@ -20,7 +22,9 @@ export default function App() {
           <Route path="/" element={<Login />} />
           <Route path="/create-password" element={<CreatePassword />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/itens" element={<ItemCatalog />} />
           <Route path="/workspace" element={<Workspace />} />
+          <Route path="/consolidar" element={<Consolidation />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="bottom-right" richColors />
