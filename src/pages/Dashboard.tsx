@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+﻿import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BookOpenText, CheckCircle2, ChevronRight } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
@@ -221,7 +221,7 @@ export default function Dashboard() {
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">Itens já lançados</h3>
                   <p className="text-xs text-gray-500">
-                    Resumo rápido dos itens já marcados e da pontuação acumulada em cada um.
+                    Resumo rÃ¡pido dos itens jÃ¡ marcados e da Pontuação acumulada em cada um.
                   </p>
                 </div>
                 <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
@@ -262,3 +262,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

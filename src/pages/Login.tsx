@@ -1,18 +1,28 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 export default function Login() {
-  const [loading, setLoading] = useState(false);
+  const [loadingTarget, setLoadingTarget] = useState<'usuário' | 'administrador' | null>(null);
   const navigate = useNavigate();
 
-  const handleAccess = () => {
-    setLoading(true);
-    toast.success('Acesso direto liberado no protótipo.');
+  const handleUserAccess = () => {
+    setLoadingTarget('usuário');
+    toast.success('Acesso de usuário liberado no protótipo.');
 
     window.setTimeout(() => {
-      setLoading(false);
+      setLoadingTarget(null);
       navigate('/dashboard');
+    }, 500);
+  };
+
+  const handleAdminAccess = () => {
+    setLoadingTarget('administrador');
+    toast.success('Área administrativa separada para a proxima etapa.');
+
+    window.setTimeout(() => {
+      setLoadingTarget(null);
+      navigate('/admin');
     }, 500);
   };
 
@@ -40,7 +50,7 @@ export default function Login() {
           >
             <img
               src="/logo_ifes.png"
-              alt="Logo IFES - Instituto Federal do Espirito Santo"
+              alt="Logo IFES - Instituto Federal do Espírito Santo"
               className="w-16 h-16 object-contain"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';
@@ -79,24 +89,73 @@ export default function Login() {
         >
           <div className="space-y-8">
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-              O prototipo esta com acesso livre nesta etapa. O mock de login e a criacao de senha
-              foram temporariamente desativados para facilitar a validacao do sistema.
+              O protótipo esta com acesso livre nesta etapa. O mock de login e a criação de senha
+              foram temporariamente desativados para facilitar a validação dos fluxos.
             </p>
 
-            <button
-              type="button"
-              onClick={handleAccess}
-              disabled={loading}
-              className="w-full py-5 rounded-xl font-headline font-bold text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-60"
-              style={{
-                background: loading ? 'var(--color-primary-container)' : 'var(--color-primary)',
-                color: 'var(--color-on-primary)',
-                boxShadow: '0 4px 24px rgba(0,107,31,0.12)',
-              }}
-            >
-              <span>{loading ? 'Acessando...' : 'Acessar sistema'}</span>
-              {!loading && <span className="material-symbols-outlined">arrow_forward</span>}
-            </button>
+            <div className="grid gap-4 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={handleUserAccess}
+                disabled={loadingTarget !== null}
+                className="w-full py-5 px-5 rounded-xl font-headline font-bold text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-60"
+                style={{
+                  background:
+                    loadingTarget === 'usuário'
+                      ? 'var(--color-primary-container)'
+                      : 'var(--color-primary)',
+                  color: 'var(--color-on-primary)',
+                  boxShadow: '0 4px 24px rgba(0,107,31,0.12)',
+                }}
+              >
+                <span>{loadingTarget === 'usuário' ? 'Acessando...' : 'Acesso usuário'}</span>
+                {loadingTarget !== 'usuário' && (
+                  <span className="material-symbols-outlined">arrow_forward</span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAdminAccess}
+                disabled={loadingTarget !== null}
+                className="w-full py-5 px-5 rounded-xl font-headline font-bold text-lg transition-all active:scale-[0.98] flex items-center justify-center gap-3 border disabled:opacity-60"
+                style={{
+                  background:
+                    loadingTarget === 'administrador'
+                      ? 'rgba(186,8,22,0.12)'
+                      : 'var(--color-surface-container-low)',
+                  color:
+                    loadingTarget === 'administrador'
+                      ? 'var(--color-secondary)'
+                      : 'var(--color-on-surface)',
+                  borderColor: 'rgba(186,8,22,0.18)',
+                }}
+              >
+                <span>
+                  {loadingTarget === 'administrador' ? 'Abrindo Área...' : 'Acesso Administrador'}
+                </span>
+                {loadingTarget !== 'administrador' && (
+                  <span className="material-symbols-outlined">shield_person</span>
+                )}
+              </button>
+            </div>
+
+            <div className="grid gap-3 text-xs md:grid-cols-2" style={{ color: 'var(--color-on-surface-variant)' }}>
+              <p
+                className="rounded-lg p-3"
+                style={{ background: 'rgba(0,107,31,0.05)' }}
+              >
+                O acesso de usuário leva para a tela inicial atual do sistema, mantendo o fluxo
+                padrão ja existente.
+              </p>
+              <p
+                className="rounded-lg p-3"
+                style={{ background: 'rgba(186,8,22,0.05)' }}
+              >
+                O acesso de administrador abre uma Área separada, pronta para receber a nova tela
+                que vamos construir em seguida.
+              </p>
+            </div>
           </div>
 
           <div
@@ -115,8 +174,8 @@ export default function Login() {
               </span>
             </div>
             <p className="text-xs md:text-sm leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-              Este fluxo ainda opera como prototipo. A autenticacao institucional, as validacoes
-              definitivas e a integracao com as bases oficiais serao conectadas em outra etapa.
+              Este fluxo ainda opera como protótipo. A autenticação institucional, as validacoes
+              definitivas e a integração com as bases oficiais serao conectadas em outra etapa.
             </p>
           </div>
 
@@ -136,10 +195,11 @@ export default function Login() {
             className="text-[0.7rem] uppercase tracking-widest font-semibold"
             style={{ color: 'var(--color-outline)', fontFamily: 'var(--font-headline)' }}
           >
-            Instituto Federal do Espirito Santo
+            Instituto Federal do Espírito Santo
           </p>
         </footer>
       </main>
     </div>
   );
 }
+
