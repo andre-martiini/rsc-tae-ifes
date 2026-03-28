@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { Toaster } from 'sonner';
 import Login from './pages/Login';
+import AdminPortal from './pages/AdminPortal';
 import CreatePassword from './pages/CreatePassword';
 import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
@@ -20,6 +21,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/admin" element={<AdminPortal />} />
           <Route path="/create-password" element={<CreatePassword />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/itens" element={<ItemCatalog />} />
