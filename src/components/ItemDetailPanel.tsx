@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { differenceInDays, format, isValid, parseISO } from 'date-fns';
 import {
   AlertCircle,
@@ -6,15 +6,21 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Eye,
+  EyeOff,
   FileText,
+  Link,
   Lock,
+  Plus,
   ShieldAlert,
   Trash2,
   UploadCloud,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ItemRSC } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
+import { getDocumentBlob } from '../lib/documentStorage';
 import { isItemJuridicallyFragile } from '../lib/rsc';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -27,7 +33,7 @@ interface ItemDetailPanelProps {
 }
 
 export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps) {
-  const { addDocumentoFromFile, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo } =
+  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo } =
     useAppContext();
   const [activeTab, setActiveTab] = useState<'form' | 'history'>('form');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -42,7 +48,59 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
   const [saving, setSaving] = useState(false);
   const [fragilityConfirmed, setFragilityConfirmed] = useState(false);
   const [showGuidance, setShowGuidance] = useState(true);
+  const [docMode, setDocMode] = useState<'upload' | 'gedoc'>('upload');
+  const [gedocLinks, setGedocLinks] = useState<string[]>([]);
+  const [gedocInput, setGedocInput] = useState('');
+  const [openViewers, setOpenViewers] = useState<Set<string>>(new Set());
+  const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
+  const [loadingViewers, setLoadingViewers] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const urls = blobUrls;
+    return () => {
+      Object.values(urls).forEach((u) => URL.revokeObjectURL(u as string));
+    };
+  }, [item.id]);
+
+  const toggleViewer = useCallback(
+    async (lancamentoId: string, docId: string) => {
+      if (openViewers.has(lancamentoId)) {
+        setOpenViewers((prev) => { const next = new Set(prev); next.delete(lancamentoId); return next; });
+        return;
+      }
+
+      setOpenViewers((prev) => new Set(prev).add(lancamentoId));
+
+      if (blobUrls[docId]) return;
+
+      setLoadingViewers((prev) => new Set(prev).add(lancamentoId));
+      try {
+        const blob = await getDocumentBlob(docId);
+        if (!blob) { toast.error('Documento não encontrado no armazenamento local.'); return; }
+        const url = URL.createObjectURL(blob);
+        setBlobUrls((prev) => ({ ...prev, [docId]: url }));
+      } catch {
+        toast.error('Não foi possível carregar o documento.');
+      } finally {
+        setLoadingViewers((prev) => { const next = new Set(prev); next.delete(lancamentoId); return next; });
+      }
+    },
+    [openViewers, blobUrls],
+  );
+
+  const isValidGedocUrl = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      return (
+        parsed.hostname === 'gedoc.ifes.edu.br' &&
+        parsed.pathname.startsWith('/documento/') &&
+        parsed.pathname.length > '/documento/'.length
+      );
+    } catch {
+      return false;
+    }
+  };
 
   const isSubmitted = processo.status === 'Enviado';
   const isFragile = isItemJuridicallyFragile(item);
@@ -130,9 +188,30 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
     setSelectedDocId('');
     setUploadFeedback(null);
     setFragilityConfirmed(!isFragile);
+    setDocMode('upload');
+    setGedocLinks([]);
+    setGedocInput('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const addGedocLink = () => {
+    const trimmed = gedocInput.trim();
+    if (!isValidGedocUrl(trimmed)) {
+      toast.error('URL inválida. Use o formato: https://gedoc.ifes.edu.br/documento/HASH');
+      return;
+    }
+    if (gedocLinks.includes(trimmed)) {
+      toast.error('Este link já foi adicionado.');
+      return;
+    }
+    setGedocLinks((prev) => [...prev, trimmed]);
+    setGedocInput('');
+  };
+
+  const removeGedocLink = (index: number) => {
+    setGedocLinks((prev) => prev.filter((_, i) => i !== index));
   };
 
   const clearFile = () => {
@@ -195,7 +274,12 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
       return;
     }
 
-    if (!file && !selectedDocId) {
+    if (docMode === 'gedoc' && gedocLinks.length === 0) {
+      toast.error('Adicione ao menos um link do GeDoc.');
+      return;
+    }
+
+    if (docMode === 'upload' && !file && !selectedDocId) {
       toast.error('Anexe um documento ou selecione um existente.');
       return;
     }
@@ -205,7 +289,13 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
 
       let docId = selectedDocId;
 
-      if (file && !selectedDocId) {
+      if (docMode === 'gedoc') {
+        const newDoc = await addDocumentoFromGedocLinks({
+          servidorId: servidor.id,
+          links: gedocLinks,
+        });
+        docId = newDoc.id;
+      } else if (file && !selectedDocId) {
         const newDoc = await addDocumentoFromFile({
           servidorId: servidor.id,
           file,
@@ -230,8 +320,13 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
         return;
       }
 
-      toast.success(`Lançamento salvo! Você acumulou +${pontosCalculados} pontos.`);
+      const qtdLinks = gedocLinks.length;
       resetForm();
+      toast.success(
+        docMode === 'gedoc'
+          ? `Lançamento salvo! ${qtdLinks} PDF${qtdLinks > 1 ? 's' : ''} mesclado${qtdLinks > 1 ? 's' : ''}. +${pontosCalculados} pontos.`
+          : `Lançamento salvo! Você acumulou +${pontosCalculados} pontos.`,
+      );
       setActiveTab('history');
       onSaved();
     } catch {
@@ -401,11 +496,97 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                       Comprovação documental
                     </Label>
                     <p className="text-sm text-gray-600">
-                      Primeiro, anexe a comprovação: envie um novo PDF ou reutilize um documento já salvo.
+                      Envie um PDF, cole links do GeDoc ou reutilize um documento já salvo.
                     </p>
                   </div>
 
+                  {/* Mode toggle */}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setDocMode('upload'); setGedocLinks([]); setGedocInput(''); }}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                        docMode === 'upload'
+                          ? 'border-primary/30 bg-primary/10 text-primary'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300',
+                      )}
+                    >
+                      <UploadCloud className="h-3.5 w-3.5" />
+                      Enviar PDF
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setDocMode('gedoc'); setFile(null); setSelectedDocId(''); setUploadFeedback(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                        docMode === 'gedoc'
+                          ? 'border-primary/30 bg-primary/10 text-primary'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300',
+                      )}
+                    >
+                      <Link className="h-3.5 w-3.5" />
+                      Links GeDoc
+                    </button>
+                  </div>
+
                   <div className="rounded-2xl border border-gray-200 bg-gray-100/70 p-4 md:p-5">
+                    {docMode === 'gedoc' ? (
+                      /* ── GeDoc batch input ── */
+                      <div className="space-y-3">
+                        <p className="text-sm text-gray-600">
+                          Cole os links do GeDoc um por um. O sistema vai buscar e mesclar todos os PDFs automaticamente ao salvar.
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="url"
+                            placeholder="https://gedoc.ifes.edu.br/documento/HASH?inline"
+                            value={gedocInput}
+                            onChange={(e) => setGedocInput(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addGedocLink(); } }}
+                            className="h-10 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={addGedocLink}
+                            className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary transition-colors hover:bg-primary/20"
+                            aria-label="Adicionar link"
+                            title="Adicionar link"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        {gedocLinks.length > 0 && (
+                          <ul className="space-y-1.5">
+                            {gedocLinks.map((link, index) => (
+                              <li
+                                key={index}
+                                className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2"
+                              >
+                                <FileText className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+                                <span className="flex-1 truncate font-mono text-[11px] text-emerald-900">{link}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeGedocLink(index)}
+                                  className="shrink-0 text-emerald-500 transition-colors hover:text-red-500"
+                                  aria-label="Remover link"
+                                  title="Remover"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
+                        {gedocLinks.length > 0 && (
+                          <p className="text-[11px] font-semibold text-emerald-700">
+                            {gedocLinks.length} link{gedocLinks.length > 1 ? 's' : ''} adicionado{gedocLinks.length > 1 ? 's' : ''} — será{gedocLinks.length > 1 ? 'ão' : ''} mesclado{gedocLinks.length > 1 ? 's' : ''} em um único PDF ao salvar.
+                          </p>
+                        )}
+                      </div>
+                    ) : (
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(260px,1fr)] md:items-start">
                       <div className="space-y-3">
                         {!selectedDocId && (
@@ -548,6 +729,7 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                         )}
                       </div>
                     </div>
+                    )}
                   </div>
                 </section>
 
@@ -705,9 +887,34 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                               </button>
                             </div>
                           </div>
-                          <p className="mt-3 text-[10px] font-bold uppercase tracking-wider text-green-600">
-                            {lancamento.status_auditoria}
-                          </p>
+                          <div className="mt-3 flex items-center justify-between">
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">
+                              {lancamento.status_auditoria}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => toggleViewer(lancamento.id, lancamento.documento_id)}
+                              className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-500 transition-colors hover:border-primary/30 hover:text-primary"
+                            >
+                              {loadingViewers.has(lancamento.id) ? (
+                                <span>Carregando...</span>
+                              ) : openViewers.has(lancamento.id) ? (
+                                <><EyeOff className="h-3.5 w-3.5" /> Ocultar</>
+                              ) : (
+                                <><Eye className="h-3.5 w-3.5" /> Ver documento</>
+                              )}
+                            </button>
+                          </div>
+
+                          {openViewers.has(lancamento.id) && blobUrls[lancamento.documento_id] && (
+                            <div className="mt-3 overflow-hidden rounded-xl border border-gray-200">
+                              <iframe
+                                src={blobUrls[lancamento.documento_id]}
+                                className="h-[600px] w-full"
+                                title="Visualizador de documento"
+                              />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

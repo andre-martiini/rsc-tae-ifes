@@ -86,3 +86,53 @@ export async function persistDocumentFile(params: {
     caminhoStorage: `indexeddb://uploads/${servidorId}/${docId}/${encodeURIComponent(file.name)}`,
   };
 }
+
+export async function getDocumentBlob(docId: string): Promise<Blob | null> {
+  const database = await openDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(docId);
+
+    request.onsuccess = () => {
+      database.close();
+      const record = request.result as StoredDocumentRecord | undefined;
+      resolve(record?.blob ?? null);
+    };
+    request.onerror = () => {
+      database.close();
+      reject(request.error);
+    };
+  });
+}
+
+export async function persistDocumentBlob(params: {
+  docId: string;
+  servidorId: string;
+  nomeArquivo: string;
+  blob: Blob;
+}) {
+  const { docId, servidorId, nomeArquivo, blob } = params;
+  const arrayBuffer = await blob.arrayBuffer();
+  const hash = await computeSha256(arrayBuffer);
+  const mimeType = blob.type || 'application/pdf';
+
+  await putRecord({
+    id: docId,
+    servidorId,
+    nomeArquivo,
+    blob,
+    hash,
+    mimeType,
+    tamanhoBytes: blob.size,
+    savedAt: new Date().toISOString(),
+  });
+
+  return {
+    hash,
+    mimeType,
+    tamanhoBytes: blob.size,
+    caminhoStorage: `indexeddb://uploads/${servidorId}/${docId}/${encodeURIComponent(nomeArquivo)}`,
+  };
+}
