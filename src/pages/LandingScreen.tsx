@@ -163,7 +163,7 @@ export default function LandingScreen() {
           <div className="inline-flex items-center justify-center rounded-2xl bg-primary/10 p-4 mb-4">
             <img src="/logo_ifes.png" alt="Logo IFES" className="h-10 w-10 object-contain" />
           </div>
-          <h1 className="text-3xl font-black text-gray-900">RSC-TAE Ifes</h1>
+          <h1 className="text-3xl font-black text-gray-900">Assistente RSC-TAE Ifes</h1>
           <p className="mt-1.5 text-sm text-gray-500">
             Reconhecimento de Saberes e Competências — Técnicos Administrativos em Educação
           </p>
