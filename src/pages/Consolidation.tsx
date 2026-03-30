@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import AppHeader from '../components/AppHeader';
 import { Button } from '../components/ui/button';
@@ -25,10 +25,24 @@ export default function Consolidation() {
     () => lancamentosDoServidor.reduce((acc, l) => acc + l.pontos_calculados, 0),
     [lancamentosDoServidor],
   );
+  const docUtilizadosSet = useMemo(
+    () => new Set(lancamentosDoServidor.map((l) => l.documento_id).filter(Boolean)),
+    [lancamentosDoServidor],
+  );
+
   const itensDistintos = useMemo(
     () => new Set(lancamentosDoServidor.map((l) => l.item_rsc_id)).size,
     [lancamentosDoServidor],
   );
+
+  const metasAtingidas =
+    !!nivelElegivel &&
+    totalPontos >= nivelElegivel.pontosMinimos &&
+    itensDistintos >= nivelElegivel.itensMinimos;
+
+
+
+  const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
 
   const resumoItens = useMemo(() => {
     const map = new Map<string, { itemId: string; numero: number; inciso: string; descricao: string; pontos: number; docCount: number }>();
@@ -55,19 +69,80 @@ export default function Consolidation() {
       .sort((a, b) => (a.data_upload < b.data_upload ? 1 : -1));
   }, [documentos, lancamentosDoServidor]);
 
+  const checks = useMemo(() => {
+    const profileOk =
+      !!servidor.email_institucional?.trim() &&
+      !!servidor.lotacao?.trim() &&
+      !!servidor.cargo?.trim();
+    const nivelOk = !!nivelElegivel;
+    const lancamentosOk = lancamentosDoServidor.length > 0;
+    const pontosOk = nivelElegivel ? totalPontos >= nivelElegivel.pontosMinimos : false;
+    const itensOk = nivelElegivel ? itensDistintos >= nivelElegivel.itensMinimos : false;
+
+    return [
+      {
+        ok: profileOk,
+        label: 'Perfil completo',
+        detail: profileOk ? 'E-mail, lotação e cargo preenchidos.' : 'Faltam campos obrigatórios no perfil.',
+        action: profileOk ? undefined : { label: 'Completar perfil', href: '/perfil' },
+      },
+      {
+        ok: nivelOk,
+        label: 'Nível pleiteável determinado',
+        detail: nivelOk
+          ? `${nivelElegivel!.label} (${nivelElegivel!.equivalencia})`
+          : 'Não foi possível determinar o nível pela escolaridade atual.',
+      },
+      {
+        ok: lancamentosOk,
+        label: 'Lançamentos registrados',
+        detail: lancamentosOk
+          ? `${lancamentosDoServidor.length} lançamento(s) registrado(s).`
+          : 'Nenhum lançamento registrado ainda.',
+        action: lancamentosOk ? undefined : { label: 'Lançar documentos', href: '/workspace' },
+      },
+      {
+        ok: pontosOk,
+        label: 'Pontuação mínima atingida',
+        detail: nivelElegivel
+          ? pontosOk
+            ? `${totalPontos.toFixed(2)} pts — meta de ${nivelElegivel.pontosMinimos} pts atingida.`
+            : `${totalPontos.toFixed(2)} / ${nivelElegivel.pontosMinimos} pts — faltam ${Number((nivelElegivel.pontosMinimos - totalPontos).toFixed(2))} pts.`
+          : 'Nível não determinado.',
+      },
+      {
+        ok: itensOk,
+        label: 'Itens distintos mínimos',
+        detail: nivelElegivel
+          ? itensOk
+            ? `${itensDistintos} itens — meta de ${nivelElegivel.itensMinimos} atingida.`
+            : `${itensDistintos} / ${nivelElegivel.itensMinimos} itens — faltam ${nivelElegivel.itensMinimos - itensDistintos}.`
+          : 'Nível não determinado.',
+      },
+      {
+        ok: autodeclaracaoGeral,
+        label: 'Veracidade das Informações',
+        detail: autodeclaracaoGeral
+          ? 'Declaração de veracidade das informações assinada eletronicamente.'
+          : 'Falta concordar com a Autodeclaração Geral atestando a veracidade das informações.',
+      },
+    ];
+  }, [servidor, nivelElegivel, lancamentosDoServidor, totalPontos, itensDistintos, documentosUtilizados, autodeclaracaoGeral]);
+
   const pendencias = useMemo(() => {
     const issues: string[] = [];
-    if (!nivelElegivel) issues.push('Nao foi possivel determinar o nivel pleiteavel pela escolaridade atual.');
-    if (lancamentosDoServidor.length === 0) issues.push('Nenhum lancamento foi registrado ainda.');
+    if (!nivelElegivel) issues.push('Não foi possível determinar o nível pleiteável pela escolaridade atual.');
+    if (lancamentosDoServidor.length === 0) issues.push('Nenhum lançamento foi registrado ainda.');
     if (nivelElegivel && totalPontos < nivelElegivel.pontosMinimos)
       issues.push(`Ainda faltam ${Number((nivelElegivel.pontosMinimos - totalPontos).toFixed(2))} pontos para liberar o envio.`);
     if (nivelElegivel && itensDistintos < nivelElegivel.itensMinimos)
       issues.push(`Ainda faltam ${nivelElegivel.itensMinimos - itensDistintos} itens distintos para liberar o envio.`);
-    if (documentosUtilizados.length === 0) issues.push('Nenhum documento vinculado foi encontrado para a consolidacao.');
+    if (!autodeclaracaoGeral)
+      issues.push('Você precisa concordar com a Autodeclaração de veracidade das informações.');
     return issues;
-  }, [documentosUtilizados.length, itensDistintos, lancamentosDoServidor.length, nivelElegivel, totalPontos]);
+  }, [itensDistintos, lancamentosDoServidor.length, nivelElegivel, totalPontos, autodeclaracaoGeral]);
 
-  const canGenerate = pendencias.length === 0;
+  const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -103,17 +178,28 @@ export default function Consolidation() {
         <AppHeader
           activeView="consolidate"
           onNavigateDashboard={() => navigate('/dashboard')}
+          onNavigateHome={() => navigate('/')}
           onNavigateCatalog={() => navigate('/itens')}
           onNavigateWorkspace={() => navigate('/workspace')}
           onNavigateConsolidate={() => undefined}
+          onNavigateProfile={() => navigate('/perfil')}
           secondaryContent={
             <>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
                 <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
               </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Nivel pleiteavel:</span>{' '}
-                {nivelElegivel ? nivelElegivel.label : 'Nao mapeado'}
+                <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
+              </div>
+              {metasAtingidas && (
+                <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Metas atingidas
+                </div>
+              )}
+              <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+                <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
+                {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
               </div>
             </>
           }
@@ -122,10 +208,76 @@ export default function Consolidation() {
 
       <main className="mx-auto max-w-4xl px-4 py-8 print:p-0 print:max-w-none">
 
+        {/* Pre-flight checklist — hidden on print */}
+        <div className="mb-4 print:hidden">
+          <div className={`rounded-xl border bg-white shadow-sm ${canGenerate ? 'border-emerald-200' : 'border-amber-200'}`}>
+            <div className={`flex items-center gap-2 rounded-t-xl px-5 py-3 ${canGenerate ? 'bg-emerald-50' : 'bg-amber-50'}`}>
+              {canGenerate ? (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-amber-600" />
+              )}
+              <p className={`text-sm font-bold ${canGenerate ? 'text-emerald-800' : 'text-amber-800'}`}>
+                {canGenerate ? 'Tudo pronto para gerar o pacote RSC' : 'Pendências antes de gerar o pacote RSC'}
+              </p>
+              <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${canGenerate ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                {checks.filter((c) => c.ok).length}/{checks.length}
+              </span>
+            </div>
+            <ul className="divide-y divide-gray-100 px-5">
+              {checks.map((check) => (
+                <li key={check.label} className="flex items-center gap-3 py-2.5">
+                  {check.ok ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 shrink-0 text-amber-500" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <span className={`text-sm font-semibold ${check.ok ? 'text-gray-700' : 'text-gray-900'}`}>
+                      {check.label}
+                    </span>
+                    <span className="ml-2 text-xs text-gray-500">{check.detail}</span>
+                  </div>
+                  {check.action && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(check.action!.href)}
+                      className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50"
+                    >
+                      {check.action.label}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mb-4 print:hidden">
+          <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
+            <p className="mb-2 text-sm font-bold text-amber-900">Autodeclaração / Veracidade das Informações</p>
+            <p className="mb-4 text-sm text-amber-800">
+              Para prosseguir e gerar o pacote RSC definitivo, você precisa declarar
+              oficialmente que todas as informações registradas conferem com a realidade.
+            </p>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-white p-4 transition-colors hover:bg-amber-50/50">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                checked={autodeclaracaoGeral}
+                onChange={(e) => setAutodeclaracaoGeral(e.target.checked)}
+              />
+              <span className="text-sm leading-relaxed text-gray-800">
+                Declaro, para todos os fins de direito, sob as penas da lei, que realizei todas as atividades descritas nos itens consolidados, que a documentação comprobatória correspondente fornecida no pacote é autêntica e que as informações prestadas de modo geral no sistema são absolutamente verdadeiras.
+              </span>
+            </label>
+          </div>
+        </div>
+
         {/* Action toolbar — hidden on print */}
         <div className="mb-4 flex items-center justify-between print:hidden">
           <div>
-            <h1 className="text-lg font-bold text-gray-900">Consolidacao do Processo</h1>
+            <h1 className="text-lg font-bold text-gray-900">Consolidação do Processo</h1>
             <p className="text-sm text-gray-500">Revise a ficha antes do envio definitivo.</p>
           </div>
           <div className="flex gap-2">
@@ -349,9 +501,9 @@ export default function Consolidation() {
                   {documentosUtilizados.map((doc) => (
                     <tr key={doc.id}>
                       <td className="px-4 py-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <FileText className="h-3 w-3 shrink-0 text-gray-300" />
-                          <span className="text-xs font-medium text-gray-800">{doc.nome_arquivo}</span>
+                        <div className="flex items-start gap-1.5">
+                          <FileText className="mt-0.5 h-3 w-3 shrink-0 text-gray-300" />
+                          <span className="text-xs font-medium text-gray-800 break-all">{doc.nome_arquivo}</span>
                         </div>
                         {doc.gedoc_links && doc.gedoc_links.length > 0 && (
                           <p className="mt-0.5 pl-4.5 text-[9px] text-gray-400">

@@ -23,11 +23,12 @@ export type ComprovacaoItemResumo = {
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
+const MARGIN_TOP = 20;
 const MARGIN_X = 44;
 const MARGIN_BOTTOM = 42;
 const HEADER_H = 74;
 const FOOTER_H = 26;
-const CONTENT_TOP = PAGE_H - HEADER_H - 18;
+const CONTENT_TOP = PAGE_H - MARGIN_TOP - HEADER_H - 18;
 const CONTENT_W = PAGE_W - MARGIN_X * 2;
 
 const COLORS = {
@@ -41,37 +42,28 @@ const COLORS = {
 };
 
 const INCISO_DESC: Record<string, string> = {
-  I: 'Comissoes e grupos de trabalho',
+  I: 'Comissões e grupos de trabalho',
   II: 'Projetos institucionais',
-  III: 'Premiacoes e reconhecimentos',
-  IV: 'Responsabilidades tecnicas',
-  V: 'Direcao, assessoramento e chefia',
-  VI: 'Publicacoes e producao tecnica',
+  III: 'Premiações e reconhecimentos',
+  IV: 'Responsabilidades técnicas',
+  V: 'Direção, assessoramento e chefia',
+  VI: 'Publicações e produção técnica',
 };
 
-const RSC_OPTIONS = [
-  'RSC-PCCTAE - I',
-  'RSC-PCCTAE - II',
-  'RSC-PCCTAE - III',
-  'RSC-PCCTAE - IV',
-  'RSC-PCCTAE - V',
-  'RSC-PCCTAE - VI',
-];
-
-const RSC_REQUIREMENTS = [
-  'a) RSC-PCCTAE - I: comprovante de ensino fundamental incompleto, acrescido de 10 pontos, distribuidos em no minimo 2 itens do rol de saberes e competencias.',
-  'b) RSC-PCCTAE - II: diploma de ensino fundamental completo, acrescido de 20 pontos, distribuidos em no minimo 3 itens do rol de saberes e competencias.',
-  'c) RSC-PCCTAE - III: diploma de ensino medio ou tecnico de nivel medio, acrescido de 25 pontos, distribuidos em no minimo 4 itens do rol de saberes e competencias.',
-  'd) RSC-PCCTAE - IV: diploma de graduacao, acrescido de 30 pontos, distribuidos em no minimo 5 itens do rol de saberes e competencias.',
-  'e) RSC-PCCTAE - V: certificado de pos-graduacao lato sensu, acrescido de 52 pontos, distribuidos em no minimo 8 itens do rol de saberes e competencias.',
-  'f) RSC-PCCTAE - VI: diploma de mestrado, acrescido de 75 pontos, distribuidos em no minimo 12 itens do rol de saberes e competencias.',
+const RSC_OPTIONS_INFO = [
+  { roman: 'I', textTarget: 'RSC-PCCTAE - I (destinado a servidor(a) que não concluiu o ensino fundamental)', req: 'RSC-PCCTAE - I: comprovante de ensino fundamental incompleto, acrescido de 10 pontos, distribuídos em no mínimo 2 itens do rol de saberes e competências;' },
+  { roman: 'II', textTarget: 'RSC-PCCTAE - II (destinado a servidor(a) com certificado de conclusão do ensino fundamental)', req: 'RSC-PCCTAE - II: diploma de ensino fundamental completo, acrescido de 20 pontos, distribuídos em no mínimo 3 itens do rol de saberes e competências;' },
+  { roman: 'III', textTarget: 'RSC-PCCTAE - III (destinado a servidor(a) com certificado ou diploma de conclusão de ensino médio ou de técnico de nível médio)', req: 'RSC-PCCTAE - III: diploma de ensino médio ou técnico de nível médio, acrescido de 25 pontos, distribuídos em no mínimo 4 itens do rol de saberes e competências;' },
+  { roman: 'IV', textTarget: 'RSC-PCCTAE - IV (destinado a servidor(a) com diploma de graduação)', req: 'RSC-PCCTAE - IV: diploma de graduação, acrescido de 30 pontos, distribuídos em no mínimo 5 itens do rol de saberes e competências;' },
+  { roman: 'V', textTarget: 'RSC-PCCTAE - V (destinado a servidor(a) com certificado de pós-graduação lato sensu)', req: 'RSC-PCCTAE - V: certificado de pós-graduação lato sensu, acrescido de 52 pontos, distribuídos em no mínimo 8 itens do rol de saberes e competências;' },
+  { roman: 'VI', textTarget: 'RSC-PCCTAE - VI (destinado a servidor(a) com diploma de mestrado)', req: 'RSC-PCCTAE - VI: diploma de mestrado, acrescido de 75 pontos, distribuídos em no mínimo 12 itens do rol de saberes e competências.' },
 ];
 
 let logoBytesPromise: Promise<Uint8Array | null> | null = null;
 
 function sanitize(value: unknown): string {
   return String(value ?? '')
-    .replace(/[^\u0000-\u00FF]/g, '?')
+    .replace(/[^\u0000-\u00FF\u2022]/g, '?')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -137,7 +129,7 @@ class Writer {
     this.doc = params.doc;
     this.title = params.title;
     this.subtitle = params.subtitle;
-    this.badge = params.badge ?? 'Rascunho';
+    this.badge = params.badge ?? 'Consolidado';
     this.footerRight = params.footerRight ?? 'RSC-TAE';
   }
 
@@ -162,7 +154,7 @@ class Writer {
   }
 
   private drawChrome() {
-    const headerY = PAGE_H - HEADER_H;
+    const headerY = PAGE_H - MARGIN_TOP - HEADER_H;
 
     this.page.drawRectangle({
       x: MARGIN_X,
@@ -218,7 +210,7 @@ class Writer {
 
     const centerX = MARGIN_X + logoBoxW + 14;
     const centerW = PAGE_W - MARGIN_X * 2 - logoBoxW - rightBoxW - 28;
-    this.page.drawText('Instituto Federal do Espirito Santo', {
+    this.page.drawText('Instituto Federal do Espírito Santo', {
       x: centerX,
       y: headerY + 48,
       size: 8,
@@ -500,7 +492,7 @@ class Writer {
   }
 
   bullet(text: string) {
-    this.text(`• ${text}`, { size: 9, indent: 4, maxWidth: CONTENT_W - 4 });
+    this.text(`- ${text}`, { size: 9, indent: 4, maxWidth: CONTENT_W - 4 });
   }
 
   table(headers: string[], rows: string[][], widths: number[]) {
@@ -577,17 +569,18 @@ export async function generateRequerimento(
   const writer = new Writer({
     doc,
     title: 'Requerimento - RSC-TAE',
-    subtitle: 'Documento de solicitacao do Reconhecimento de Saberes e Competencias',
+    subtitle: 'Documento de solicitação do Reconhecimento de Saberes e Competências',
+    badge: 'Consolidado',
     footerRight: `${servidor.siape} · ${nivelElegivel?.label ?? 'RSC-TAE'}`,
   });
   await writer.init();
 
-  writer.section('1. Identificacao do Servidor');
+  writer.section('1. Identificação do Servidor');
   writer.infoGrid(
     [
       { label: 'Servidor(a)', value: servidor.nome_completo },
       { label: 'Unidade', value: servidor.lotacao || '-' },
-      { label: 'Cargo', value: servidor.cargo || 'Tecnico-Administrativo em Educacao' },
+      { label: 'Cargo', value: servidor.cargo || 'Técnico-Administrativo em Educação' },
       { label: 'SIAPE', value: servidor.siape },
     ],
     4,
@@ -601,34 +594,54 @@ export async function generateRequerimento(
   );
 
   writer.section('2. Requerimento');
-  writer.text('Venho requerer o nivel abaixo indicado para fins de concessao do RSC-PCCTAE:', {
+  writer.text('Venho requerer o nível abaixo indicado para fins de concessão do RSC-PCCTAE:', {
     size: 9.5,
   });
   writer.gap(4);
-  RSC_OPTIONS.forEach((option) => {
-    const selected = nivelElegivel?.label.replace('RSC-TAE', 'RSC-PCCTAE') === option;
-    writer.text(`${selected ? '[X]' : '[ ]'} ${option}`, {
-      size: 9,
-      bold: selected,
-      indent: 8,
-    });
-  });
+
+  if (nivelElegivel) {
+    const romanMatch = nivelElegivel.label.match(/RSC-TAE ([IVX]+)/);
+    const roman = romanMatch ? romanMatch[1] : '';
+    const optionInfo = RSC_OPTIONS_INFO.find((opt) => opt.roman === roman);
+
+    if (optionInfo) {
+      writer.text(`[X] ${optionInfo.textTarget}`, {
+        size: 9,
+        bold: true,
+        indent: 8,
+      });
+    } else {
+      writer.text(`[X] ${nivelElegivel.label.replace('RSC-TAE', 'RSC-PCCTAE')}`, {
+        size: 9,
+        bold: true,
+        indent: 8,
+      });
+    }
+  }
 
   writer.gap(4);
-  writer.keyValue('Nivel requerido', nivelElegivel?.label ?? 'Nao identificado');
-  writer.keyValue('Equivalencia pretendida', nivelElegivel?.equivalencia ?? '-');
+  writer.keyValue('Nível requerido', nivelElegivel?.label ?? 'Não identificado');
+  writer.keyValue('Equivalência pretendida', nivelElegivel?.equivalencia ?? '-');
   writer.keyValue('Requisito apresentado', servidor.escolaridade_atual || '-');
 
-  writer.section('3. Requisitos Minimos');
-  RSC_REQUIREMENTS.forEach((requirement) => writer.bullet(requirement));
+  writer.section('3. Requisitos Mínimos');
+  if (nivelElegivel) {
+    const romanMatch = nivelElegivel.label.match(/RSC-TAE ([IVX]+)/);
+    const roman = romanMatch ? romanMatch[1] : '';
+    const optionInfo = RSC_OPTIONS_INFO.find((opt) => opt.roman === roman);
 
-  writer.section('4. Declaracao e Encaminhamento');
+    if (optionInfo) {
+      writer.bullet(optionInfo.req);
+    }
+  }
+
+  writer.section('4. Declaração e Encaminhamento');
   writer.text(
-    `Eu, ${servidor.nome_completo}, SIAPE ${servidor.siape}, lotado(a) em ${servidor.lotacao || '-'}, declaro que os documentos anexados e o Memorial Descritivo refletem fielmente minha trajetoria funcional para fins de analise pela comissao competente.`,
+    `Eu, ${servidor.nome_completo}, SIAPE ${servidor.siape}, lotado(a) em ${servidor.lotacao || '-'}, declaro que os documentos anexados e o Memorial Descritivo refletem fielmente minha trajetória funcional para fins de análise pela comissão competente.`,
   );
   writer.gap(4);
   writer.text(
-    'Apos anexar a documentacao, o processo devera ser encaminhado a unidade CRSC - Comissao Institucional de Reconhecimento de Saberes e Competencias para analise.',
+    'Após anexar a documentação, o processo deverá ser encaminhado à unidade CRSC - Comissão Institucional de Reconhecimento de Saberes e Competências para análise.',
   );
   writer.gap(28);
   writer.text(`Local e data: ${todayLabel()}`, { size: 9 });
@@ -652,7 +665,7 @@ export async function generateMemorialDescritivo(
   const writer = new Writer({
     doc,
     title: 'Memorial Descritivo - RSC-TAE',
-    subtitle: 'Documento narrativo e consolidado da trajetoria funcional apresentada pelo servidor',
+    subtitle: 'Documento narrativo e consolidado da trajetória funcional apresentada pelo servidor',
     footerRight: `${servidor.siape} · Memorial`,
   });
   await writer.init();
@@ -663,19 +676,19 @@ export async function generateMemorialDescritivo(
     size: 18,
     lineHeight: 22,
   });
-  writer.text('RECONHECIMENTO DE SABERES E COMPETENCIAS (RSC-TAE)', {
+  writer.text('RECONHECIMENTO DE SABERES E COMPETÊNCIAS (RSC-TAE)', {
     align: 'center',
     bold: true,
     size: 11,
   });
-  writer.text(nivelElegivel?.label ?? 'Nivel em analise', {
+  writer.text(nivelElegivel?.label ?? 'Nível em análise', {
     align: 'center',
     size: 10,
     color: COLORS.muted,
   });
   writer.gap(26);
   writer.text(servidor.nome_completo, { align: 'center', bold: true, size: 12 });
-  writer.text(servidor.lotacao || 'Instituto Federal do Espirito Santo', {
+  writer.text(servidor.lotacao || 'Instituto Federal do Espírito Santo', {
     align: 'center',
     size: 9.5,
     color: COLORS.muted,
@@ -683,7 +696,7 @@ export async function generateMemorialDescritivo(
   writer.text(todayYear(), { align: 'center', size: 9.5, color: COLORS.muted });
   writer.gap(20);
   writer.text(
-    'Memorial Descritivo apresentado a Comissao Institucional de Reconhecimento de Saberes e Competencias do Ifes como parte do processo de solicitacao do RSC-TAE.',
+    'Memorial Descritivo apresentado à Comissão Institucional de Reconhecimento de Saberes e Competências do Ifes como parte do processo de solicitação do RSC-TAE.',
     { size: 10, align: 'center', maxWidth: 360, lineHeight: 14 },
   );
 
@@ -695,38 +708,38 @@ export async function generateMemorialDescritivo(
   );
 
   writer.addPage();
-  writer.section('1. Identificacao do(a) Servidor(a)');
+  writer.section('1. Identificação do(a) Servidor(a)');
   writer.infoGrid(
     [
       { label: 'Nome completo', value: servidor.nome_completo },
-      { label: 'Unidade/Orgao', value: servidor.lotacao || '-' },
-      { label: 'Matricula/SIAPE', value: servidor.siape },
-      { label: 'Cargo', value: servidor.cargo || 'Tecnico-Administrativo em Educacao' },
+      { label: 'Unidade/Órgão', value: servidor.lotacao || '-' },
+      { label: 'Matrícula/SIAPE', value: servidor.siape },
+      { label: 'Cargo', value: servidor.cargo || 'Técnico-Administrativo em Educação' },
     ],
     4,
   );
   writer.infoGrid(
     [
-      { label: 'Maior titulacao', value: servidor.escolaridade_atual || '-' },
+      { label: 'Maior titulação', value: servidor.escolaridade_atual || '-' },
       { label: 'E-mail institucional', value: servidor.email_institucional || '-' },
     ],
     2,
   );
 
-  writer.section('2. Apresentacao');
+  writer.section('2. Apresentação');
   writer.text(
-    `O presente Memorial Descritivo tem por finalidade apresentar, de forma objetiva e sistematizada, as atividades desenvolvidas por ${servidor.nome_completo} no exercicio do cargo de ${servidor.cargo || 'Tecnico-Administrativo em Educacao'}, com vistas a concessao do ${nivelElegivel?.label ?? 'RSC-TAE'}, equivalente a ${nivelElegivel?.equivalencia ?? 'nivel superior ao requisito atual'}.`,
+    `O presente Memorial Descritivo tem por finalidade apresentar, de forma objetiva e sistematizada, as atividades desenvolvidas por ${servidor.nome_completo} no exercício do cargo de ${servidor.cargo || 'Técnico-Administrativo em Educação'}, com vistas à concessão do ${nivelElegivel?.label ?? 'RSC-TAE'}, equivalente a ${nivelElegivel?.equivalencia ?? 'nível superior ao requisito atual'}.`,
   );
   writer.gap(4);
   writer.text(
-    'Este documento contempla a descricao das atribuicoes desempenhadas, a participacao em atividades institucionais e o conjunto de evidencias documentais que demonstram o desenvolvimento de saberes e competencias ao longo da trajetoria funcional.',
+    'Este documento contempla a descrição das atribuições desempenhadas, a participação em atividades institucionais e o conjunto de evidências documentais que demonstram o desenvolvimento de saberes e competências ao longo da trajetória funcional.',
   );
 
-  writer.section('3. Nivel Pleiteado e Pontuacao Consolidada');
+  writer.section('3. Nível Pleiteado e Pontuação Consolidada');
   writer.infoGrid(
     [
-      { label: 'Nivel RSC', value: nivelElegivel?.label ?? '-' },
-      { label: 'Equivalencia', value: nivelElegivel?.equivalencia ?? '-' },
+      { label: 'Nível RSC', value: nivelElegivel?.label ?? '-' },
+      { label: 'Equivalência', value: nivelElegivel?.equivalencia ?? '-' },
       { label: 'Total de pontos', value: `${formatNumber(totalPontos)} pts` },
       {
         label: 'Itens distintos',
@@ -736,21 +749,22 @@ export async function generateMemorialDescritivo(
     4,
   );
   writer.keyValue(
-    'Minimo exigido para o nivel',
+    'Mínimo exigido para o nível',
     nivelElegivel ? `${nivelElegivel.pontosMinimos} pontos` : '-',
   );
-  writer.keyValue(
-    'Distribuicao por inciso',
-    incisoSummary.length
-      ? incisoSummary
-          .map(([inciso, pontos]) => `Inciso ${inciso} - ${INCISO_DESC[inciso] ?? inciso}: ${formatNumber(pontos)} pts`)
-          .join(' | ')
-      : 'Nenhum lancamento consolidado ate o momento.',
-  );
+  writer.text('Distribuição por inciso:', { size: 7, bold: true, color: COLORS.soft });
+  writer.gap(4);
+  if (incisoSummary.length) {
+    incisoSummary.forEach(([inciso, pontos]) => {
+      writer.bullet(`Inciso ${inciso} - ${INCISO_DESC[inciso] ?? inciso}: ${formatNumber(pontos)} pts`);
+    });
+  } else {
+    writer.text('Nenhum lançamento consolidado até o momento.', { size: 9, indent: 4 });
+  }
 
   writer.section('4. Relato das Atividades');
   if (!lancamentos.length) {
-    writer.text('Nenhum saber ou competencia foi registrado ate o momento.');
+    writer.text('Nenhum saber ou competência foi registrado até o momento.');
   } else {
     const grouped = new Map<string, Lancamento[]>();
     lancamentos.forEach((entry) => {
@@ -770,9 +784,9 @@ export async function generateMemorialDescritivo(
         size: 8.5,
         color: COLORS.muted,
       });
-      writer.text(`Descricao detalhada: ${item.regra_aceite}`, { size: 8.8 });
+      writer.text(`Descrição detalhada: ${item.regra_aceite}`, { size: 8.8 });
       writer.table(
-        ['Periodo', 'Unidade', 'Quantidade', 'Pts/Un', 'Subtotal'],
+        ['Período', 'Unidade', 'Quantidade', 'Pts/Un', 'Subtotal'],
         itemLancamentos.map((entry) => [
           `${formatDate(entry.data_inicio)} a ${formatDate(entry.data_fim)}`,
           item.unidade_medida,
@@ -783,32 +797,54 @@ export async function generateMemorialDescritivo(
         [0.28, 0.18, 0.16, 0.16, 0.22],
       );
       writer.keyValue('Subtotal do item', `${formatNumber(subtotal)} pontos`);
-      writer.keyValue('Documentacao comprobatoria prevista', item.documentos_comprobatorios || '-');
+      writer.gap(4);
+      writer.text('Documentação comprobatória prevista:', { size: 7, bold: true, color: COLORS.soft });
+      writer.gap(2);
+      writer.text(item.documentos_comprobatorios || '-', { size: 8 });
+      writer.gap(12);
     });
   }
 
-  writer.section('5. Consideracoes Finais e Declaracao de Veracidade');
+  writer.section('5. Considerações Finais e Declaração de Veracidade');
   writer.text(
-    'As evidencias apresentadas demonstram trajetoria funcional marcada por comprometimento institucional, aperfeicoamento continuo e aplicacao pratica de saberes adquiridos ao longo da experiencia profissional.',
+    'As evidências apresentadas demonstram trajetória funcional marcada por comprometimento institucional, aperfeiçoamento contínuo e aplicação prática de saberes adquiridos ao longo da experiência profissional.',
   );
   writer.gap(4);
   writer.text(
-    'Declaro, para todos os fins de direito, que as informacoes constantes neste Memorial Descritivo sao verdadeiras, autenticas e estao devidamente documentadas, assumindo inteira responsabilidade pelas declaracoes prestadas.',
+    'Declaro, para todos os fins de direito, que as informações constantes neste Memorial Descritivo são verdadeiras, autênticas e estão devidamente documentadas, assumindo inteira responsabilidade pelas declarações prestadas.',
   );
   writer.gap(10);
-  writer.keyValue(
-    'Documentos anexados ao processo',
-    documentosUsados.length
-      ? documentosUsados.map((docItem) => docItem.nome_arquivo).join(' | ')
-      : 'Nenhum documento vinculado.',
-  );
+  writer.text('Documentos anexados ao processo:', { size: 7, bold: true, color: COLORS.soft });
+  writer.gap(4);
+
+  const itensComLancamentos = itensRSC
+    .filter((item) => lancamentos.some((l) => l.item_rsc_id === item.id))
+    .sort((a, b) => a.numero - b.numero);
+
+  if (itensComLancamentos.length) {
+    const sanitizeFileName = (value: string) =>
+      value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9._-]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 80);
+
+    itensComLancamentos.forEach((item) => {
+      const baseName = sanitizeFileName(`Item_${item.numero}_${item.descricao}`);
+      writer.bullet(`${baseName}.pdf`);
+    });
+  } else {
+    writer.text('Nenhum documento vinculado.', { size: 9, indent: 4 });
+  }
+
   writer.gap(18);
-  writer.text(`${servidor.lotacao || 'Vitoria - ES'}, ${todayLabel()}.`, { size: 9 });
+  writer.text(`${servidor.lotacao || 'Vitória - ES'}, ${todayLabel()}.`, { size: 9 });
   writer.gap(26);
   writer.text('___________________________________', { align: 'center' });
   writer.gap(2);
   writer.text(servidor.nome_completo, { align: 'center', bold: true, size: 10 });
-  writer.text(servidor.cargo || 'Tecnico-Administrativo em Educacao', {
+  writer.text(servidor.cargo || 'Técnico-Administrativo em Educação', {
     align: 'center',
     size: 8.5,
     color: COLORS.muted,
@@ -824,28 +860,28 @@ export async function generateComprovacoesIndice(
   const doc = await PDFDocument.create();
   const writer = new Writer({
     doc,
-    title: 'Indice de Comprovacoes',
-    subtitle: 'Organizacao do conjunto documental por item do rol de saberes e competencias',
-    footerRight: `${servidor.siape} · Comprovacoes`,
+    title: 'Índice de Comprovações',
+    subtitle: 'Organização do conjunto documental por item do rol de saberes e competências',
+    footerRight: `${servidor.siape} · Comprovações`,
   });
   await writer.init();
 
-  writer.section('1. Estrutura do Conjunto de Comprovacoes');
+  writer.section('1. Estrutura do Conjunto de Comprovações');
   writer.text(
-    'As comprovacoes deste processo foram organizadas por item do rol de saberes. Cada arquivo desta pasta contem uma capa-resumo com a identificacao do item e, quando houver, os anexos fisicos correspondentes ao item.',
+    'As comprovações deste processo foram organizadas por item do rol de saberes. Cada arquivo desta pasta contém uma capa-resumo com a identificação do item e, quando houver, os anexos físicos correspondentes ao item.',
   );
   writer.gap(4);
   writer.text(
-    'Referencias do GeDoc e autodeclaracoes sem arquivo fisico aparecem registradas na capa do respectivo item.',
+    'Referências do GeDoc e autodeclarações sem arquivo físico aparecem registradas na capa do respectivo item.',
     { size: 9, color: COLORS.muted },
   );
 
-  writer.section('2. Itens com Comprovacoes');
+  writer.section('2. Itens com Comprovações');
   if (!grupos.length) {
-    writer.text('Nenhum item possui comprovacoes vinculadas no momento.');
+    writer.text('Nenhum item possui comprovações vinculadas no momento.');
   } else {
     writer.table(
-      ['Item', 'Inciso', 'Descricao', 'Lanc.', 'Docs'],
+      ['Item', 'Inciso', 'Descrição', 'Lanç.', 'Docs'],
       grupos.map((grupo) => [
         `${grupo.item.numero}`,
         grupo.item.inciso,
@@ -867,7 +903,7 @@ export async function generateComprovacaoResumoItem(
   const doc = await PDFDocument.create();
   const writer = new Writer({
     doc,
-    title: `Comprovacoes - Item ${grupo.item.numero}`,
+    title: `Comprovações - Item ${grupo.item.numero}`,
     subtitle: 'Capa-resumo do conjunto documental do item',
     footerRight: `${servidor.siape} · Item ${grupo.item.numero}`,
   });
@@ -880,7 +916,7 @@ export async function generateComprovacaoResumoItem(
   const gedocDocs = grupo.documentos.filter((docItem) => (docItem.gedoc_links?.length ?? 0) > 0);
   const autodeclaracoes = grupo.documentos.filter((docItem) => docItem.autodeclaracao);
 
-  writer.section('1. Identificacao do Item');
+  writer.section('1. Identificação do Item');
   writer.infoGrid(
     [
       { label: 'Servidor', value: servidor.nome_completo },
@@ -890,13 +926,13 @@ export async function generateComprovacaoResumoItem(
     ],
     4,
   );
-  writer.keyValue('Descricao do item', grupo.item.descricao);
+  writer.keyValue('Descrição do item', grupo.item.descricao);
   writer.keyValue('Regra de aceite', grupo.item.regra_aceite);
-  writer.keyValue('Pontuacao consolidada no item', `${formatNumber(subtotal)} pontos`);
+  writer.keyValue('Pontuação consolidada no item', `${formatNumber(subtotal)} pontos`);
 
-  writer.section('2. Lancamentos Vinculados');
+  writer.section('2. Lançamentos Vinculados');
   writer.table(
-    ['Periodo', 'Quantidade', 'Pontos', 'Documento'],
+    ['Período', 'Quantidade', 'Pontos', 'Documento'],
     grupo.lancamentos.map((entry) => {
       const docItem = grupo.documentos.find((candidate) => candidate.id === entry.documento_id);
       return [
@@ -909,14 +945,14 @@ export async function generateComprovacaoResumoItem(
     [0.34, 0.16, 0.16, 0.34],
   );
 
-  writer.section('3. Composicao do Dossie');
-  writer.keyValue('Arquivos fisicos anexados', `${physicalDocs.length}`);
-  writer.keyValue('Referencias GeDoc', `${gedocDocs.length}`);
-  writer.keyValue('Autodeclaracoes', `${autodeclaracoes.length}`);
+  writer.section('3. Composição do Dossiê');
+  writer.keyValue('Arquivos físicos anexados', `${physicalDocs.length}`);
+  writer.keyValue('Referências GeDoc', `${gedocDocs.length}`);
+  writer.keyValue('Autodeclarações', `${autodeclaracoes.length}`);
 
   if (gedocDocs.length) {
     writer.gap(4);
-    writer.text('Referencias de GeDoc:', { bold: true, size: 9 });
+    writer.text('Referências de GeDoc:', { bold: true, size: 9 });
     gedocDocs.forEach((docItem) => {
       writer.text(docItem.nome_arquivo, { size: 8.5, bold: true, indent: 8 });
       docItem.gedoc_links?.forEach((link) => {
@@ -927,9 +963,9 @@ export async function generateComprovacaoResumoItem(
 
   if (autodeclaracoes.length) {
     writer.gap(4);
-    writer.text('Registros por autodeclaracao:', { bold: true, size: 9 });
+    writer.text('Registros por autodeclaração:', { bold: true, size: 9 });
     autodeclaracoes.forEach((docItem) => {
-      writer.text(`${docItem.nome_arquivo} - sem arquivo fisico anexo.`, {
+      writer.text(`${docItem.nome_arquivo} - sem arquivo físico anexo.`, {
         size: 8.5,
         indent: 8,
       });
@@ -948,8 +984,8 @@ export async function generateRelatorioPontuacao(
   const doc = await PDFDocument.create();
   const writer = new Writer({
     doc,
-    title: 'Ficha de Consolidacao - RSC-TAE',
-    subtitle: 'Resumo tecnico da pontuacao e dos itens consolidados do processo',
+    title: 'Ficha de Consolidação - RSC-TAE',
+    subtitle: 'Resumo técnico da pontuação e dos itens consolidados do processo',
     footerRight: `${servidor.siape} · ${nivelElegivel?.label ?? 'RSC-TAE'}`,
   });
   await writer.init();
@@ -957,12 +993,12 @@ export async function generateRelatorioPontuacao(
   const totalPontos = lancamentos.reduce((sum, entry) => sum + entry.pontos_calculados, 0);
   const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
 
-  writer.section('1. Identificacao do Servidor');
+  writer.section('1. Identificação do Servidor');
   writer.infoGrid(
     [
       { label: 'Nome', value: servidor.nome_completo },
       { label: 'SIAPE', value: servidor.siape },
-      { label: 'Lotacao', value: servidor.lotacao || '-' },
+      { label: 'Lotação', value: servidor.lotacao || '-' },
       { label: 'Escolaridade atual', value: servidor.escolaridade_atual || '-' },
     ],
     4,
@@ -971,9 +1007,9 @@ export async function generateRelatorioPontuacao(
   writer.section('2. Dados do Pedido');
   writer.infoGrid(
     [
-      { label: 'Nivel pleiteavel', value: nivelElegivel?.label ?? '-' },
-      { label: 'Equivalencia', value: nivelElegivel?.equivalencia ?? '-' },
-      { label: 'Pontuacao total', value: `${formatNumber(totalPontos)} pts` },
+      { label: 'Nível pleiteável', value: nivelElegivel?.label ?? '-' },
+      { label: 'Equivalência', value: nivelElegivel?.equivalencia ?? '-' },
+      { label: 'Pontuação total', value: `${formatNumber(totalPontos)} pts` },
       { label: 'Itens distintos', value: `${itensDistintos}` },
     ],
     4,
@@ -981,7 +1017,7 @@ export async function generateRelatorioPontuacao(
 
   writer.section('3. Itens Consolidados');
   if (!lancamentos.length) {
-    writer.text('Nenhum item consolidado ate o momento.');
+    writer.text('Nenhum item consolidado até o momento.');
   } else {
     const rows = lancamentos
       .map((entry) => {
@@ -996,7 +1032,7 @@ export async function generateRelatorioPontuacao(
         ];
       })
       .filter((row): row is string[] => !!row);
-    writer.table(['Item', 'Inc.', 'Descricao', 'Qtd.', 'Pontos'], rows, [0.08, 0.08, 0.52, 0.12, 0.2]);
+    writer.table(['Item', 'Inc.', 'Descrição', 'Qtd.', 'Pontos'], rows, [0.08, 0.08, 0.52, 0.12, 0.2]);
   }
 
   return doc.save();

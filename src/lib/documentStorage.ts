@@ -156,3 +156,33 @@ export async function clearDocumentStorage() {
     };
   });
 }
+
+export async function deleteDocumentsByServidorId(servidorId: string): Promise<void> {
+  const database = await openDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.openCursor();
+
+    request.onsuccess = () => {
+      const cursor = request.result as IDBCursorWithValue | null;
+      if (cursor) {
+        const record = cursor.value as StoredDocumentRecord;
+        if (record.servidorId === servidorId) {
+          cursor.delete();
+        }
+        cursor.continue();
+      }
+    };
+
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}

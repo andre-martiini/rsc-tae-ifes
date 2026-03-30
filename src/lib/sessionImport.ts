@@ -1,21 +1,14 @@
 /**
  * Session import: reads a ZIP backup produced by sessionExport.ts,
- * restores localStorage metadata and re-imports PDF blobs into IndexedDB.
+ * restores IndexedDB blobs for the active session.
  *
  * Returns the restored metadata so the calling context can update React state.
+ * Does NOT write to localStorage — the AppContext handles that via restoreSession().
  */
 
 import JSZip from 'jszip';
-import { clearDocumentStorage, persistDocumentBlob } from './documentStorage';
+import { deleteDocumentsByServidorId, persistDocumentBlob } from './documentStorage';
 import type { Servidor, Documento, Lancamento, ProcessoRSC } from '../data/mock';
-
-const STORAGE_KEYS = [
-  'rsc-tae-perfil',
-  'rsc-tae-documentos',
-  'rsc-tae-lancamentos',
-  'rsc-tae-processo',
-  'rsc-tae-wizard-ids',
-];
 
 export interface RestoredSession {
   perfil: Servidor | null;
@@ -25,11 +18,11 @@ export interface RestoredSession {
   wizardIds: string[];
 }
 
-export async function importSession(file: File): Promise<RestoredSession> {
+export async function importSession(file: File, currentServidorId?: string): Promise<RestoredSession> {
   const arrayBuffer = await file.arrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
-  // ── Restore metadata ───────────────────────────────────────────────────────
+  // ── Parse metadata ─────────────────────────────────────────────────────────
   const metadataFile = zip.file('metadata.json');
   if (!metadataFile) {
     throw new Error('Arquivo de backup inválido: metadata.json não encontrado.');
@@ -38,20 +31,14 @@ export async function importSession(file: File): Promise<RestoredSession> {
   const metadataText = await metadataFile.async('text');
   const metadata = JSON.parse(metadataText) as Record<string, unknown>;
 
-  // Write each key back to localStorage
-  for (const key of STORAGE_KEYS) {
-    if (key in metadata) {
-      window.localStorage.setItem(key, JSON.stringify(metadata[key]));
-    } else {
-      window.localStorage.removeItem(key);
-    }
-  }
-
   // ── Restore PDF blobs into IndexedDB ──────────────────────────────────────
   const docs = (metadata['rsc-tae-documentos'] ?? []) as Documento[];
   const filesFolder = zip.folder('files');
 
-  await clearDocumentStorage();
+  // Clear only the active session's blobs, not all sessions
+  if (currentServidorId) {
+    await deleteDocumentsByServidorId(currentServidorId);
+  }
 
   if (filesFolder && docs.length > 0) {
     for (const doc of docs) {
