@@ -56,7 +56,7 @@ export default function AppHeader({
               <LogOut className="h-3.5 w-3.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold text-gray-900">RSC-TAE Ifes</h1>
+              <h1 className="truncate text-xl font-bold text-gray-900">Assistente RSC-TAE Ifes</h1>
               <p className="truncate text-sm text-gray-500">Reconhecimento de Saberes e Competências</p>
             </div>
           </div>

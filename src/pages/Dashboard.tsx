@@ -1,6 +1,6 @@
 ﻿import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2 } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppContext } from '../context/AppContext';
 import { RSC_LEVELS } from '../data/mock';
@@ -335,7 +335,17 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 gap-2">
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              <a
+                href="https://notebooklm.google.com/notebook/c34b5dca-ec61-4d1f-a467-efd551f6b0b5"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                title="Abrir Assistente Virtual em nova guia"
+              >
+                <Bot className="h-4 w-4 text-emerald-600" />
+                Assistente Virtual
+              </a>
               {wizardRecommendedIds.length > 0 && (
                 <button
                   type="button"
@@ -408,26 +418,18 @@ export default function Dashboard() {
 
               <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
-                      <div className="group relative flex items-center">
-                        <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
-                        <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                          <p className="mb-2 text-[11px] font-bold text-white">Sobre a Pontuação</p>
-                          <p className="text-[11px] leading-relaxed text-gray-300">
-                            A pontuação é obtida a partir das suas atividades cadastradas. Cada nível de RSC exige que você alcance uma <span className="font-semibold text-white">pontuação mínima predefinida</span> somando os pontos de todos os lançamentos válidos.
-                          </p>
-                          <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
-                        </div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
+                    <div className="group relative flex items-center">
+                      <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
+                      <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                        <p className="mb-2 text-[11px] font-bold text-white">Sobre a Pontuação</p>
+                        <p className="text-[11px] leading-relaxed text-gray-300">
+                          A pontuação é obtida a partir das suas atividades cadastradas. Cada nível de RSC exige que você alcance uma <span className="font-semibold text-white">pontuação mínima predefinida</span> somando os pontos de todos os lançamentos válidos.
+                        </p>
+                        <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
                       </div>
                     </div>
-                    {nivelPleiteavel.atingido && (
-                      <p className="flex items-center gap-2 text-sm font-medium text-green-700">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Meta atingida
-                      </p>
-                    )}
                   </div>
                   <div className="flex items-end justify-between gap-4">
                     <p className="text-3xl font-black text-gray-900">
