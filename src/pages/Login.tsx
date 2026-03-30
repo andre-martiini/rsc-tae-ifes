@@ -1,14 +1,32 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useAppContext } from '../context/AppContext';
 
 export default function Login() {
+  const { servidores, login } = useAppContext();
   const [loadingTarget, setLoadingTarget] = useState<'usuário' | 'administrador' | null>(null);
+  const [selectedServidorId, setSelectedServidorId] = useState<string>(servidores[0]?.id ?? '');
   const navigate = useNavigate();
 
   const handleUserAccess = () => {
+    const selected = servidores.find((s) => s.id === selectedServidorId);
+
+    if (!selected) {
+      toast.error('Selecione um servidor para acessar.');
+      return;
+    }
+
     setLoadingTarget('usuário');
-    toast.success('Acesso de usuário liberado no protótipo.');
+    const ok = login(selected.siape);
+
+    if (!ok) {
+      toast.error('Servidor não encontrado.');
+      setLoadingTarget(null);
+      return;
+    }
+
+    toast.success(`Acesso liberado: ${selected.nome_completo}`);
 
     window.setTimeout(() => {
       setLoadingTarget(null);
@@ -18,7 +36,7 @@ export default function Login() {
 
   const handleAdminAccess = () => {
     setLoadingTarget('administrador');
-    toast.success('Área administrativa separada para a proxima etapa.');
+    toast.success('Área administrativa.');
 
     window.setTimeout(() => {
       setLoadingTarget(null);
@@ -89,9 +107,39 @@ export default function Login() {
         >
           <div className="space-y-8">
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-              O protótipo esta com acesso livre nesta etapa. O mock de login e a criação de senha
-              foram temporariamente desativados para facilitar a validação dos fluxos.
+              Selecione o servidor para acessar o sistema. Novos servidores podem ser cadastrados
+              pela área administrativa.
             </p>
+
+            <div className="space-y-3">
+              <label className="text-sm font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                Servidor
+              </label>
+              <select
+                value={selectedServidorId}
+                onChange={(e) => setSelectedServidorId(e.target.value)}
+                className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition-colors"
+                style={{
+                  background: 'var(--color-surface-container-low)',
+                  borderColor: 'rgba(190,202,185,0.3)',
+                  color: 'var(--color-on-surface)',
+                }}
+              >
+                {servidores.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.nome_completo} — SIAPE {s.siape}
+                  </option>
+                ))}
+              </select>
+              {selectedServidorId && (() => {
+                const s = servidores.find((x) => x.id === selectedServidorId);
+                return s ? (
+                  <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                    {s.lotacao} · {s.escolaridade_atual}
+                  </p>
+                ) : null;
+              })()}
+            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <button
@@ -139,23 +187,6 @@ export default function Login() {
                 )}
               </button>
             </div>
-
-            <div className="grid gap-3 text-xs md:grid-cols-2" style={{ color: 'var(--color-on-surface-variant)' }}>
-              <p
-                className="rounded-lg p-3"
-                style={{ background: 'rgba(0,107,31,0.05)' }}
-              >
-                O acesso de usuário leva para a tela inicial atual do sistema, mantendo o fluxo
-                padrão ja existente.
-              </p>
-              <p
-                className="rounded-lg p-3"
-                style={{ background: 'rgba(186,8,22,0.05)' }}
-              >
-                O acesso de administrador abre uma Área separada, pronta para receber a nova tela
-                que vamos construir em seguida.
-              </p>
-            </div>
           </div>
 
           <div
@@ -174,8 +205,8 @@ export default function Login() {
               </span>
             </div>
             <p className="text-xs md:text-sm leading-relaxed" style={{ color: 'var(--color-on-surface-variant)' }}>
-              Este fluxo ainda opera como protótipo. A autenticação institucional, as validacoes
-              definitivas e a integração com as bases oficiais serao conectadas em outra etapa.
+              Este fluxo ainda opera como protótipo. A autenticação institucional e a integração
+              com as bases oficiais serão conectadas em outra etapa.
             </p>
           </div>
 
@@ -202,4 +233,3 @@ export default function Login() {
     </div>
   );
 }
-

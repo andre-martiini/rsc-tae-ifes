@@ -76,6 +76,7 @@ export interface Documento {
   mime_type?: string;
   tamanho_bytes?: number;
   data_upload: string;
+  gedoc_links?: string[];
 }
 
 export interface Lancamento {
@@ -92,11 +93,23 @@ export interface Lancamento {
 }
 
 export interface ProcessoRSC {
-  status: 'Rascunho' | 'Enviado';
+  status: 'Rascunho' | 'Em triagem';
   nivel_pleiteado_id?: string;
   pontos_total_submissao?: number;
   itens_distintos_submissao?: number;
   submitted_at?: string;
+}
+
+export type SystemUserPerfil = 'Avaliador' | 'Administrador' | 'Gestor';
+
+export interface SystemUser {
+  id: string;
+  nome: string;
+  siape: string;
+  email: string;
+  perfil: SystemUserPerfil;
+  lotacao: string;
+  status: 'Ativo' | 'Inativo';
 }
 
 export const mockServidor: Servidor = {
@@ -107,6 +120,32 @@ export const mockServidor: Servidor = {
   lotacao: 'Campus Barra de São Francisco',
   escolaridade_atual: 'Mestrado',
 };
+
+export const seedServidores: Servidor[] = [
+  mockServidor,
+  {
+    id: 'srv-002',
+    siape: '2345678',
+    nome_completo: 'Marina Costa Almeida',
+    email_institucional: 'marina.almeida@ifes.edu.br',
+    lotacao: 'Gabinete da Reitoria',
+    escolaridade_atual: 'Especialização',
+  },
+  {
+    id: 'srv-003',
+    siape: '3456789',
+    nome_completo: 'Carlos Henrique Tavares',
+    email_institucional: 'carlos.tavares@ifes.edu.br',
+    lotacao: 'Campus Vitória',
+    escolaridade_atual: 'Doutorado',
+  },
+];
+
+export const seedSystemUsers: SystemUser[] = [
+  { id: 'usr-001', nome: 'Paula Mendes', siape: '4567890', email: 'paula.mendes@ifes.edu.br', perfil: 'Avaliador', lotacao: 'Pró-Reitoria de Ensino', status: 'Ativo' },
+  { id: 'usr-002', nome: 'Rafael Souza', siape: '5678901', email: 'rafael.souza@ifes.edu.br', perfil: 'Administrador', lotacao: 'Pró-Reitoria de Desenvolvimento Institucional', status: 'Ativo' },
+  { id: 'usr-003', nome: 'Luciana Rocha', siape: '6789012', email: 'luciana.rocha@ifes.edu.br', perfil: 'Gestor', lotacao: 'Gabinete da Reitoria', status: 'Inativo' },
+];
 
 export { rolItensRSC as mockItensRSC } from './rolItens';
 

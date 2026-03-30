@@ -7,25 +7,27 @@ import {
   ChevronRight,
   FileCheck2,
   LayoutGrid,
+  Plus,
   Save,
   Search,
   Settings2,
   ShieldCheck,
-  SlidersHorizontal,
   Users,
   X,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { useAppContext } from '../context/AppContext';
+import { SystemUserPerfil } from '../data/mock';
 
 type AdminView = 'painel' | 'usuarios' | 'avaliacao' | 'configuracoes';
 type UserTab = 'base-servidores' | 'usuarios-sistema';
-type ProcessStatus = 'Enviado' | 'Em triagem' | 'Em analise' | 'Pendente de ajuste' | 'Deferido' | 'Indeferido';
+type ProcessStatus = 'Elegível' | 'Em triagem' | 'Em analise' | 'Pendente de ajuste' | 'Deferido' | 'Indeferido';
 type DocumentStatus = 'Pendente' | 'Validado' | 'Pendencia' | 'Recusado';
 type Inciso = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI';
 
-type AccessProfile = 'Servidor' | 'Avaliador' | 'Administrador' | 'Gestor';
+type AccessProfile = 'Servidor' | SystemUserPerfil;
 
 interface AdminDocument {
   id: string;
@@ -54,16 +56,6 @@ interface AdminServer {
   itensLancados: number;
   documentos: AdminDocument[];
   parecerGeral: string;
-}
-
-interface SystemUser {
-  id: string;
-  nome: string;
-  siape: string;
-  email: string;
-  perfil: Exclude<AccessProfile, 'Servidor'>;
-  lotacao: string;
-  status: 'Ativo' | 'Inativo';
 }
 
 const EDUCATION_OPTIONS = [
@@ -244,38 +236,28 @@ const INITIAL_SERVERS: AdminServer[] = [
   },
 ];
 
-const INITIAL_SYSTEM_USERS: SystemUser[] = [
-  {
-    id: 'usr-001',
-    nome: 'Paula Mendes',
-    siape: '4567890',
-    email: 'paula.mendes@ifes.edu.br',
-    perfil: 'Avaliador',
-    lotacao: 'Pró-Reitoria de Ensino',
-    status: 'Ativo',
-  },
-  {
-    id: 'usr-002',
-    nome: 'Rafael Souza',
-    siape: '5678901',
-    email: 'rafael.souza@ifes.edu.br',
-    perfil: 'Administrador',
-    lotacao: 'Pró-Reitoria de Desenvolvimento Institucional',
-    status: 'Ativo',
-  },
-  {
-    id: 'usr-003',
-    nome: 'Luciana Rocha',
-    siape: '6789012',
-    email: 'luciana.rocha@ifes.edu.br',
-    perfil: 'Gestor',
-    lotacao: 'Gabinete da Reitoria',
-    status: 'Inativo',
-  },
-];
+const ADMIN_SERVERS_KEY = 'rsc-tae-admin-servers';
+
+const VALID_STATUSES = new Set<string>(['Elegível', 'Em triagem', 'Em analise', 'Pendente de ajuste', 'Deferido', 'Indeferido']);
+
+function migrateStatus(status: string): ProcessStatus {
+  if (status === 'Enviado') return 'Em triagem';
+  return VALID_STATUSES.has(status) ? (status as ProcessStatus) : 'Elegível';
+}
+
+function loadAdminServers(): AdminServer[] {
+  try {
+    const raw = window.localStorage.getItem(ADMIN_SERVERS_KEY);
+    if (!raw) return INITIAL_SERVERS;
+    const parsed = JSON.parse(raw) as AdminServer[];
+    return parsed.map((s) => ({ ...s, statusProcesso: migrateStatus(s.statusProcesso) }));
+  } catch {
+    return INITIAL_SERVERS;
+  }
+}
 
 const STATUS_META: Record<ProcessStatus, { label: string; bar: string; chip: string }> = {
-  Enviado: { label: 'Enviado', bar: 'bg-slate-400', chip: 'bg-slate-100 text-slate-700 border-slate-200' },
+  'Elegível': { label: 'Elegível', bar: 'bg-slate-300', chip: 'bg-slate-50 text-slate-500 border-slate-200' },
   'Em triagem': { label: 'Em triagem', bar: 'bg-amber-400', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
   'Em analise': { label: 'Em análise', bar: 'bg-yellow-400', chip: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
   'Pendente de ajuste': { label: 'Pendente de ajuste', bar: 'bg-orange-400', chip: 'bg-orange-50 text-orange-700 border-orange-200' },
@@ -338,31 +320,106 @@ function Pagination({ page, totalItems, onChange }: { page: number; totalItems: 
   );
 }
 
+const EMPTY_NEW_SERVER = {
+  nome: '',
+  siape: '',
+  email: '',
+  escolaridade: EDUCATION_OPTIONS[0] as string,
+  lotacao: LOTACAO_OPTIONS[0] as string,
+};
+
+const EMPTY_NEW_SYSTEM_USER = {
+  nome: '',
+  siape: '',
+  email: '',
+  perfil: 'Avaliador' as SystemUserPerfil,
+  lotacao: LOTACAO_OPTIONS[0] as string,
+};
+
 export default function AdminPortal() {
   const navigate = useNavigate();
+  const { systemUsers, createServidor, createSystemUser } = useAppContext();
   const [activeView, setActiveView] = useState<AdminView>('painel');
   const [userTab, setUserTab] = useState<UserTab>('base-servidores');
-  const [servers, setServers] = useState<AdminServer[]>(INITIAL_SERVERS);
-  const [systemUsers] = useState<SystemUser[]>(INITIAL_SYSTEM_USERS);
+  const [servers, setServers] = useState<AdminServer[]>(() => loadAdminServers());
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedServerId, setSelectedServerId] = useState<string>(INITIAL_SERVERS[0].id);
+  const [selectedServerId, setSelectedServerId] = useState<string>(() => loadAdminServers()[0]?.id ?? '');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
+  const [newServerModalOpen, setNewServerModalOpen] = useState(false);
+  const [newSystemUserModalOpen, setNewSystemUserModalOpen] = useState(false);
+  const [newServerForm, setNewServerForm] = useState(EMPTY_NEW_SERVER);
+  const [newSystemUserForm, setNewSystemUserForm] = useState(EMPTY_NEW_SYSTEM_USER);
   const [queuePage, setQueuePage] = useState(1);
   const [serverPage, setServerPage] = useState(1);
   const [systemUserPage, setSystemUserPage] = useState(1);
   const [selectedInciso, setSelectedInciso] = useState<Inciso>('I');
-  const [editableServer, setEditableServer] = useState(() => ({
-    nome: INITIAL_SERVERS[0].nome,
-    siape: INITIAL_SERVERS[0].siape,
-    email: INITIAL_SERVERS[0].email,
-    escolaridade: INITIAL_SERVERS[0].escolaridade,
-    lotacao: INITIAL_SERVERS[0].lotacao,
-    perfil: INITIAL_SERVERS[0].perfil,
-  }));
-  const [generalOpinion, setGeneralOpinion] = useState(INITIAL_SERVERS[0].parecerGeral);
+  const [editableServer, setEditableServer] = useState(() => {
+    const first = loadAdminServers()[0];
+    return first
+      ? { nome: first.nome, siape: first.siape, email: first.email, escolaridade: first.escolaridade, lotacao: first.lotacao, perfil: first.perfil }
+      : { nome: '', siape: '', email: '', escolaridade: EDUCATION_OPTIONS[0] as string, lotacao: LOTACAO_OPTIONS[0] as string, perfil: 'Servidor' as AccessProfile };
+  });
+  const [generalOpinion, setGeneralOpinion] = useState(() => loadAdminServers()[0]?.parecerGeral ?? '');
 
   const selectedServer = servers.find((server) => server.id === selectedServerId) ?? null;
+
+  useEffect(() => {
+    window.localStorage.setItem(ADMIN_SERVERS_KEY, JSON.stringify(servers));
+  }, [servers]);
+
+  const handleCreateServer = () => {
+    if (!newServerForm.nome.trim() || !newServerForm.siape.trim() || !newServerForm.email.trim()) {
+      return;
+    }
+
+    const novoServidor = createServidor({
+      nome_completo: newServerForm.nome.trim(),
+      siape: newServerForm.siape.trim(),
+      email_institucional: newServerForm.email.trim(),
+      lotacao: newServerForm.lotacao,
+      escolaridade_atual: newServerForm.escolaridade,
+    });
+
+    const novoAdminServer: AdminServer = {
+      id: novoServidor.id,
+      nome: novoServidor.nome_completo,
+      siape: novoServidor.siape,
+      email: novoServidor.email_institucional,
+      escolaridade: novoServidor.escolaridade_atual,
+      lotacao: novoServidor.lotacao,
+      perfil: 'Servidor',
+      statusProcesso: 'Elegível',
+      nivelPretendido: '—',
+      ultimaAtualizacao: new Date().toLocaleString('pt-BR'),
+      pontuacao: 0,
+      itensLancados: 0,
+      documentos: [],
+      parecerGeral: '',
+    };
+
+    setServers((current) => [...current, novoAdminServer]);
+    setNewServerForm(EMPTY_NEW_SERVER);
+    setNewServerModalOpen(false);
+  };
+
+  const handleCreateSystemUser = () => {
+    if (!newSystemUserForm.nome.trim() || !newSystemUserForm.siape.trim() || !newSystemUserForm.email.trim()) {
+      return;
+    }
+
+    createSystemUser({
+      nome: newSystemUserForm.nome.trim(),
+      siape: newSystemUserForm.siape.trim(),
+      email: newSystemUserForm.email.trim(),
+      perfil: newSystemUserForm.perfil,
+      lotacao: newSystemUserForm.lotacao,
+      status: 'Ativo',
+    });
+
+    setNewSystemUserForm(EMPTY_NEW_SYSTEM_USER);
+    setNewSystemUserModalOpen(false);
+  };
 
   const filteredServers = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -564,9 +621,19 @@ export default function AdminPortal() {
                   : 'Tabela separada para administrar perfis internos do sistema.'}
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 lg:min-w-[360px]">
-              <Search className="h-4 w-4 text-gray-400" />
-              <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar por nome, SIAPE, e-mail ou lotação" className="h-auto border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0" />
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => userTab === 'base-servidores' ? setNewServerModalOpen(true) : setNewSystemUserModalOpen(true)}
+                className="rounded-lg bg-[#8c1d24] px-3 text-white hover:bg-[#7a1920] gap-1.5"
+              >
+                <Plus className="h-4 w-4" />
+                {userTab === 'base-servidores' ? 'Novo servidor' : 'Novo usuário'}
+              </Button>
+              <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 lg:min-w-[300px]">
+                <Search className="h-4 w-4 text-gray-400" />
+                <Input value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="Buscar por nome, SIAPE, e-mail..." className="h-auto border-0 bg-transparent px-0 py-0 shadow-none focus-visible:ring-0" />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -848,6 +915,114 @@ export default function AdminPortal() {
             <div className="mt-6 flex justify-end gap-3">
               <Button variant="outline" onClick={() => setConfirmSaveOpen(false)} className="rounded-xl border-gray-200 px-4 py-2 text-gray-700">Cancelar</Button>
               <Button onClick={handleSaveServer} className="rounded-xl bg-green-700 px-4 py-2 text-white hover:bg-green-800">Confirmar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {newServerModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-6">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8c1d24]">Novo cadastro</p>
+                <h3 className="mt-1 text-xl font-black text-gray-900">Cadastrar servidor</h3>
+                <p className="mt-1 text-sm text-gray-500">O servidor será salvo na base e poderá acessar o sistema.</p>
+              </div>
+              <button type="button" onClick={() => setNewServerModalOpen(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Nome completo *</label>
+                <Input value={newServerForm.nome} onChange={(e) => setNewServerForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex.: Maria das Dores Silva" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">SIAPE *</label>
+                <Input value={newServerForm.siape} onChange={(e) => setNewServerForm((f) => ({ ...f, siape: e.target.value }))} placeholder="Ex.: 1234567" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">E-mail institucional *</label>
+                <Input value={newServerForm.email} onChange={(e) => setNewServerForm((f) => ({ ...f, email: e.target.value }))} placeholder="Ex.: nome@ifes.edu.br" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Escolaridade</label>
+                <select value={newServerForm.escolaridade} onChange={(e) => setNewServerForm((f) => ({ ...f, escolaridade: e.target.value }))} className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500">
+                  {EDUCATION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Lotação</label>
+                <select value={newServerForm.lotacao} onChange={(e) => setNewServerForm((f) => ({ ...f, lotacao: e.target.value }))} className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500">
+                  {LOTACAO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => { setNewServerModalOpen(false); setNewServerForm(EMPTY_NEW_SERVER); }} className="rounded-xl border-gray-200 px-4 py-2 text-gray-700">Cancelar</Button>
+              <Button
+                onClick={handleCreateServer}
+                disabled={!newServerForm.nome.trim() || !newServerForm.siape.trim() || !newServerForm.email.trim()}
+                className="rounded-xl bg-[#8c1d24] px-4 py-2 text-white hover:bg-[#7a1920] disabled:opacity-50"
+              >
+                Salvar servidor
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {newSystemUserModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/25 px-6">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8c1d24]">Novo cadastro</p>
+                <h3 className="mt-1 text-xl font-black text-gray-900">Cadastrar usuário do sistema</h3>
+                <p className="mt-1 text-sm text-gray-500">Avaliadores, gestores e administradores da plataforma.</p>
+              </div>
+              <button type="button" onClick={() => setNewSystemUserModalOpen(false)} className="rounded-full bg-gray-100 p-2 text-gray-500 hover:bg-gray-200"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2 space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Nome completo *</label>
+                <Input value={newSystemUserForm.nome} onChange={(e) => setNewSystemUserForm((f) => ({ ...f, nome: e.target.value }))} placeholder="Ex.: Roberto Ferreira" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">SIAPE *</label>
+                <Input value={newSystemUserForm.siape} onChange={(e) => setNewSystemUserForm((f) => ({ ...f, siape: e.target.value }))} placeholder="Ex.: 9876543" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">E-mail institucional *</label>
+                <Input value={newSystemUserForm.email} onChange={(e) => setNewSystemUserForm((f) => ({ ...f, email: e.target.value }))} placeholder="Ex.: nome@ifes.edu.br" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Perfil</label>
+                <select value={newSystemUserForm.perfil} onChange={(e) => setNewSystemUserForm((f) => ({ ...f, perfil: e.target.value as SystemUserPerfil }))} className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500">
+                  <option value="Avaliador">Avaliador</option>
+                  <option value="Administrador">Administrador</option>
+                  <option value="Gestor">Gestor</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Lotação</label>
+                <select value={newSystemUserForm.lotacao} onChange={(e) => setNewSystemUserForm((f) => ({ ...f, lotacao: e.target.value }))} className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-green-500">
+                  {LOTACAO_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="outline" onClick={() => { setNewSystemUserModalOpen(false); setNewSystemUserForm(EMPTY_NEW_SYSTEM_USER); }} className="rounded-xl border-gray-200 px-4 py-2 text-gray-700">Cancelar</Button>
+              <Button
+                onClick={handleCreateSystemUser}
+                disabled={!newSystemUserForm.nome.trim() || !newSystemUserForm.siape.trim() || !newSystemUserForm.email.trim()}
+                className="rounded-xl bg-[#8c1d24] px-4 py-2 text-white hover:bg-[#7a1920] disabled:opacity-50"
+              >
+                Salvar usuário
+              </Button>
             </div>
           </div>
         </div>

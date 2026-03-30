@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight, FileBox, Inbox, Layers, Sparkles } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
@@ -45,7 +45,7 @@ export default function Workspace() {
   }, [itensRSC, requestedItemId]);
 
   if (!servidor) {
-    return null;
+    return <Navigate to="/" replace />;
   }
 
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);

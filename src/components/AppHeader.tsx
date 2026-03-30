@@ -1,5 +1,6 @@
 import React from 'react';
-import { LogOut } from 'lucide-react';
+import { LogOut, UserCircle } from 'lucide-react';
+import { useAppContext } from '../context/AppContext';
 import { Button } from './ui/button';
 
 interface AppHeaderProps {
@@ -13,6 +14,12 @@ interface AppHeaderProps {
   secondaryContent?: React.ReactNode;
 }
 
+function getShortName(nomeCompleto: string): string {
+  const parts = nomeCompleto.trim().split(/\s+/);
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
 export default function AppHeader({
   activeView,
   onNavigateDashboard,
@@ -23,14 +30,15 @@ export default function AppHeader({
   primaryAction,
   secondaryContent,
 }: AppHeaderProps) {
+  const { servidor } = useAppContext();
+  const shortName = servidor ? getShortName(servidor.nome_completo) : null;
+
   return (
     <header className="border-b border-gray-200 bg-white">
       <div className="px-6 py-4">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-700">
-              <span className="font-bold text-white">IFES</span>
-            </div>
+            <img src="/logo_ifes.png" alt="Logo IFES" className="h-10 w-10 object-contain" />
             <div className="min-w-0">
               <h1 className="truncate text-xl font-bold text-gray-900">RSC-TAE</h1>
               <p className="truncate text-sm text-gray-500">Reconhecimento de Saberes e Competencias</p>
@@ -85,7 +93,13 @@ export default function AppHeader({
             {primaryAction}
           </div>
 
-          <div className="flex shrink-0 items-center justify-end">
+          <div className="flex shrink-0 items-center gap-3 justify-end">
+            {shortName && (
+              <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5">
+                <UserCircle className="h-4 w-4 shrink-0 text-gray-400" />
+                <span className="text-sm font-medium text-gray-700">{shortName}</span>
+              </div>
+            )}
             <Button variant="ghost" onClick={onLogout} className="text-gray-500 hover:text-gray-900">
               <LogOut className="mr-2 h-4 w-4" />
               Sair
