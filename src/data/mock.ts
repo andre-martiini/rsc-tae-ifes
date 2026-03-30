@@ -52,6 +52,8 @@ export interface Servidor {
   email_institucional: string;
   lotacao: string;
   escolaridade_atual: string;
+  cargo?: string;
+  data_ingresso?: string;
 }
 
 export interface ItemRSC {
@@ -77,6 +79,7 @@ export interface Documento {
   tamanho_bytes?: number;
   data_upload: string;
   gedoc_links?: string[];
+  autodeclaracao?: boolean;
 }
 
 export interface Lancamento {
@@ -100,92 +103,4 @@ export interface ProcessoRSC {
   submitted_at?: string;
 }
 
-export type SystemUserPerfil = 'Avaliador' | 'Administrador' | 'Gestor';
-
-export interface SystemUser {
-  id: string;
-  nome: string;
-  siape: string;
-  email: string;
-  perfil: SystemUserPerfil;
-  lotacao: string;
-  status: 'Ativo' | 'Inativo';
-}
-
-export const mockServidor: Servidor = {
-  id: 'srv-001',
-  siape: '1234567',
-  nome_completo: 'João da Silva Sauro',
-  email_institucional: 'joao.silva@ifes.edu.br',
-  lotacao: 'Campus Barra de São Francisco',
-  escolaridade_atual: 'Mestrado',
-};
-
-export const seedServidores: Servidor[] = [
-  mockServidor,
-  {
-    id: 'srv-002',
-    siape: '2345678',
-    nome_completo: 'Marina Costa Almeida',
-    email_institucional: 'marina.almeida@ifes.edu.br',
-    lotacao: 'Gabinete da Reitoria',
-    escolaridade_atual: 'Especialização',
-  },
-  {
-    id: 'srv-003',
-    siape: '3456789',
-    nome_completo: 'Carlos Henrique Tavares',
-    email_institucional: 'carlos.tavares@ifes.edu.br',
-    lotacao: 'Campus Vitória',
-    escolaridade_atual: 'Doutorado',
-  },
-];
-
-export const seedSystemUsers: SystemUser[] = [
-  { id: 'usr-001', nome: 'Paula Mendes', siape: '4567890', email: 'paula.mendes@ifes.edu.br', perfil: 'Avaliador', lotacao: 'Pró-Reitoria de Ensino', status: 'Ativo' },
-  { id: 'usr-002', nome: 'Rafael Souza', siape: '5678901', email: 'rafael.souza@ifes.edu.br', perfil: 'Administrador', lotacao: 'Pró-Reitoria de Desenvolvimento Institucional', status: 'Ativo' },
-  { id: 'usr-003', nome: 'Luciana Rocha', siape: '6789012', email: 'luciana.rocha@ifes.edu.br', perfil: 'Gestor', lotacao: 'Gabinete da Reitoria', status: 'Inativo' },
-];
-
 export { rolItensRSC as mockItensRSC } from './rolItens';
-
-export const mockDocumentos: Documento[] = [
-  {
-    id: 'doc-1',
-    servidor_id: 'srv-001',
-    nome_arquivo: 'portaria_cpa_2022.pdf',
-    hash_arquivo: 'sha256-placeholder-001',
-    caminho_storage: 'uploads/srv-001/portaria_cpa_2022.pdf',
-    mime_type: 'application/pdf',
-    tamanho_bytes: 182340,
-    data_upload: '2023-01-15T10:00:00Z',
-  },
-  {
-    id: 'doc-2',
-    servidor_id: 'srv-001',
-    nome_arquivo: 'declaracao_extensao.pdf',
-    hash_arquivo: 'sha256-placeholder-002',
-    caminho_storage: 'uploads/srv-001/declaracao_extensao.pdf',
-    mime_type: 'application/pdf',
-    tamanho_bytes: 148220,
-    data_upload: '2023-02-20T14:30:00Z',
-  },
-];
-
-export const mockLancamentos: Lancamento[] = [
-  {
-    id: 'lanc-1',
-    servidor_id: 'srv-001',
-    item_rsc_id: 'item-3',
-    documento_id: 'doc-1',
-    data_inicio: '2022-01-01',
-    data_fim: '2022-12-31',
-    quantidade_informada: 12,
-    pontos_calculados: 30,
-    status_auditoria: 'Aprovado',
-  },
-];
-
-export const mockProcessoRSC: ProcessoRSC = {
-  status: 'Rascunho',
-};

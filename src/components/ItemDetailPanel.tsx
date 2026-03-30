@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { differenceInDays, format, isValid, parseISO } from 'date-fns';
+import { PDFDocument } from 'pdf-lib';
 import {
   AlertCircle,
   Calculator,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  ClipboardCheck,
   Eye,
   EyeOff,
   FileText,
@@ -33,7 +35,7 @@ interface ItemDetailPanelProps {
 }
 
 export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps) {
-  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo } =
+  const { addDocumento, addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo } =
     useAppContext();
   const [activeTab, setActiveTab] = useState<'form' | 'history'>('form');
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -48,7 +50,8 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
   const [saving, setSaving] = useState(false);
   const [fragilityConfirmed, setFragilityConfirmed] = useState(false);
   const [showGuidance, setShowGuidance] = useState(true);
-  const [docMode, setDocMode] = useState<'upload' | 'gedoc'>('upload');
+  const [docMode, setDocMode] = useState<'upload' | 'gedoc' | 'autodeclaracao'>('upload');
+  const [autodeclaracaoConfirmed, setAutodeclaracaoConfirmed] = useState(false);
   const [gedocLinks, setGedocLinks] = useState<string[]>([]);
   const [gedocInput, setGedocInput] = useState('');
   const [openViewers, setOpenViewers] = useState<Set<string>>(new Set());
@@ -191,8 +194,39 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
     setDocMode('upload');
     setGedocLinks([]);
     setGedocInput('');
+    setAutodeclaracaoConfirmed(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  /** Merge multiple PDF Files into one File object using pdf-lib. */
+  const mergeAndAcceptFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    if (fileList.length === 1) {
+      acceptPdfFile(fileList[0]);
+      return;
+    }
+    try {
+      const merged = await PDFDocument.create();
+      let mergedName = `documentos-mesclados-${fileList.length}.pdf`;
+      for (const f of Array.from(fileList)) {
+        try {
+          const buf = await f.arrayBuffer();
+          const src = await PDFDocument.load(buf, { ignoreEncryption: true });
+          const pages = await merged.copyPages(src, src.getPageIndices());
+          pages.forEach((page) => merged.addPage(page));
+        } catch {
+          /* skip unreadable files */
+        }
+      }
+      const bytes = await merged.save();
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const mergedFile = new File([blob], mergedName, { type: 'application/pdf' });
+      acceptPdfFile(mergedFile);
+      setUploadFeedback(`${fileList.length} PDFs mesclados em um único arquivo.`);
+    } catch {
+      toast.error('Não foi possível mesclar os arquivos. Tente enviar um por um.');
     }
   };
 
@@ -284,12 +318,24 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
       return;
     }
 
+    if (docMode === 'autodeclaracao' && !autodeclaracaoConfirmed) {
+      toast.error('Marque a caixa de autodeclaração para confirmar.');
+      return;
+    }
+
     try {
       setSaving(true);
 
       let docId = selectedDocId;
 
-      if (docMode === 'gedoc') {
+      if (docMode === 'autodeclaracao') {
+        const newDoc = addDocumento({
+          servidor_id: servidor.id,
+          nome_arquivo: 'Autodeclaração',
+          autodeclaracao: true,
+        });
+        docId = newDoc.id;
+      } else if (docMode === 'gedoc') {
         const newDoc = await addDocumentoFromGedocLinks({
           servidorId: servidor.id,
           links: gedocLinks,
@@ -321,11 +367,14 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
       }
 
       const qtdLinks = gedocLinks.length;
+      const savedMode = docMode;
       resetForm();
       toast.success(
-        docMode === 'gedoc'
-          ? `Lançamento salvo! ${qtdLinks} PDF${qtdLinks > 1 ? 's' : ''} mesclado${qtdLinks > 1 ? 's' : ''}. +${pontosCalculados} pontos.`
-          : `Lançamento salvo! Você acumulou +${pontosCalculados} pontos.`,
+        savedMode === 'gedoc'
+          ? `Lançamento salvo! ${qtdLinks} link${qtdLinks > 1 ? 's' : ''} GeDoc registrado${qtdLinks > 1 ? 's' : ''}. +${pontosCalculados} pontos.`
+          : savedMode === 'autodeclaracao'
+            ? `Lançamento salvo por autodeclaração! +${pontosCalculados} pontos.`
+            : `Lançamento salvo! Você acumulou +${pontosCalculados} pontos.`,
       );
       setActiveTab('history');
       onSaved();
@@ -501,10 +550,10 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                   </div>
 
                   {/* Mode toggle */}
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => { setDocMode('upload'); setGedocLinks([]); setGedocInput(''); }}
+                      onClick={() => { setDocMode('upload'); setGedocLinks([]); setGedocInput(''); setAutodeclaracaoConfirmed(false); }}
                       className={cn(
                         'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
                         docMode === 'upload'
@@ -517,7 +566,7 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setDocMode('gedoc'); setFile(null); setSelectedDocId(''); setUploadFeedback(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      onClick={() => { setDocMode('gedoc'); setFile(null); setSelectedDocId(''); setUploadFeedback(null); setAutodeclaracaoConfirmed(false); if (fileInputRef.current) fileInputRef.current.value = ''; }}
                       className={cn(
                         'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
                         docMode === 'gedoc'
@@ -528,14 +577,48 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                       <Link className="h-3.5 w-3.5" />
                       Links GeDoc
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => { setDocMode('autodeclaracao'); setFile(null); setSelectedDocId(''); setGedocLinks([]); setGedocInput(''); setUploadFeedback(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                      className={cn(
+                        'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors',
+                        docMode === 'autodeclaracao'
+                          ? 'border-amber-400/60 bg-amber-50 text-amber-800'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300',
+                      )}
+                    >
+                      <ClipboardCheck className="h-3.5 w-3.5" />
+                      Autodeclaração
+                    </button>
                   </div>
 
                   <div className="rounded-2xl border border-gray-200 bg-gray-100/70 p-4 md:p-5">
-                    {docMode === 'gedoc' ? (
+                    {docMode === 'autodeclaracao' ? (
+                      /* ── Autodeclaração ── */
+                      <div className="space-y-4">
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                          <p className="mb-1 text-sm font-bold text-amber-900">O que é a Autodeclaração?</p>
+                          <p className="text-sm text-amber-800">
+                            Use este modo quando você realizou a atividade mas ainda não possui o PDF digitalizado em mãos. O lançamento ficará registrado como autodeclarado e você deverá apresentar a documentação física no momento da entrega do processo.
+                          </p>
+                        </div>
+                        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-300 bg-white p-4 hover:bg-amber-50/50">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
+                            checked={autodeclaracaoConfirmed}
+                            onChange={(e) => setAutodeclaracaoConfirmed(e.target.checked)}
+                          />
+                          <span className="text-sm leading-relaxed text-gray-800">
+                            Declaro, sob as penas da lei, que realizei a atividade descrita neste item, que as informações prestadas são verdadeiras e que possuo documentação comprobatória que poderá ser apresentada quando solicitado pela comissão avaliadora.
+                          </span>
+                        </label>
+                      </div>
+                    ) : docMode === 'gedoc' ? (
                       /* ── GeDoc batch input ── */
                       <div className="space-y-3">
                         <p className="text-sm text-gray-600">
-                          Cole os links do GeDoc um por um. O sistema vai buscar e mesclar todos os PDFs automaticamente ao salvar.
+                          Cole as referências dos links do GeDoc. Os links serão registrados no Memorial Descritivo — os PDFs deverão ser entregues fisicamente junto com o processo.
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -582,7 +665,7 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
 
                         {gedocLinks.length > 0 && (
                           <p className="text-[11px] font-semibold text-emerald-700">
-                            {gedocLinks.length} link{gedocLinks.length > 1 ? 's' : ''} adicionado{gedocLinks.length > 1 ? 's' : ''} — será{gedocLinks.length > 1 ? 'ão' : ''} mesclado{gedocLinks.length > 1 ? 's' : ''} em um único PDF ao salvar.
+                            {gedocLinks.length} link{gedocLinks.length > 1 ? 's' : ''} registrado{gedocLinks.length > 1 ? 's' : ''} como referência no processo.
                           </p>
                         )}
                       </div>
@@ -616,15 +699,16 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                             onDrop={(event) => {
                               event.preventDefault();
                               setIsDragActive(false);
-                              acceptPdfFile(event.dataTransfer.files?.[0] ?? null);
+                              void mergeAndAcceptFiles(event.dataTransfer.files);
                             }}
                           >
                             <input
                               ref={fileInputRef}
                               type="file"
+                              multiple
                               className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
                               accept=".pdf"
-                              onChange={(e) => acceptPdfFile(e.target.files?.[0] ?? null)}
+                              onChange={(e) => void mergeAndAcceptFiles(e.target.files)}
                             />
                             {file && (
                               <button
@@ -659,8 +743,8 @@ export default function ItemDetailPanel({ item, onSaved }: ItemDetailPanelProps)
                               {file
                                 ? file.name
                                 : isDragActive
-                                  ? 'Solte o PDF aqui'
-                                  : 'Clique, arraste ou cole um PDF'}
+                                  ? 'Solte os PDFs aqui'
+                                  : 'Clique, arraste ou cole um PDF (múltiplos permitidos)'}
                             </p>
                             <p
                               className={`mt-1 text-[10px] font-bold uppercase tracking-widest ${

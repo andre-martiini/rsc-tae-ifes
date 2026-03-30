@@ -43,7 +43,7 @@ function getItemStatus(pontosLancados: number, limitepontos: number | undefined)
 }
 
 export default function ItemCatalog() {
-  const { servidor, itensRSC, lancamentos, processo, logout, wizardRecommendedIds } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo, wizardRecommendedIds } = useAppContext();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -128,7 +128,7 @@ export default function ItemCatalog() {
   const hasWizardRecs = wizardRecommendedIds.length > 0;
 
   if (!servidor) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/perfil" replace />;
   }
 
   return (
@@ -139,10 +139,6 @@ export default function ItemCatalog() {
         onNavigateCatalog={() => undefined}
         onNavigateWorkspace={() => navigate('/workspace')}
         onNavigateConsolidate={() => navigate('/consolidar')}
-        onLogout={() => {
-          logout();
-          navigate('/');
-        }}
         secondaryContent={
           <>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">

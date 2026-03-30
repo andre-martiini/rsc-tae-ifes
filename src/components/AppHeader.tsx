@@ -1,5 +1,6 @@
 import React from 'react';
-import { LogOut, UserCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { UserCircle } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Button } from './ui/button';
 
@@ -9,7 +10,6 @@ interface AppHeaderProps {
   onNavigateCatalog: () => void;
   onNavigateWorkspace: () => void;
   onNavigateConsolidate: () => void;
-  onLogout: () => void;
   primaryAction?: React.ReactNode;
   secondaryContent?: React.ReactNode;
 }
@@ -26,11 +26,11 @@ export default function AppHeader({
   onNavigateCatalog,
   onNavigateWorkspace,
   onNavigateConsolidate,
-  onLogout,
   primaryAction,
   secondaryContent,
 }: AppHeaderProps) {
   const { servidor } = useAppContext();
+  const navigate = useNavigate();
   const shortName = servidor ? getShortName(servidor.nome_completo) : null;
 
   return (
@@ -41,7 +41,7 @@ export default function AppHeader({
             <img src="/logo_ifes.png" alt="Logo IFES" className="h-10 w-10 object-contain" />
             <div className="min-w-0">
               <h1 className="truncate text-xl font-bold text-gray-900">RSC-TAE</h1>
-              <p className="truncate text-sm text-gray-500">Reconhecimento de Saberes e Competencias</p>
+              <p className="truncate text-sm text-gray-500">Reconhecimento de Saberes e Competências</p>
             </div>
           </div>
 
@@ -77,7 +77,7 @@ export default function AppHeader({
                   : 'h-9 rounded-lg border-gray-200 px-4 text-sm font-semibold text-gray-700'
               }
             >
-              Lancar documentos
+              Lançar documentos
             </Button>
             <Button
               onClick={onNavigateConsolidate}
@@ -94,16 +94,15 @@ export default function AppHeader({
           </div>
 
           <div className="flex shrink-0 items-center gap-3 justify-end">
-            {shortName && (
-              <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5">
-                <UserCircle className="h-4 w-4 shrink-0 text-gray-400" />
-                <span className="text-sm font-medium text-gray-700">{shortName}</span>
-              </div>
-            )}
-            <Button variant="ghost" onClick={onLogout} className="text-gray-500 hover:text-gray-900">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sair
-            </Button>
+            <button
+              type="button"
+              onClick={() => navigate('/perfil')}
+              className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+              title="Editar perfil"
+            >
+              <UserCircle className="h-4 w-4 shrink-0 text-gray-400" />
+              {shortName ?? 'Editar perfil'}
+            </button>
           </div>
         </div>
       </div>

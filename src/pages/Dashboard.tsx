@@ -1,11 +1,14 @@
-﻿import React, { useMemo, useState } from 'react';
+﻿import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpenText, CheckCircle2, ChevronRight, LayoutGrid, List, Wand2 } from 'lucide-react';
+import { BookOpenText, CheckCircle2, ChevronRight, Download, Loader2, LayoutGrid, List, Upload, Wand2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAppContext } from '../context/AppContext';
 import { RSC_LEVELS } from '../data/mock';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { getEligibleRscLevel } from '../lib/rsc';
+import { exportSession } from '../lib/sessionExport';
+import { importSession } from '../lib/sessionImport';
 import AppHeader from '../components/AppHeader';
 import WizardModal from '../components/WizardModal';
 
@@ -37,18 +40,43 @@ const levelAccentClasses = [
 ];
 
 export default function Dashboard() {
-  const { servidor, itensRSC, lancamentos, processo, logout, wizardRecommendedIds, setWizardRecommendedIds } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo, wizardRecommendedIds, setWizardRecommendedIds, restoreSession } = useAppContext();
   const navigate = useNavigate();
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportSession = async () => {
+    setIsExporting(true);
+    try {
+      await exportSession();
+      toast.success('Backup salvo com sucesso!');
+    } catch {
+      toast.error('Erro ao exportar o progresso. Tente novamente.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportSession = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const session = await importSession(file);
+      restoreSession(session);
+      toast.success('Progresso restaurado com sucesso!');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Arquivo inválido.';
+      toast.error(`Erro ao restaurar: ${message}`);
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   if (!servidor) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/perfil" replace />;
   }
-
-  const handleLogout = () => {
-    logout();
-    navigate('/');
-  };
 
   const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
   const totalPontos = lancamentosDoServidor.reduce((acc, lancamento) => acc + lancamento.pontos_calculados, 0);
@@ -118,7 +146,6 @@ export default function Dashboard() {
         onNavigateCatalog={() => navigate('/itens')}
         onNavigateWorkspace={() => navigate('/workspace')}
         onNavigateConsolidate={() => navigate('/consolidar')}
-        onLogout={handleLogout}
         secondaryContent={
           <>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
@@ -130,6 +157,38 @@ export default function Dashboard() {
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
               <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
               {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
+            </div>
+            <div className="ml-2 flex items-center gap-1.5 border-l border-gray-200 pl-2.5">
+              <button
+                type="button"
+                title="Salvar progresso como arquivo de backup"
+                disabled={isExporting}
+                onClick={handleExportSession}
+                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
+              >
+                {isExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                Salvar progresso
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".zip"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleImportSession(f);
+                }}
+              />
+              <button
+                type="button"
+                title="Restaurar progresso a partir de um arquivo de backup"
+                disabled={isImporting}
+                onClick={() => importInputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
+              >
+                {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                Restaurar
+              </button>
             </div>
           </>
         }

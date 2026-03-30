@@ -136,3 +136,23 @@ export async function persistDocumentBlob(params: {
     caminhoStorage: `indexeddb://uploads/${servidorId}/${docId}/${encodeURIComponent(nomeArquivo)}`,
   };
 }
+
+export async function clearDocumentStorage() {
+  const database = await openDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    store.clear();
+
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
