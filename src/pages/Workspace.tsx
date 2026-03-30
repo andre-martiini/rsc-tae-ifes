@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronLeft, ChevronRight, FileBox, Inbox, Layers, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, FileBox, Inbox, Layers, Sparkles } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 import { Inciso } from '../data/mock';
 import ItemDetailPanel from '../components/ItemDetailPanel';
@@ -11,12 +11,12 @@ import { getEligibleRscLevel, isItemJuridicallyFragile } from '../lib/rsc';
 import AppHeader from '../components/AppHeader';
 
 const incisosInfo: { id: Inciso; title: string; desc: string }[] = [
-  { id: 'I', title: 'Inciso I', desc: 'Comissoes e GTs' },
+  { id: 'I', title: 'Inciso I', desc: 'Comissões e GTs' },
   { id: 'II', title: 'Inciso II', desc: 'Projetos institucionais' },
-  { id: 'III', title: 'Inciso III', desc: 'Premiacao' },
-  { id: 'IV', title: 'Inciso IV', desc: 'Responsabilidades tecnicas' },
-  { id: 'V', title: 'Inciso V', desc: 'Direcao e assessoramento' },
-  { id: 'VI', title: 'Inciso VI', desc: 'Publicacoes e producao' },
+  { id: 'III', title: 'Inciso III', desc: 'Premiação' },
+  { id: 'IV', title: 'Inciso IV', desc: 'Responsabilidades técnicas' },
+  { id: 'V', title: 'Inciso V', desc: 'Direção e assessoramento' },
+  { id: 'VI', title: 'Inciso VI', desc: 'Publicações e produção' },
 ];
 
 export default function Workspace() {
@@ -69,10 +69,20 @@ export default function Workspace() {
     return pointsMap;
   }, [itensRSC, lancamentosDoServidor]);
 
-  const totalPoints = useMemo(
-    () => lancamentosDoServidor.reduce((acc, current) => acc + current.pontos_calculados, 0),
+  const totalPontos = useMemo(
+    () => lancamentosDoServidor.reduce((acc, l) => acc + l.pontos_calculados, 0),
     [lancamentosDoServidor],
   );
+
+  const itensDistintos = useMemo(
+    () => new Set(lancamentosDoServidor.map((l) => l.item_rsc_id)).size,
+    [lancamentosDoServidor],
+  );
+
+  const metasAtingidas =
+    !!nivelElegivel &&
+    totalPontos >= nivelElegivel.pontosMinimos &&
+    itensDistintos >= nivelElegivel.itensMinimos;
 
   const activeItems = useMemo(
     () => itensRSC.filter((item) => item.inciso === activeInciso),
@@ -98,20 +108,31 @@ export default function Workspace() {
         <AppHeader
           activeView="workspace"
           onNavigateDashboard={() => navigate('/dashboard')}
+          onNavigateHome={() => navigate('/')}
           onNavigateCatalog={() => navigate('/itens')}
           onNavigateWorkspace={() => undefined}
           onNavigateConsolidate={() => navigate('/consolidar')}
+          onNavigateProfile={() => navigate('/perfil')}
           secondaryContent={
             <>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
                 <span className="font-semibold text-gray-900">Status:</span> {processo.status}
               </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Total:</span> {totalPoints.toFixed(2)} pts
+                <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
               </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Nivel pleiteavel:</span>{' '}
-                {nivelElegivel ? nivelElegivel.label : 'Nao mapeado'}
+                <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
+              </div>
+              {metasAtingidas && (
+                <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Metas atingidas
+                </div>
+              )}
+              <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+                <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
+                {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
               </div>
             </>
           }
@@ -119,24 +140,21 @@ export default function Workspace() {
 
         <div className="flex flex-1 overflow-hidden">
           <aside
-            className={`shrink-0 overflow-y-auto border-r border-gray-100 bg-gray-50/50 transition-[width] duration-300 ${
-              isIncisoSidebarCollapsed ? 'w-24' : 'w-64'
-            }`}
+            className={`shrink-0 overflow-y-auto border-r border-gray-100 bg-gray-50/50 transition-[width] duration-300 ${isIncisoSidebarCollapsed ? 'w-24' : 'w-64'
+              }`}
           >
             <div
-              className={`sticky top-0 z-10 border-b border-gray-100/50 bg-white/50 p-4 backdrop-blur-sm ${
-                isIncisoSidebarCollapsed ? 'px-3' : ''
-              }`}
+              className={`sticky top-0 z-10 border-b border-gray-100/50 bg-white/50 p-4 backdrop-blur-sm ${isIncisoSidebarCollapsed ? 'px-3' : ''
+                }`}
             >
               <div
-                className={`flex items-center ${
-                  isIncisoSidebarCollapsed ? 'justify-center' : 'justify-between gap-3'
-                }`}
+                className={`flex items-center ${isIncisoSidebarCollapsed ? 'justify-center' : 'justify-between gap-3'
+                  }`}
               >
                 {!isIncisoSidebarCollapsed && (
                   <h3 className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
                     <Layers className="h-3 w-3" />
-                    Incisos de avaliacao
+                    Incisos de avaliação
                   </h3>
                 )}
                 <Button
@@ -172,31 +190,27 @@ export default function Workspace() {
                         return nextParams;
                       });
                     }}
-                    className={`relative flex w-full flex-col rounded-xl border transition-all duration-300 ${
-                      isActive
-                        ? 'border-primary/20 bg-white shadow-sm shadow-primary/5'
-                        : 'border-transparent text-gray-500 hover:bg-gray-100 active:scale-[0.98]'
-                    } ${isIncisoSidebarCollapsed ? 'items-center px-2 py-3.5' : 'items-start px-4 py-3'}`}
+                    className={`relative flex w-full flex-col rounded-xl border transition-all duration-300 ${isActive
+                      ? 'border-primary/20 bg-white shadow-sm shadow-primary/5'
+                      : 'border-transparent text-gray-500 hover:bg-gray-100 active:scale-[0.98]'
+                      } ${isIncisoSidebarCollapsed ? 'items-center px-2 py-3.5' : 'items-start px-4 py-3'}`}
                   >
                     <div
-                      className={`flex w-full items-center ${
-                        isIncisoSidebarCollapsed ? 'mb-2 justify-center' : 'mb-1 justify-between'
-                      }`}
+                      className={`flex w-full items-center ${isIncisoSidebarCollapsed ? 'mb-2 justify-center' : 'mb-1 justify-between'
+                        }`}
                     >
                       <span
-                        className={`text-[10px] font-black uppercase tracking-widest transition-colors ${
-                          isActive ? 'text-primary' : 'text-gray-400'
-                        }`}
+                        className={`text-[10px] font-black uppercase tracking-widest transition-colors ${isActive ? 'text-primary' : 'text-gray-400'
+                          }`}
                       >
                         {inciso.id}
                       </span>
                       {!isIncisoSidebarCollapsed && pontos > 0 && (
                         <span
-                          className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${
-                            isActive
-                              ? 'border-primary/20 bg-primary/10 text-primary'
-                              : 'border-gray-300 bg-gray-200 text-gray-600'
-                          }`}
+                          className={`rounded-full border px-1.5 py-0.5 text-[10px] font-black ${isActive
+                            ? 'border-primary/20 bg-primary/10 text-primary'
+                            : 'border-gray-300 bg-gray-200 text-gray-600'
+                            }`}
                         >
                           {pontos}
                         </span>
@@ -206,11 +220,10 @@ export default function Workspace() {
                     {isIncisoSidebarCollapsed ? (
                       <>
                         <span
-                          className={`flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-black transition-colors ${
-                            isActive
-                              ? 'bg-primary text-white shadow-sm shadow-primary/20'
-                              : 'border border-gray-200 bg-white text-gray-600'
-                          }`}
+                          className={`flex h-10 w-10 items-center justify-center rounded-2xl text-sm font-black transition-colors ${isActive
+                            ? 'bg-primary text-white shadow-sm shadow-primary/20'
+                            : 'border border-gray-200 bg-white text-gray-600'
+                            }`}
                         >
                           {inciso.id}
                         </span>
@@ -218,9 +231,8 @@ export default function Workspace() {
                       </>
                     ) : (
                       <span
-                        className={`text-sm font-bold transition-colors ${
-                          isActive ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'
-                        }`}
+                        className={`text-sm font-bold transition-colors ${isActive ? 'text-gray-900' : 'text-gray-600 group-hover:text-gray-900'
+                          }`}
                       >
                         {inciso.desc}
                       </span>
@@ -239,9 +251,8 @@ export default function Workspace() {
           </aside>
 
           <div
-            className={`relative z-20 flex shrink-0 flex-col overflow-hidden border-r border-gray-100 bg-white shadow-[4px_0_15px_-10px_rgba(0,0,0,0.05)] transition-[width] duration-300 ${
-              isItemsSidebarCollapsed ? 'w-24' : 'w-72 xl:w-80'
-            }`}
+            className={`relative z-20 flex shrink-0 flex-col overflow-hidden border-r border-gray-100 bg-white shadow-[4px_0_15px_-10px_rgba(0,0,0,0.05)] transition-[width] duration-300 ${isItemsSidebarCollapsed ? 'w-24' : 'w-72 xl:w-80'
+              }`}
           >
             <div className="sticky top-0 z-10 border-b border-gray-100 bg-white p-4">
               <div className={`flex items-center ${isItemsSidebarCollapsed ? 'justify-center' : 'justify-between gap-3'}`}>
@@ -249,11 +260,11 @@ export default function Workspace() {
                   <div>
                     <h3 className="mb-1 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
                       <FileBox className="h-3 w-3" />
-                      Itens disponiveis
+                      Itens disponíveis
                     </h3>
                     <div className="mt-2 flex items-center gap-2">
                       <span className="text-xs font-black text-gray-900">{activeItems.length}</span>
-                      <span className="text-xs font-medium text-gray-500">ocorrencias localizadas</span>
+                      <span className="text-xs font-medium text-gray-500">ocorrências localizadas</span>
                     </div>
                   </div>
                 )}
@@ -261,8 +272,8 @@ export default function Workspace() {
                   variant="ghost"
                   size="icon"
                   type="button"
-                  aria-label={isItemsSidebarCollapsed ? 'Expandir itens disponiveis' : 'Recolher itens disponiveis'}
-                  title={isItemsSidebarCollapsed ? 'Expandir itens disponiveis' : 'Recolher itens disponiveis'}
+                  aria-label={isItemsSidebarCollapsed ? 'Expandir itens disponíveis' : 'Recolher itens disponíveis'}
+                  title={isItemsSidebarCollapsed ? 'Expandir itens disponíveis' : 'Recolher itens disponíveis'}
                   className="h-9 w-9 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                   onClick={() => setIsItemsSidebarCollapsed((current) => !current)}
                 >
@@ -326,10 +337,10 @@ export default function Workspace() {
                       <Sparkles className="animate-bounce-slow h-16 w-16 text-primary" />
                     </div>
                   </div>
-                  <h2 className="mb-3 text-2xl font-black text-gray-900">Pronto para lancar</h2>
+                  <h2 className="mb-3 text-2xl font-black text-gray-900">Pronto para lançar</h2>
                   <p className="mb-8 max-w-sm leading-relaxed text-gray-500">
-                    Selecione um item da lista a esquerda para carregar as regras de aceite e preencher o formulario de
-                    comprovacao.
+                    Selecione um item da lista à esquerda para carregar as regras de aceite e preencher o formulário de
+                    comprovação.
                   </p>
                   <div className="flex gap-2">
                     <span className="h-2 w-2 rounded-full bg-gray-200"></span>

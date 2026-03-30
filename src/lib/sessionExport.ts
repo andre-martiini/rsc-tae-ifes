@@ -3,21 +3,23 @@
  * into a single ZIP file and triggers a browser download.
  *
  * ZIP structure:
- *   metadata.json          — all localStorage keys
+ *   metadata.json          — session data using portable key names
  *   files/<docId>_<name>   — one entry per document with a real blob
  */
 
 import JSZip from 'jszip';
 import { getDocumentBlob } from './documentStorage';
+import { sessionKeys } from '../context/AppContext';
 import type { Documento } from '../data/mock';
 
-const STORAGE_KEYS = [
-  'rsc-tae-perfil',
-  'rsc-tae-documentos',
-  'rsc-tae-lancamentos',
-  'rsc-tae-processo',
-  'rsc-tae-wizard-ids',
-];
+// Portable key names used inside the ZIP (not session-scoped)
+const EXPORT_KEY_NAMES = {
+  perfil: 'rsc-tae-perfil',
+  documentos: 'rsc-tae-documentos',
+  lancamentos: 'rsc-tae-lancamentos',
+  processo: 'rsc-tae-processo',
+  wizardIds: 'rsc-tae-wizard-ids',
+};
 
 function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -30,32 +32,41 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function exportSession(): Promise<void> {
+export async function exportSession(activeSessionId: string): Promise<void> {
   const zip = new JSZip();
+  const keys = sessionKeys(activeSessionId);
 
   // ── metadata.json ─────────────────────────────────────────────────────────
+  // Map session-scoped storage keys → portable export key names
+  const keyMap: Record<string, string> = {
+    [keys.perfil]: EXPORT_KEY_NAMES.perfil,
+    [keys.documentos]: EXPORT_KEY_NAMES.documentos,
+    [keys.lancamentos]: EXPORT_KEY_NAMES.lancamentos,
+    [keys.processo]: EXPORT_KEY_NAMES.processo,
+    [keys.wizardIds]: EXPORT_KEY_NAMES.wizardIds,
+  };
+
   const metadata: Record<string, unknown> = {};
-  for (const key of STORAGE_KEYS) {
-    const raw = window.localStorage.getItem(key);
+  for (const [storageKey, exportKey] of Object.entries(keyMap)) {
+    const raw = window.localStorage.getItem(storageKey);
     if (raw) {
       try {
-        metadata[key] = JSON.parse(raw);
+        metadata[exportKey] = JSON.parse(raw);
       } catch {
-        metadata[key] = raw;
+        metadata[exportKey] = raw;
       }
     }
   }
   zip.file('metadata.json', JSON.stringify(metadata, null, 2));
 
   // ── PDF blobs from IndexedDB ───────────────────────────────────────────────
-  const documentsRaw = window.localStorage.getItem('rsc-tae-documentos');
+  const documentsRaw = window.localStorage.getItem(keys.documentos);
   if (documentsRaw) {
     try {
       const docs = JSON.parse(documentsRaw) as Documento[];
       const filesFolder = zip.folder('files');
       if (filesFolder) {
         for (const doc of docs) {
-          // Only export docs with a real physical blob (skip GeDoc refs and autodeclarações)
           if (!doc.caminho_storage || doc.nome_arquivo.endsWith('.ref') || doc.autodeclaracao) {
             continue;
           }

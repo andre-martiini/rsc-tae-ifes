@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowRight, LayoutGrid, List, Search, ShieldAlert, Sparkles, Wand2 } from 'lucide-react';
+import { ArrowRight, CheckCircle2, LayoutGrid, List, Search, ShieldAlert, Sparkles, Wand2 } from 'lucide-react';
 import AppHeader from '../components/AppHeader';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -17,12 +17,12 @@ function normalizeSearch(value: string) {
 }
 
 const incisoLabels: Record<string, string> = {
-  I: 'Comissoes e GTs',
+  I: 'Comissões e GTs',
   II: 'Projetos institucionais',
-  III: 'Premiacao',
-  IV: 'Responsabilidades tecnicas',
-  V: 'Direcao e assessoramento',
-  VI: 'Publicacoes e producao',
+  III: 'Premiação',
+  IV: 'Responsabilidades técnicas',
+  V: 'Direção e assessoramento',
+  VI: 'Publicações e produção',
 };
 
 const ALL_INCISOS: Inciso[] = ['I', 'II', 'III', 'IV', 'V', 'VI'];
@@ -31,7 +31,7 @@ type StatusFilter = 'todos' | 'sem_lancamento' | 'em_andamento' | 'completo';
 
 const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'todos', label: 'Todos' },
-  { value: 'sem_lancamento', label: 'Sem lancamento' },
+  { value: 'sem_lancamento', label: 'Sem lançamento' },
   { value: 'em_andamento', label: 'Em andamento' },
   { value: 'completo', label: 'Completo' },
 ];
@@ -63,6 +63,16 @@ export default function ItemCatalog() {
     () => lancamentosDoServidor.reduce((acc, lancamento) => acc + lancamento.pontos_calculados, 0),
     [lancamentosDoServidor],
   );
+
+  const itensDistintos = useMemo(
+    () => new Set(lancamentosDoServidor.map((l) => l.item_rsc_id)).size,
+    [lancamentosDoServidor],
+  );
+
+  const metasAtingidas =
+    !!nivelElegivel &&
+    totalPontos >= nivelElegivel.pontosMinimos &&
+    itensDistintos >= nivelElegivel.itensMinimos;
 
   const lancamentosByItemId = useMemo(() => {
     const map = new Map<string, number>();
@@ -136,9 +146,11 @@ export default function ItemCatalog() {
       <AppHeader
         activeView="catalog"
         onNavigateDashboard={() => navigate('/dashboard')}
+        onNavigateHome={() => navigate('/')}
         onNavigateCatalog={() => undefined}
         onNavigateWorkspace={() => navigate('/workspace')}
         onNavigateConsolidate={() => navigate('/consolidar')}
+        onNavigateProfile={() => navigate('/perfil')}
         secondaryContent={
           <>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
@@ -148,8 +160,17 @@ export default function ItemCatalog() {
               <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
             </div>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Nivel pleiteavel:</span>{' '}
-              {nivelElegivel ? nivelElegivel.label : 'Nao mapeado'}
+              <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
+            </div>
+            {metasAtingidas && (
+              <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+                <CheckCircle2 className="h-3 w-3" />
+                Metas atingidas
+              </div>
+            )}
+            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+              <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
+              {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
             </div>
           </>
         }
@@ -162,12 +183,12 @@ export default function ItemCatalog() {
               <div>
                 <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/10 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
                   <Sparkles className="h-3.5 w-3.5" />
-                  Catalogo de Itens do RSC-TAE
+                  Catálogo de Itens do RSC-TAE
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900">Encontre o item certo antes do lancamento</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Encontre o item certo antes do lançamento</h2>
                 <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                  Pesquise por descricao, inciso, regra de aceite ou documento comprobatorio e abra o item
-                  diretamente na tela de lancamento.
+                  Pesquise por descrição, inciso, regra de aceite ou documento comprobatório e abra o item
+                  diretamente na tela de lançamento.
                 </p>
               </div>
 
@@ -198,11 +219,10 @@ export default function ItemCatalog() {
                       key={inciso}
                       type="button"
                       onClick={() => toggleInciso(inciso)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                        active
-                          ? 'border-primary bg-primary text-white'
-                          : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5 hover:text-primary'
-                      }`}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${active
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5 hover:text-primary'
+                        }`}
                     >
                       {inciso} — {incisoLabels[inciso]}
                     </button>
@@ -222,7 +242,7 @@ export default function ItemCatalog() {
               {/* Status filter */}
               <div className="flex flex-wrap items-center gap-2">
                 <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                  Situacao
+                  Situação
                 </span>
                 {statusOptions.map((opt) => {
                   const active = statusFilter === opt.value;
@@ -231,11 +251,10 @@ export default function ItemCatalog() {
                       key={opt.value}
                       type="button"
                       onClick={() => setStatusFilter(opt.value)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                        active
-                          ? 'border-primary bg-primary text-white'
-                          : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5 hover:text-primary'
-                      }`}
+                      className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${active
+                        ? 'border-primary bg-primary text-white'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5 hover:text-primary'
+                        }`}
                     >
                       {opt.label}
                     </button>
@@ -255,15 +274,14 @@ export default function ItemCatalog() {
                   title={
                     hasWizardRecs
                       ? `${wizardRecommendedIds.length} itens recomendados pelo wizard`
-                      : 'Execute o Wizard de Mapeamento para ver recomendacoes personalizadas'
+                      : 'Execute o Wizard de Mapeamento para ver recomendações personalizadas'
                   }
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                    !hasWizardRecs
-                      ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300'
-                      : wizardOnly
-                        ? 'border-violet-400 bg-violet-500 text-white'
-                        : 'border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400 hover:bg-violet-100'
-                  }`}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${!hasWizardRecs
+                    ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300'
+                    : wizardOnly
+                      ? 'border-violet-400 bg-violet-500 text-white'
+                      : 'border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400 hover:bg-violet-100'
+                    }`}
                 >
                   <Wand2 className="h-3 w-3" />
                   {hasWizardRecs
@@ -279,7 +297,7 @@ export default function ItemCatalog() {
                   {filteredItems.length} itens encontrados
                 </span>
                 <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
-                  {lancamentosByItemId.size} itens ja lancados
+                  {lancamentosByItemId.size} itens já lançados
                 </span>
               </div>
               <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
@@ -335,13 +353,13 @@ export default function ItemCatalog() {
                               </span>
                               {item.quantidade_automatica && (
                                 <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-                                  Calculo automatico
+                                  Cálculo automático
                                 </span>
                               )}
                               {isFragile && (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
                                   <ShieldAlert className="h-3 w-3" />
-                                  Enquadramento sensivel
+                                  Enquadramento sensível
                                 </span>
                               )}
                               {wizardRecommendedIds.includes(item.id) && (
@@ -364,19 +382,18 @@ export default function ItemCatalog() {
                           <p className="mt-1 text-sm font-medium text-gray-800">{item.unidade_medida}</p>
                         </div>
                         <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Situacao</p>
-                          <p className={`mt-1 text-sm font-medium ${
-                            itemStatus === 'completo'
-                              ? 'text-emerald-700'
-                              : itemStatus === 'em_andamento'
-                                ? 'text-sky-700'
-                                : 'text-gray-800'
-                          }`}>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Situação</p>
+                          <p className={`mt-1 text-sm font-medium ${itemStatus === 'completo'
+                            ? 'text-emerald-700'
+                            : itemStatus === 'em_andamento'
+                              ? 'text-sky-700'
+                              : 'text-gray-800'
+                            }`}>
                             {itemStatus === 'completo'
                               ? `Completo — ${pontosLancados.toFixed(2)} pts`
                               : itemStatus === 'em_andamento'
-                                ? `${pontosLancados.toFixed(2)} pts lancados`
-                                : 'Ainda sem lancamento'}
+                                ? `${pontosLancados.toFixed(2)} pts lançados`
+                                : 'Ainda sem lançamento'}
                           </p>
                         </div>
                       </div>
@@ -387,7 +404,7 @@ export default function ItemCatalog() {
                           <p className="mt-1 line-clamp-5 text-[13px] leading-relaxed text-gray-600">{item.regra_aceite}</p>
                         </div>
                         <div className="rounded-xl border border-gray-100 bg-white p-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Comprovacao</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Comprovação</p>
                           <p className="mt-1 line-clamp-5 text-[13px] leading-relaxed text-gray-600">
                             {item.documentos_comprobatorios}
                           </p>
@@ -440,13 +457,13 @@ export default function ItemCatalog() {
                         <div className="mt-1 flex flex-wrap gap-1">
                           {item.quantidade_automatica && (
                             <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
-                              Calculo automatico
+                              Cálculo automático
                             </span>
                           )}
                           {isFragile && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                               <ShieldAlert className="h-2.5 w-2.5" />
-                              Enquadramento sensivel
+                              Enquadramento sensível
                             </span>
                           )}
                           {wizardRecommendedIds.includes(item.id) && (
@@ -471,7 +488,7 @@ export default function ItemCatalog() {
                             {pontosLancados.toFixed(2)} pts
                           </span>
                         ) : (
-                          <span className="text-[11px] text-gray-400">Sem lancamento</span>
+                          <span className="text-[11px] text-gray-400">Sem lançamento</span>
                         )}
                       </td>
                       <td className="px-4 py-3">

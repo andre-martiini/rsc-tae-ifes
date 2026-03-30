@@ -1,5 +1,29 @@
 export type Inciso = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI';
 
+export const CAMPI_IFES = [
+  'Reitoria',
+  'Campus Alegre',
+  'Campus Aracruz',
+  'Campus Barra de São Francisco',
+  'Campus Cachoeiro de Itapemirim',
+  'Campus Cariacica',
+  'Campus Centro-Serrano',
+  'Campus Colatina',
+  'Campus Guarapari',
+  'Campus Ibatiba',
+  'Campus Itapina',
+  'Campus Linhares',
+  'Campus Montanha',
+  'Campus Nova Venécia',
+  'Campus Piúma',
+  'Campus Santa Teresa',
+  'Campus São Mateus',
+  'Campus Serra',
+  'Campus Viana',
+  'Campus Vila Velha',
+  'Campus Vitória',
+] as const;
+
 export const RSC_LEVELS = [
   {
     id: 'RSC-I',
@@ -86,7 +110,7 @@ export interface Lancamento {
   id: string;
   servidor_id: string;
   item_rsc_id: string;
-  documento_id: string;
+  documento_id?: string;
   data_inicio: string;
   data_fim: string;
   quantidade_informada: number;

@@ -8,22 +8,17 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from './context/AppContext';
 import { useAppContext } from './context/AppContext';
 import { Toaster } from 'sonner';
+import LandingScreen from './pages/LandingScreen';
 import ProfileSetup from './pages/ProfileSetup';
 import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
 import Workspace from './pages/Workspace';
 import Consolidation from './pages/Consolidation';
 
-// Rota raiz: redireciona para /dashboard se já tem perfil, senão para /perfil
-function HomeRedirect() {
-  const { servidor } = useAppContext();
-  return <Navigate to={servidor ? '/dashboard' : '/perfil'} replace />;
-}
-
-// Protege rotas que exigem perfil cadastrado
-function RequirePerfil({ children }: { children: React.ReactNode }) {
-  const { servidor } = useAppContext();
-  if (!servidor) return <Navigate to="/perfil" replace />;
+// Protects routes that require an active session
+function RequireSession({ children }: { children: React.ReactNode }) {
+  const { activeSessionId } = useAppContext();
+  if (!activeSessionId) return <Navigate to="/" replace />;
   return <>{children}</>;
 }
 
@@ -32,38 +27,45 @@ export default function App() {
     <AppProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<HomeRedirect />} />
-          <Route path="/perfil" element={<ProfileSetup />} />
+          <Route path="/" element={<LandingScreen />} />
+          <Route
+            path="/perfil"
+            element={
+              <RequireSession>
+                <ProfileSetup />
+              </RequireSession>
+            }
+          />
           <Route
             path="/dashboard"
             element={
-              <RequirePerfil>
+              <RequireSession>
                 <Dashboard />
-              </RequirePerfil>
+              </RequireSession>
             }
           />
           <Route
             path="/itens"
             element={
-              <RequirePerfil>
+              <RequireSession>
                 <ItemCatalog />
-              </RequirePerfil>
+              </RequireSession>
             }
           />
           <Route
             path="/workspace"
             element={
-              <RequirePerfil>
+              <RequireSession>
                 <Workspace />
-              </RequirePerfil>
+              </RequireSession>
             }
           />
           <Route
             path="/consolidar"
             element={
-              <RequirePerfil>
+              <RequireSession>
                 <Consolidation />
-              </RequirePerfil>
+              </RequireSession>
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

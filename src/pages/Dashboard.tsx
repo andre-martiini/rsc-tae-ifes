@@ -1,6 +1,6 @@
 ﻿import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpenText, CheckCircle2, ChevronRight, Download, Loader2, LayoutGrid, List, Upload, Wand2 } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppContext } from '../context/AppContext';
 import { RSC_LEVELS } from '../data/mock';
@@ -40,7 +40,7 @@ const levelAccentClasses = [
 ];
 
 export default function Dashboard() {
-  const { servidor, itensRSC, lancamentos, processo, wizardRecommendedIds, setWizardRecommendedIds, restoreSession } = useAppContext();
+  const { servidor, activeSessionId, itensRSC, lancamentos, processo, wizardRecommendedIds, setWizardRecommendedIds, restoreSession } = useAppContext();
   const navigate = useNavigate();
   const [wizardOpen, setWizardOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -48,9 +48,10 @@ export default function Dashboard() {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   const handleExportSession = async () => {
+    if (!activeSessionId) return;
     setIsExporting(true);
     try {
-      await exportSession();
+      await exportSession(activeSessionId);
       toast.success('Backup salvo com sucesso!');
     } catch {
       toast.error('Erro ao exportar o progresso. Tente novamente.');
@@ -62,7 +63,7 @@ export default function Dashboard() {
   const handleImportSession = async (file: File) => {
     setIsImporting(true);
     try {
-      const session = await importSession(file);
+      const session = await importSession(file, servidor?.id);
       restoreSession(session);
       toast.success('Progresso restaurado com sucesso!');
     } catch (err) {
@@ -75,7 +76,7 @@ export default function Dashboard() {
   };
 
   if (!servidor) {
-    return <Navigate to="/perfil" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
@@ -83,16 +84,26 @@ export default function Dashboard() {
   const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
 
+  const metasAtingidas =
+    !!nivelElegivel &&
+    totalPontos >= nivelElegivel.pontosMinimos &&
+    itensDistintos >= nivelElegivel.itensMinimos;
+
+  const isProfileComplete =
+    !!servidor.email_institucional?.trim() &&
+    !!servidor.lotacao?.trim() &&
+    !!servidor.cargo?.trim();
+
   const nivelPleiteavel = nivelElegivel
     ? RSC_LEVELS.map((nivel, index) => ({
-        ...nivel,
-        accent: levelAccentClasses[index],
-        pontosPct: Math.min(100, Math.round((totalPontos / nivel.pontosMinimos) * 100)),
-        itensPct: Math.min(100, Math.round((itensDistintos / nivel.itensMinimos) * 100)),
-        pontosFaltantes: Math.max(0, nivel.pontosMinimos - totalPontos),
-        itensFaltantes: Math.max(0, nivel.itensMinimos - itensDistintos),
-        atingido: totalPontos >= nivel.pontosMinimos && itensDistintos >= nivel.itensMinimos,
-      })).find((nivel) => nivel.id === nivelElegivel.id) ?? null
+      ...nivel,
+      accent: levelAccentClasses[index],
+      pontosPct: Math.min(100, Math.round((totalPontos / nivel.pontosMinimos) * 100)),
+      itensPct: Math.min(100, Math.round((itensDistintos / nivel.itensMinimos) * 100)),
+      pontosFaltantes: Math.max(0, nivel.pontosMinimos - totalPontos),
+      itensFaltantes: Math.max(0, nivel.itensMinimos - itensDistintos),
+      atingido: totalPontos >= nivel.pontosMinimos && itensDistintos >= nivel.itensMinimos,
+    })).find((nivel) => nivel.id === nivelElegivel.id) ?? null
     : null;
 
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
@@ -142,10 +153,12 @@ export default function Dashboard() {
       )}
       <AppHeader
         activeView="dashboard"
+        onNavigateHome={() => navigate('/')}
         onNavigateDashboard={() => undefined}
         onNavigateCatalog={() => navigate('/itens')}
         onNavigateWorkspace={() => navigate('/workspace')}
         onNavigateConsolidate={() => navigate('/consolidar')}
+        onNavigateProfile={() => navigate('/perfil')}
         secondaryContent={
           <>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
@@ -155,20 +168,63 @@ export default function Dashboard() {
               <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
             </div>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+              <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
+            </div>
+            {metasAtingidas && (
+              <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+                <CheckCircle2 className="h-3 w-3" />
+                Metas atingidas
+              </div>
+            )}
+            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
               <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
               {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
             </div>
-            <div className="ml-2 flex items-center gap-1.5 border-l border-gray-200 pl-2.5">
-              <button
-                type="button"
-                title="Salvar progresso como arquivo de backup"
-                disabled={isExporting}
-                onClick={handleExportSession}
-                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-              >
-                {isExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                Salvar progresso
-              </button>
+            {/* Auto-save indicator */}
+            <div className="group relative ml-1 flex items-center">
+              <div className="flex cursor-default items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-1">
+                <div className="relative">
+                  <HardDrive className="h-3 w-3 text-gray-400" />
+                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </div>
+                <span className="text-[10px] font-medium text-gray-500">Auto</span>
+              </div>
+              <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                <p className="mb-1 text-[11px] font-bold text-white">Salvamento automático</p>
+                <p className="text-[11px] leading-relaxed text-gray-300">
+                  Seus dados são gravados automaticamente neste navegador (localStorage + IndexedDB) a cada alteração. Funcionam offline, sem servidores.
+                </p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-amber-300">
+                  ⚠ Limpar o cache ou histórico do navegador apaga esses dados. Use o botão "Salvar progresso" para fazer backup externo.
+                </p>
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900" />
+              </div>
+            </div>
+
+            <div className="ml-1 flex items-center gap-1.5 border-l border-gray-200 pl-2.5">
+              {/* Salvar progresso + info */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  disabled={isExporting}
+                  onClick={handleExportSession}
+                  className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
+                >
+                  {isExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                  Salvar progresso
+                </button>
+                <div className="group relative flex items-center">
+                  <Info className="h-3 w-3 cursor-help text-gray-300 hover:text-gray-500" />
+                  <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-60 -translate-x-1/2 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                    <p className="mb-1 text-[11px] font-bold text-white">Salvar progresso</p>
+                    <p className="text-[11px] leading-relaxed text-gray-300">
+                      Exporta um arquivo <span className="font-mono font-semibold text-white">.zip</span> com todos os seus dados (perfil, lançamentos e documentos). Guarde-o em local seguro — ele permite recuperar o progresso em qualquer computador ou navegador.
+                    </p>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900" />
+                  </div>
+                </div>
+              </div>
+
               <input
                 ref={importInputRef}
                 type="file"
@@ -179,16 +235,29 @@ export default function Dashboard() {
                   if (f) void handleImportSession(f);
                 }}
               />
-              <button
-                type="button"
-                title="Restaurar progresso a partir de um arquivo de backup"
-                disabled={isImporting}
-                onClick={() => importInputRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-              >
-                {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                Restaurar
-              </button>
+
+              {/* Restaurar + info */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  type="button"
+                  disabled={isImporting}
+                  onClick={() => importInputRef.current?.click()}
+                  className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
+                >
+                  {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                  Restaurar
+                </button>
+                <div className="group relative flex items-center">
+                  <Info className="h-3 w-3 cursor-help text-gray-300 hover:text-gray-500" />
+                  <div className="pointer-events-none absolute top-full right-0 z-50 mt-2 w-60 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                    <p className="mb-1 text-[11px] font-bold text-white">Restaurar backup</p>
+                    <p className="text-[11px] leading-relaxed text-gray-300">
+                      Carrega um arquivo <span className="font-mono font-semibold text-white">.zip</span> exportado anteriormente. Os dados da sessão atual serão substituídos pelo conteúdo do backup.
+                    </p>
+                    <div className="absolute bottom-full right-3 border-4 border-transparent border-b-gray-900" />
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         }
@@ -211,7 +280,7 @@ export default function Dashboard() {
                   <div>
                     <p className="text-xs font-semibold uppercase text-gray-500">Formação atual</p>
                     <p className="text-sm font-medium text-gray-900">
-                      {servidor.escolaridade_atual} - referência do protótipo
+                      {servidor.escolaridade_atual}
                     </p>
                   </div>
                 </div>
@@ -219,6 +288,32 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Profile completeness banner */}
+        {!isProfileComplete && (
+          <Card className="border-amber-200 bg-amber-50/60 shadow-sm">
+            <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-amber-100 p-2.5 text-amber-600 shrink-0">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900">Perfil incompleto</p>
+                  <p className="text-sm text-gray-600">
+                    Alguns campos são necessários para gerar o pacote RSC (memorial descritivo e requerimento).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/perfil')}
+                className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
+              >
+                Completar perfil
+              </button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Wizard CTA */}
         <Card className={`border shadow-sm ${wizardRecommendedIds.length > 0 ? 'border-violet-200 bg-violet-50/40' : 'border-gray-200 bg-white'}`}>
@@ -268,9 +363,42 @@ export default function Dashboard() {
                 <div>
                   <div className="flex items-center gap-3">
                     <h3 className="text-xl font-bold text-gray-900">{nivelPleiteavel.label}</h3>
-                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${nivelPleiteavel.accent.chip}`}>
-                      {nivelPleiteavel.atingido ? 'Pronto para envio' : 'Nível em foco'}
-                    </span>
+                    {nivelPleiteavel.atingido ? (
+                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${nivelPleiteavel.accent.chip}`}>
+                        Pronto para envio
+                      </span>
+                    ) : (
+                      <div className="group relative flex items-center">
+                        <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
+                        <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                          <p className="mb-2 text-[11px] font-bold text-white">Como funciona a equivalência RSC</p>
+                          <p className="mb-3 text-[11px] leading-relaxed text-gray-300">
+                            Sua formação atual (<span className="font-semibold text-white">{servidor.escolaridade_atual}</span>) te credencia ao{' '}
+                            <span className="font-semibold text-white">{nivelPleiteavel.label}</span>, com equivalência funcional a{' '}
+                            <span className="font-semibold text-white">{nivelPleiteavel.equivalencia}</span>. Isso significa que, ao cumprir os requisitos de pontuação e itens, sua carreira terá progressão equivalente à dessa titulação acadêmica.
+                          </p>
+                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Tabela de equivalências</p>
+                          <ul className="mb-3 space-y-1.5">
+                            {[
+                              { formacao: 'Ensino Fundamental', rsc: 'RSC-I / RSC-II' },
+                              { formacao: 'Ensino Médio / Técnico', rsc: 'RSC-III' },
+                              { formacao: 'Graduação', rsc: 'RSC-IV' },
+                              { formacao: 'Especialização', rsc: 'RSC-V' },
+                              { formacao: 'Mestrado', rsc: 'RSC-VI' },
+                            ].map(({ formacao, rsc }) => (
+                              <li key={rsc} className="flex items-center justify-between gap-2 text-[11px]">
+                                <span className="text-gray-400">{formacao}</span>
+                                <span className="font-semibold text-white">→ {rsc}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          <p className="text-[10px] leading-relaxed text-gray-500">
+                            O nível é determinado pela maior titulação concluída. Ao obter nova titulação, é possível solicitar um novo RSC para avançar ao próximo nível.
+                          </p>
+                          <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900" />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
                     Equivalência pretendida: {nivelPleiteavel.equivalencia}
@@ -281,7 +409,19 @@ export default function Dashboard() {
               <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
                 <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
+                      <div className="group relative flex items-center">
+                        <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
+                        <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                          <p className="mb-2 text-[11px] font-bold text-white">Sobre a Pontuação</p>
+                          <p className="text-[11px] leading-relaxed text-gray-300">
+                            A pontuação é obtida a partir das suas atividades cadastradas. Cada nível de RSC exige que você alcance uma <span className="font-semibold text-white">pontuação mínima predefinida</span> somando os pontos de todos os lançamentos válidos.
+                          </p>
+                          <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
+                        </div>
+                      </div>
+                    </div>
                     {nivelPleiteavel.atingido && (
                       <p className="flex items-center gap-2 text-sm font-medium text-green-700">
                         <CheckCircle2 className="h-4 w-4" />
@@ -294,9 +434,16 @@ export default function Dashboard() {
                       {totalPontos.toFixed(2)}
                       <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.pontosMinimos} pts</span>
                     </p>
-                    <p className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                      Faltam {nivelPleiteavel.pontosFaltantes.toFixed(2)} pontos
-                    </p>
+                    {nivelPleiteavel.pontosFaltantes > 0 ? (
+                      <p className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                        Faltam {nivelPleiteavel.pontosFaltantes.toFixed(2)} pontos
+                      </p>
+                    ) : (
+                      <p className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Alcançado
+                      </p>
+                    )}
                   </div>
                   <div className="h-3 w-full rounded-full bg-gray-200">
                     <div
@@ -307,15 +454,34 @@ export default function Dashboard() {
                 </div>
 
                 <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Itens distintos</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Itens distintos</p>
+                    <div className="group relative flex items-center">
+                      <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
+                      <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                        <p className="mb-2 text-[11px] font-bold text-white">Sobre os Itens Distintos</p>
+                        <p className="text-[11px] leading-relaxed text-gray-300">
+                          Além da pontuação total, o RSC exige que você comprove a diversidade das suas atividades. Por isso, é necessário pontuar em um número mínimo de <span className="font-semibold text-white">itens diferentes</span>. Lançamentos múltiplos no mesmo item não aumentam essa contagem.
+                        </p>
+                        <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
+                      </div>
+                    </div>
+                  </div>
                   <div className="flex items-end justify-between gap-4">
                     <p className="text-3xl font-black text-gray-900">
                       {itensDistintos}
                       <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.itensMinimos} itens</span>
                     </p>
-                    <p className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                      Faltam {nivelPleiteavel.itensFaltantes} itens
-                    </p>
+                    {nivelPleiteavel.itensFaltantes > 0 ? (
+                      <p className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                        Faltam {nivelPleiteavel.itensFaltantes} itens
+                      </p>
+                    ) : (
+                      <p className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                        <CheckCircle2 className="h-4 w-4" />
+                        Alcançado
+                      </p>
+                    )}
                   </div>
                   <div className="h-3 w-full rounded-full bg-gray-200">
                     <div

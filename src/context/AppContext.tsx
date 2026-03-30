@@ -7,16 +7,109 @@ import {
   ProcessoRSC,
   mockItensRSC,
 } from '../data/mock';
-import { persistDocumentFile, persistDocumentBlob } from '../lib/documentStorage';
+import { persistDocumentFile, persistDocumentBlob, deleteDocumentsByServidorId } from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
+
+// ── Session types ─────────────────────────────────────────────────────────────
+
+export interface SessionSummary {
+  id: string;
+  siape: string;
+  nome_completo: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Storage key helpers ───────────────────────────────────────────────────────
+
+const GLOBAL_KEYS = {
+  sessions: 'rsc-tae-sessions',
+  active: 'rsc-tae-active',
+};
+
+export function sessionKeys(id: string) {
+  return {
+    perfil: `rsc-tae-${id}-perfil`,
+    documentos: `rsc-tae-${id}-documentos`,
+    lancamentos: `rsc-tae-${id}-lancamentos`,
+    processo: `rsc-tae-${id}-processo`,
+    wizardIds: `rsc-tae-${id}-wizard-ids`,
+  };
+}
+
+// Old flat keys — used only for migration
+const OLD_KEYS = {
+  perfil: 'rsc-tae-perfil',
+  documentos: 'rsc-tae-documentos',
+  lancamentos: 'rsc-tae-lancamentos',
+  processo: 'rsc-tae-processo',
+  wizardIds: 'rsc-tae-wizard-ids',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function loadJson<T>(key: string, fallback: T): T {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Migrate pre-multi-session data (flat keys) to the new format.
+// Returns a SessionSummary[] to seed the sessions index, or [] if nothing to migrate.
+function migrateOldSession(): SessionSummary[] {
+  const oldPerfil = loadJson<Servidor | null>(OLD_KEYS.perfil, null);
+  if (!oldPerfil) return [];
+
+  const id = oldPerfil.id || `srv-${Date.now()}`;
+  const keys = sessionKeys(id);
+
+  window.localStorage.setItem(keys.perfil, JSON.stringify(oldPerfil));
+
+  const docRaw = window.localStorage.getItem(OLD_KEYS.documentos);
+  if (docRaw) window.localStorage.setItem(keys.documentos, docRaw);
+
+  const lancRaw = window.localStorage.getItem(OLD_KEYS.lancamentos);
+  if (lancRaw) window.localStorage.setItem(keys.lancamentos, lancRaw);
+
+  const procRaw = window.localStorage.getItem(OLD_KEYS.processo);
+  if (procRaw) window.localStorage.setItem(keys.processo, procRaw);
+
+  const wizRaw = window.localStorage.getItem(OLD_KEYS.wizardIds);
+  if (wizRaw) window.localStorage.setItem(keys.wizardIds, wizRaw);
+
+  // Clean up old flat keys
+  Object.values(OLD_KEYS).forEach((k) => window.localStorage.removeItem(k));
+
+  const now = new Date().toISOString();
+  return [
+    {
+      id,
+      siape: oldPerfil.siape,
+      nome_completo: oldPerfil.nome_completo,
+      created_at: now,
+      updated_at: now,
+    },
+  ];
+}
+
+// ── Context type ──────────────────────────────────────────────────────────────
 
 interface AppContextType {
   servidor: Servidor | null;
+  activeSessionId: string | null;
+  sessions: SessionSummary[];
   itensRSC: ItemRSC[];
   documentos: Documento[];
   lancamentos: Lancamento[];
   processo: ProcessoRSC;
   wizardRecommendedIds: string[];
+  createSession: (perfil: Servidor) => void;
+  loadSession: (id: string) => void;
+  deleteSession: (id: string) => Promise<void>;
   setPerfil: (data: Servidor) => void;
   restoreSession: (session: RestoredSession) => void;
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
@@ -29,88 +122,205 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_KEYS = {
-  perfil: 'rsc-tae-perfil',
-  documentos: 'rsc-tae-documentos',
-  lancamentos: 'rsc-tae-lancamentos',
-  processo: 'rsc-tae-processo',
-  wizardIds: 'rsc-tae-wizard-ids',
-};
-
-function loadStoredValue<T>(key: string, fallback: T) {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const rawValue = window.localStorage.getItem(key);
-    return rawValue ? (JSON.parse(rawValue) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+// ── Provider ──────────────────────────────────────────────────────────────────
 
 const INITIAL_PROCESSO: ProcessoRSC = { status: 'Rascunho' };
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [servidor, setServidor] = useState<Servidor | null>(() =>
-    loadStoredValue<Servidor | null>(STORAGE_KEYS.perfil, null),
+  // ── Sessions index ──────────────────────────────────────────────────────────
+  const [sessions, setSessions] = useState<SessionSummary[]>(() => {
+    let stored = loadJson<SessionSummary[]>(GLOBAL_KEYS.sessions, []);
+    if (stored.length === 0) {
+      // Attempt migration from old flat keys
+      stored = migrateOldSession();
+      if (stored.length > 0) {
+        window.localStorage.setItem(GLOBAL_KEYS.sessions, JSON.stringify(stored));
+        window.localStorage.setItem(GLOBAL_KEYS.active, stored[0].id);
+      }
+    }
+    return stored;
+  });
+
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
+    window.localStorage.getItem(GLOBAL_KEYS.active),
   );
+
+  // ── Active session data ─────────────────────────────────────────────────────
+  const [servidor, setServidor] = useState<Servidor | null>(() => {
+    const id = window.localStorage.getItem(GLOBAL_KEYS.active);
+    return id ? loadJson<Servidor | null>(`rsc-tae-${id}-perfil`, null) : null;
+  });
+
+  const [documentos, setDocumentos] = useState<Documento[]>(() => {
+    const id = window.localStorage.getItem(GLOBAL_KEYS.active);
+    return id ? loadJson<Documento[]>(`rsc-tae-${id}-documentos`, []) : [];
+  });
+
+  const [lancamentos, setLancamentos] = useState<Lancamento[]>(() => {
+    const id = window.localStorage.getItem(GLOBAL_KEYS.active);
+    return id ? loadJson<Lancamento[]>(`rsc-tae-${id}-lancamentos`, []) : [];
+  });
+
+  const [processo, setProcesso] = useState<ProcessoRSC>(() => {
+    const id = window.localStorage.getItem(GLOBAL_KEYS.active);
+    return id ? loadJson<ProcessoRSC>(`rsc-tae-${id}-processo`, INITIAL_PROCESSO) : INITIAL_PROCESSO;
+  });
+
+  const [wizardRecommendedIds, setWizardRecommendedIds] = useState<string[]>(() => {
+    const id = window.localStorage.getItem(GLOBAL_KEYS.active);
+    return id ? loadJson<string[]>(`rsc-tae-${id}-wizard-ids`, []) : [];
+  });
+
   const [itensRSC] = useState<ItemRSC[]>(mockItensRSC);
-  const [documentos, setDocumentos] = useState<Documento[]>(() =>
-    loadStoredValue<Documento[]>(STORAGE_KEYS.documentos, []),
-  );
-  const [lancamentos, setLancamentos] = useState<Lancamento[]>(() =>
-    loadStoredValue<Lancamento[]>(STORAGE_KEYS.lancamentos, []),
-  );
-  const [processo, setProcesso] = useState<ProcessoRSC>(() =>
-    loadStoredValue<ProcessoRSC>(STORAGE_KEYS.processo, INITIAL_PROCESSO),
-  );
-  const [wizardRecommendedIds, setWizardRecommendedIds] = useState<string[]>(() =>
-    loadStoredValue<string[]>(STORAGE_KEYS.wizardIds, []),
-  );
+
+  // ── Persistence effects ─────────────────────────────────────────────────────
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (servidor) {
-      window.localStorage.setItem(STORAGE_KEYS.perfil, JSON.stringify(servidor));
+    window.localStorage.setItem(GLOBAL_KEYS.sessions, JSON.stringify(sessions));
+  }, [sessions]);
+
+  useEffect(() => {
+    if (activeSessionId) {
+      window.localStorage.setItem(GLOBAL_KEYS.active, activeSessionId);
     } else {
-      window.localStorage.removeItem(STORAGE_KEYS.perfil);
+      window.localStorage.removeItem(GLOBAL_KEYS.active);
     }
-  }, [servidor]);
+  }, [activeSessionId]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.documentos, JSON.stringify(documentos));
+    if (!activeSessionId) return;
+    const key = `rsc-tae-${activeSessionId}-perfil`;
+    if (servidor) {
+      window.localStorage.setItem(key, JSON.stringify(servidor));
+      // Keep session summary in sync
+      setSessions((prev) => {
+        const target = prev.find((s) => s.id === activeSessionId);
+        if (
+          target &&
+          target.siape === servidor.siape &&
+          target.nome_completo === servidor.nome_completo
+        ) {
+          return prev; // no change
+        }
+        return prev.map((s) =>
+          s.id === activeSessionId
+            ? {
+                ...s,
+                siape: servidor.siape,
+                nome_completo: servidor.nome_completo,
+                updated_at: new Date().toISOString(),
+              }
+            : s,
+        );
+      });
+    } else {
+      window.localStorage.removeItem(key);
     }
-  }, [documentos]);
+  }, [servidor, activeSessionId]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.lancamentos, JSON.stringify(lancamentos));
-    }
-  }, [lancamentos]);
+    if (!activeSessionId) return;
+    window.localStorage.setItem(`rsc-tae-${activeSessionId}-documentos`, JSON.stringify(documentos));
+  }, [documentos, activeSessionId]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.processo, JSON.stringify(processo));
-    }
-  }, [processo]);
+    if (!activeSessionId) return;
+    window.localStorage.setItem(`rsc-tae-${activeSessionId}-lancamentos`, JSON.stringify(lancamentos));
+  }, [lancamentos, activeSessionId]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(STORAGE_KEYS.wizardIds, JSON.stringify(wizardRecommendedIds));
+    if (!activeSessionId) return;
+    window.localStorage.setItem(`rsc-tae-${activeSessionId}-processo`, JSON.stringify(processo));
+  }, [processo, activeSessionId]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    window.localStorage.setItem(`rsc-tae-${activeSessionId}-wizard-ids`, JSON.stringify(wizardRecommendedIds));
+  }, [wizardRecommendedIds, activeSessionId]);
+
+  // ── Session actions ─────────────────────────────────────────────────────────
+
+  const createSession = (perfil: Servidor) => {
+    const id = perfil.id;
+    const now = new Date().toISOString();
+    const summary: SessionSummary = {
+      id,
+      siape: perfil.siape,
+      nome_completo: perfil.nome_completo,
+      created_at: now,
+      updated_at: now,
+    };
+
+    // Persist immediately so effects are consistent on first render
+    const keys = sessionKeys(id);
+    window.localStorage.setItem(keys.perfil, JSON.stringify(perfil));
+    window.localStorage.setItem(keys.documentos, JSON.stringify([]));
+    window.localStorage.setItem(keys.lancamentos, JSON.stringify([]));
+    window.localStorage.setItem(keys.processo, JSON.stringify(INITIAL_PROCESSO));
+    window.localStorage.setItem(keys.wizardIds, JSON.stringify([]));
+    window.localStorage.setItem(GLOBAL_KEYS.active, id);
+
+    setSessions((prev) => [...prev, summary]);
+    setActiveSessionId(id);
+    setServidor(perfil);
+    setDocumentos([]);
+    setLancamentos([]);
+    setProcesso(INITIAL_PROCESSO);
+    setWizardRecommendedIds([]);
+  };
+
+  const loadSession = (id: string) => {
+    const keys = sessionKeys(id);
+    window.localStorage.setItem(GLOBAL_KEYS.active, id);
+    setActiveSessionId(id);
+    setServidor(loadJson<Servidor | null>(keys.perfil, null));
+    setDocumentos(loadJson<Documento[]>(keys.documentos, []));
+    setLancamentos(loadJson<Lancamento[]>(keys.lancamentos, []));
+    setProcesso(loadJson<ProcessoRSC>(keys.processo, INITIAL_PROCESSO));
+    setWizardRecommendedIds(loadJson<string[]>(keys.wizardIds, []));
+  };
+
+  const deleteSession = async (id: string) => {
+    const keys = sessionKeys(id);
+    const sessionPerfil = loadJson<Servidor | null>(keys.perfil, null);
+
+    // Remove all session-scoped localStorage keys
+    Object.values(keys).forEach((k) => window.localStorage.removeItem(k));
+
+    // Remove from sessions index
+    setSessions((prev) => prev.filter((s) => s.id !== id));
+
+    // If this was the active session, clear in-memory state
+    if (activeSessionId === id) {
+      window.localStorage.removeItem(GLOBAL_KEYS.active);
+      setActiveSessionId(null);
+      setServidor(null);
+      setDocumentos([]);
+      setLancamentos([]);
+      setProcesso(INITIAL_PROCESSO);
+      setWizardRecommendedIds([]);
     }
-  }, [wizardRecommendedIds]);
+
+    // Clean up IndexedDB blobs for this session
+    if (sessionPerfil) {
+      await deleteDocumentsByServidorId(sessionPerfil.id);
+    }
+  };
 
   const setPerfil = (data: Servidor) => {
     setServidor(data);
   };
 
   const restoreSession = (session: RestoredSession) => {
+    if (!activeSessionId) return;
     setServidor(session.perfil);
     setDocumentos(session.documentos);
     setLancamentos(session.lancamentos);
     setProcesso(session.processo ?? INITIAL_PROCESSO);
     setWizardRecommendedIds(session.wizardIds);
   };
+
+  // ── Document & lançamento actions ────────────────────────────────────────────
 
   const addDocumento = (doc: Omit<Documento, 'id' | 'data_upload'>) => {
     const newDoc: Documento = {
@@ -141,8 +351,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return newDoc;
   };
 
-  // GeDoc: sem proxy backend — armazena os links como referência de metadado apenas.
-  // Os documentos não são baixados; o link aparece no relatório final para consulta manual.
   const addDocumentoFromGedocLinks = async ({
     servidorId,
     links,
@@ -152,9 +360,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }): Promise<Documento> => {
     const docId = `doc-${Date.now()}`;
     const nomeArquivo =
-      links.length === 1
-        ? `gedoc-referencia.ref`
-        : `gedoc-referencias-${links.length}.ref`;
+      links.length === 1 ? `gedoc-referencia.ref` : `gedoc-referencias-${links.length}.ref`;
 
     const newDoc: Documento = {
       id: docId,
@@ -195,10 +401,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppContext.Provider
       value={{
         servidor,
+        activeSessionId,
+        sessions,
         itensRSC,
         documentos,
         lancamentos,
         processo,
+        wizardRecommendedIds,
+        createSession,
+        loadSession,
+        deleteSession,
         setPerfil,
         restoreSession,
         addLancamento,
@@ -206,7 +418,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addDocumento,
         addDocumentoFromFile,
         addDocumentoFromGedocLinks,
-        wizardRecommendedIds,
         setWizardRecommendedIds,
       }}
     >
