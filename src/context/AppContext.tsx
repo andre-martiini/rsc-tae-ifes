@@ -1,49 +1,36 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import {
   Servidor,
-  SystemUser,
   ItemRSC,
   Documento,
   Lancamento,
   ProcessoRSC,
   mockItensRSC,
-  mockDocumentos,
-  mockLancamentos,
-  mockProcessoRSC,
 } from '../data/mock';
 import { persistDocumentFile, persistDocumentBlob } from '../lib/documentStorage';
-import {
-  loadServidores,
-  saveServidores,
-  loadSystemUsers,
-  saveSystemUsers,
-} from '../lib/userStorage';
+import type { RestoredSession } from '../lib/sessionImport';
 
 interface AppContextType {
   servidor: Servidor | null;
-  servidores: Servidor[];
-  systemUsers: SystemUser[];
   itensRSC: ItemRSC[];
   documentos: Documento[];
   lancamentos: Lancamento[];
   processo: ProcessoRSC;
   wizardRecommendedIds: string[];
-  login: (siapeOrEmail: string) => boolean;
-  logout: () => void;
-  createServidor: (data: Omit<Servidor, 'id'>) => Servidor;
-  createSystemUser: (data: Omit<SystemUser, 'id'>) => SystemUser;
+  setPerfil: (data: Servidor) => void;
+  restoreSession: (session: RestoredSession) => void;
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
   addDocumento: (doc: Omit<Documento, 'id' | 'data_upload'>) => Documento;
   addDocumentoFromFile: (params: { servidorId: string; file: File }) => Promise<Documento>;
   addDocumentoFromGedocLinks: (params: { servidorId: string; links: string[] }) => Promise<Documento>;
-  submitProcess: (payload: Omit<ProcessoRSC, 'status' | 'submitted_at'>) => void;
   setWizardRecommendedIds: (ids: string[]) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
+  perfil: 'rsc-tae-perfil',
   documentos: 'rsc-tae-documentos',
   lancamentos: 'rsc-tae-lancamentos',
   processo: 'rsc-tae-processo',
@@ -51,10 +38,7 @@ const STORAGE_KEYS = {
 };
 
 function loadStoredValue<T>(key: string, fallback: T) {
-  if (typeof window === 'undefined') {
-    return fallback;
-  }
-
+  if (typeof window === 'undefined') return fallback;
   try {
     const rawValue = window.localStorage.getItem(key);
     return rawValue ? (JSON.parse(rawValue) as T) : fallback;
@@ -63,31 +47,34 @@ function loadStoredValue<T>(key: string, fallback: T) {
   }
 }
 
+const INITIAL_PROCESSO: ProcessoRSC = { status: 'Rascunho' };
+
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [servidores, setServidores] = useState<Servidor[]>(() => loadServidores());
-  const [systemUsers, setSystemUsers] = useState<SystemUser[]>(() => loadSystemUsers());
-  const [servidor, setServidor] = useState<Servidor | null>(null);
+  const [servidor, setServidor] = useState<Servidor | null>(() =>
+    loadStoredValue<Servidor | null>(STORAGE_KEYS.perfil, null),
+  );
   const [itensRSC] = useState<ItemRSC[]>(mockItensRSC);
   const [documentos, setDocumentos] = useState<Documento[]>(() =>
-    loadStoredValue(STORAGE_KEYS.documentos, mockDocumentos),
+    loadStoredValue<Documento[]>(STORAGE_KEYS.documentos, []),
   );
   const [lancamentos, setLancamentos] = useState<Lancamento[]>(() =>
-    loadStoredValue(STORAGE_KEYS.lancamentos, mockLancamentos),
+    loadStoredValue<Lancamento[]>(STORAGE_KEYS.lancamentos, []),
   );
   const [processo, setProcesso] = useState<ProcessoRSC>(() =>
-    loadStoredValue(STORAGE_KEYS.processo, mockProcessoRSC),
+    loadStoredValue<ProcessoRSC>(STORAGE_KEYS.processo, INITIAL_PROCESSO),
   );
   const [wizardRecommendedIds, setWizardRecommendedIds] = useState<string[]>(() =>
-    loadStoredValue(STORAGE_KEYS.wizardIds, []),
+    loadStoredValue<string[]>(STORAGE_KEYS.wizardIds, []),
   );
 
   useEffect(() => {
-    saveServidores(servidores);
-  }, [servidores]);
-
-  useEffect(() => {
-    saveSystemUsers(systemUsers);
-  }, [systemUsers]);
+    if (typeof window === 'undefined') return;
+    if (servidor) {
+      window.localStorage.setItem(STORAGE_KEYS.perfil, JSON.stringify(servidor));
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.perfil);
+    }
+  }, [servidor]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -113,43 +100,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [wizardRecommendedIds]);
 
-  const login = (siapeOrEmail: string) => {
-    const normalized = siapeOrEmail.trim().toLowerCase();
-    const found = servidores.find(
-      (s) =>
-        s.siape === normalized ||
-        s.siape === siapeOrEmail.trim() ||
-        s.email_institucional.toLowerCase() === normalized,
-    );
-
-    if (found) {
-      setServidor(found);
-      return true;
-    }
-
-    return false;
+  const setPerfil = (data: Servidor) => {
+    setServidor(data);
   };
 
-  const logout = () => {
-    setServidor(null);
-  };
-
-  const createServidor = (data: Omit<Servidor, 'id'>) => {
-    const newServidor: Servidor = {
-      ...data,
-      id: `srv-${Date.now()}`,
-    };
-    setServidores((current) => [...current, newServidor]);
-    return newServidor;
-  };
-
-  const createSystemUser = (data: Omit<SystemUser, 'id'>) => {
-    const newUser: SystemUser = {
-      ...data,
-      id: `usr-${Date.now()}`,
-    };
-    setSystemUsers((current) => [...current, newUser]);
-    return newUser;
+  const restoreSession = (session: RestoredSession) => {
+    setServidor(session.perfil);
+    setDocumentos(session.documentos);
+    setLancamentos(session.lancamentos);
+    setProcesso(session.processo ?? INITIAL_PROCESSO);
+    setWizardRecommendedIds(session.wizardIds);
   };
 
   const addDocumento = (doc: Omit<Documento, 'id' | 'data_upload'>) => {
@@ -158,7 +118,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: `doc-${Date.now()}`,
       data_upload: new Date().toISOString(),
     };
-    setDocumentos((currentDocs) => [...currentDocs, newDoc]);
+    setDocumentos((current) => [...current, newDoc]);
     return newDoc;
   };
 
@@ -177,47 +137,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
       data_upload: new Date().toISOString(),
     };
 
-    setDocumentos((currentDocs) => [...currentDocs, newDoc]);
+    setDocumentos((current) => [...current, newDoc]);
     return newDoc;
   };
 
-  const addDocumentoFromGedocLinks = async ({ servidorId, links }: { servidorId: string; links: string[] }): Promise<Documento> => {
-    const { PDFDocument } = await import('pdf-lib');
-
-    const toProxyUrl = (url: string) => {
-      const parsed = new URL(url);
-      return `/proxy/gedoc${parsed.pathname}${parsed.search}`;
-    };
-
-    const pdfBuffers = await Promise.all(
-      links.map(async (url) => {
-        const response = await fetch(toProxyUrl(url));
-        if (!response.ok) throw new Error(`Falha ao buscar documento: ${url}`);
-        return response.arrayBuffer();
-      }),
-    );
-
-    const mergedDoc = await PDFDocument.create();
-    for (const buffer of pdfBuffers) {
-      const sourcePdf = await PDFDocument.load(buffer);
-      const copiedPages = await mergedDoc.copyPages(sourcePdf, sourcePdf.getPageIndices());
-      copiedPages.forEach((page) => mergedDoc.addPage(page));
-    }
-
-    const mergedBytes = await mergedDoc.save();
-    const blob = new Blob([mergedBytes], { type: 'application/pdf' });
+  // GeDoc: sem proxy backend — armazena os links como referência de metadado apenas.
+  // Os documentos não são baixados; o link aparece no relatório final para consulta manual.
+  const addDocumentoFromGedocLinks = async ({
+    servidorId,
+    links,
+  }: {
+    servidorId: string;
+    links: string[];
+  }): Promise<Documento> => {
     const docId = `doc-${Date.now()}`;
-    const nomeArquivo = `gedoc-mesclado-${links.length}-doc${links.length > 1 ? 's' : ''}.pdf`;
-    const persisted = await persistDocumentBlob({ docId, servidorId, nomeArquivo, blob });
+    const nomeArquivo =
+      links.length === 1
+        ? `gedoc-referencia.ref`
+        : `gedoc-referencias-${links.length}.ref`;
 
     const newDoc: Documento = {
       id: docId,
       servidor_id: servidorId,
       nome_arquivo: nomeArquivo,
-      hash_arquivo: persisted.hash,
-      caminho_storage: persisted.caminhoStorage,
-      mime_type: 'application/pdf',
-      tamanho_bytes: persisted.tamanhoBytes,
       data_upload: new Date().toISOString(),
       gedoc_links: links,
     };
@@ -227,69 +169,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addLancamento = (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => {
-    if (processo.status === 'Em triagem') {
-      return false;
-    }
-
     const newLancamento: Lancamento = {
       ...lancamento,
       id: `lanc-${Date.now()}`,
       status_auditoria: 'Pendente',
     };
-    setLancamentos((currentLancamentos) => [...currentLancamentos, newLancamento]);
+    setLancamentos((current) => [...current, newLancamento]);
     return true;
   };
 
   const removeLancamento = (lancamentoId: string) => {
-    if (processo.status === 'Em triagem') {
-      return false;
-    }
-
     let removed = false;
-
-    setLancamentos((currentLancamentos) => {
-      const nextLancamentos = currentLancamentos.filter((lancamento) => {
-        const shouldKeep = lancamento.id !== lancamentoId;
-        if (!shouldKeep) {
-          removed = true;
-        }
+    setLancamentos((current) => {
+      const next = current.filter((l) => {
+        const shouldKeep = l.id !== lancamentoId;
+        if (!shouldKeep) removed = true;
         return shouldKeep;
       });
-
-      return nextLancamentos;
+      return next;
     });
-
     return removed;
-  };
-
-  const submitProcess = (payload: Omit<ProcessoRSC, 'status' | 'submitted_at'>) => {
-    setProcesso({
-      ...payload,
-      status: 'Em triagem',
-      submitted_at: new Date().toISOString(),
-    });
   };
 
   return (
     <AppContext.Provider
       value={{
         servidor,
-        servidores,
-        systemUsers,
         itensRSC,
         documentos,
         lancamentos,
         processo,
-        login,
-        logout,
-        createServidor,
-        createSystemUser,
+        setPerfil,
+        restoreSession,
         addLancamento,
         removeLancamento,
         addDocumento,
         addDocumentoFromFile,
         addDocumentoFromGedocLinks,
-        submitProcess,
         wizardRecommendedIds,
         setWizardRecommendedIds,
       }}

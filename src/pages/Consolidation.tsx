@@ -1,18 +1,19 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, FileText, Send, ShieldAlert, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppHeader from '../components/AppHeader';
 import { Button } from '../components/ui/button';
 import { useAppContext } from '../context/AppContext';
+import { exportPacoteRSC } from '../lib/pacoteExport';
 import { getEligibleRscLevel } from '../lib/rsc';
 
 export default function Consolidation() {
-  const { servidor, itensRSC, documentos, lancamentos, processo, submitProcess, logout } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, processo } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/perfil" replace />;
   }
 
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
@@ -66,22 +67,33 @@ export default function Consolidation() {
     return issues;
   }, [documentosUtilizados.length, itensDistintos, lancamentosDoServidor.length, nivelElegivel, totalPontos]);
 
-  const canSubmit = pendencias.length === 0 && processo.status !== 'Em triagem';
+  const canGenerate = pendencias.length === 0;
   const today = new Date().toLocaleDateString('pt-BR');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const handleExport = () => window.print();
 
-  const handleSubmit = () => {
-    if (!nivelElegivel || !canSubmit) {
-      toast.error('Revise as pendencias antes de enviar o processo.');
+  const handleGenerate = async () => {
+    if (!canGenerate) {
+      toast.error('Revise as pendências antes de gerar o pacote.');
       return;
     }
-    submitProcess({
-      nivel_pleiteado_id: nivelElegivel.id,
-      pontos_total_submissao: totalPontos,
-      itens_distintos_submissao: itensDistintos,
-    });
-    toast.success(`Processo enviado para analise no nivel ${nivelElegivel.label}.`);
+    setIsGenerating(true);
+    try {
+      await exportPacoteRSC({
+        servidor,
+        nivelElegivel,
+        lancamentos: lancamentosDoServidor,
+        itensRSC,
+        documentos,
+      });
+      toast.success('Pacote RSC gerado e baixado com sucesso!');
+    } catch (err) {
+      console.error('Erro ao gerar pacote:', err);
+      toast.error('Erro ao gerar o pacote. Tente novamente.');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   return (
@@ -94,12 +106,8 @@ export default function Consolidation() {
           onNavigateCatalog={() => navigate('/itens')}
           onNavigateWorkspace={() => navigate('/workspace')}
           onNavigateConsolidate={() => undefined}
-          onLogout={() => { logout(); navigate('/'); }}
           secondaryContent={
             <>
-              <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Status:</span> {processo.status}
-              </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
                 <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
               </div>
@@ -126,12 +134,16 @@ export default function Consolidation() {
               Exportar ficha
             </Button>
             <Button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
+              onClick={handleGenerate}
+              disabled={!canGenerate || isGenerating}
               className="bg-primary text-white hover:bg-primary/90 disabled:opacity-60 text-sm"
             >
-              <Send className="mr-2 h-4 w-4" />
-              {processo.status === 'Em triagem' ? 'Em triagem' : 'Enviar processo'}
+              {isGenerating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 h-4 w-4" />
+              )}
+              {isGenerating ? 'Gerando...' : 'Gerar Pacote RSC'}
             </Button>
           </div>
         </div>
@@ -161,11 +173,7 @@ export default function Consolidation() {
             <div className="flex shrink-0 flex-col items-end justify-center border-l border-gray-200 px-5 py-3 text-right">
               <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Data</p>
               <p className="text-xs font-bold text-gray-900">{today}</p>
-              <span className={`mt-1.5 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
-                processo.status === 'Em triagem'
-                  ? 'bg-emerald-100 text-emerald-800'
-                  : 'bg-gray-100 text-gray-600'
-              }`}>
+              <span className="mt-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
                 {processo.status}
               </span>
             </div>

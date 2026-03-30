@@ -20,7 +20,7 @@ const incisosInfo: { id: Inciso; title: string; desc: string }[] = [
 ];
 
 export default function Workspace() {
-  const { servidor, itensRSC, lancamentos, processo, logout } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo } = useAppContext();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeInciso, setActiveInciso] = useState<Inciso>('I');
@@ -45,7 +45,7 @@ export default function Workspace() {
   }, [itensRSC, requestedItemId]);
 
   if (!servidor) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/perfil" replace />;
   }
 
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
@@ -101,10 +101,6 @@ export default function Workspace() {
           onNavigateCatalog={() => navigate('/itens')}
           onNavigateWorkspace={() => undefined}
           onNavigateConsolidate={() => navigate('/consolidar')}
-          onLogout={() => {
-            logout();
-            navigate('/');
-          }}
           secondaryContent={
             <>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
