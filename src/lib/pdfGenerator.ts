@@ -159,7 +159,7 @@ class Writer {
       color: COLORS.accent,
     });
 
-    const logoBoxW = 54;
+    const logoBoxW = 72;
     const rightBoxW = 92;
 
     this.page.drawLine({
@@ -399,8 +399,12 @@ class Writer {
     const size = 9;
     const labelWidth = 126;
     const lineHeight = 13;
+    const labelLineHeight = 9;
+    const labelLines = this.wrap(sanitize(label), this.bold, 7, labelWidth - 8);
     const lines = this.wrap(value, this.regular, size, valueWidth);
-    const rowHeight = Math.max(18, lines.length * lineHeight + 4);
+    const labelTotalH = labelLines.length * labelLineHeight;
+    const valueTotalH = lines.length * lineHeight;
+    const rowHeight = Math.max(18, Math.max(labelTotalH, valueTotalH) + 4);
     this.ensure(rowHeight + 4);
 
     this.page.drawLine({
@@ -409,12 +413,14 @@ class Writer {
       thickness: 0.4,
       color: COLORS.border,
     });
-    this.page.drawText(sanitize(label), {
-      x: MARGIN_X + 4,
-      y: this.y - 9,
-      size: 7,
-      font: this.bold,
-      color: COLORS.soft,
+    labelLines.forEach((line, index) => {
+      this.page.drawText(line, {
+        x: MARGIN_X + 4,
+        y: this.y - 9 - index * labelLineHeight,
+        size: 7,
+        font: this.bold,
+        color: COLORS.soft,
+      });
     });
     lines.forEach((line, index) => {
       this.page.drawText(line, {
