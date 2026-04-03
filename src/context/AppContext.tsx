@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import {
   Servidor,
   ItemRSC,
@@ -8,7 +8,12 @@ import {
   mockItensRSC,
 } from '../data/mock';
 import { buildInstitutionReferenceFileName } from '../config/institution';
-import { persistDocumentFile, persistDocumentBlob, deleteDocumentsByServidorId } from '../lib/documentStorage';
+import {
+  persistDocumentFile,
+  persistDocumentBlob,
+  deleteDocumentsByServidorId,
+  computeDocumentHash,
+} from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
 
 // ── Session types ─────────────────────────────────────────────────────────────
@@ -57,6 +62,14 @@ function loadJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+function normalizeFileName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 }
 
 // Migrate pre-multi-session data (flat keys) to the new format.
@@ -112,6 +125,7 @@ interface AppContextType {
   loadSession: (id: string) => void;
   deleteSession: (id: string) => Promise<void>;
   setPerfil: (data: Servidor) => void;
+  updateProcesso: (updates: Partial<ProcessoRSC>) => void;
   restoreSession: (session: RestoredSession) => void;
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
@@ -318,6 +332,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setServidor(data);
   };
 
+  const updateProcesso = useCallback((updates: Partial<ProcessoRSC>) => {
+    setProcesso((current) => ({ ...current, ...updates }));
+  }, []);
+
   const restoreSession = (session: RestoredSession) => {
     if (!activeSessionId) return;
     setServidor(session.perfil);
@@ -352,6 +370,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sourceMimeType?: string;
     convertedToPdf?: boolean;
   }) => {
+    const fileHash = await computeDocumentHash(file);
+    const normalizedName = normalizeFileName(file.name);
+
+    const duplicatedDocument = documentos.find((doc) => {
+      if (doc.servidor_id !== servidorId || !doc.caminho_storage) {
+        return false;
+      }
+
+      if (doc.hash_arquivo && doc.hash_arquivo === fileHash) {
+        return true;
+      }
+
+      return (
+        normalizeFileName(doc.nome_arquivo) === normalizedName &&
+        doc.tamanho_bytes === file.size
+      );
+    });
+
+    if (duplicatedDocument) {
+      const duplicateReason =
+        duplicatedDocument.hash_arquivo === fileHash
+          ? 'o conteúdo do arquivo já foi carregado anteriormente'
+          : 'já existe um arquivo com o mesmo nome e tamanho nesta sessão';
+      throw new Error(
+        `Upload bloqueado: ${duplicateReason} (${duplicatedDocument.nome_arquivo}).`,
+      );
+    }
+
     const docId = `doc-${Date.now()}`;
     const persistedFile = await persistDocumentFile({ docId, servidorId, file });
 
@@ -433,6 +479,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadSession,
         deleteSession,
         setPerfil,
+        updateProcesso,
         restoreSession,
         addLancamento,
         removeLancamento,

@@ -35,7 +35,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
   const [docMode, setDocMode] = useState<'upload' | 'reference'>('upload');
-  const [selectedDocId, setSelectedDocId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
@@ -48,12 +47,14 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [quantidade, setQuantidade] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmFragile, setConfirmFragile] = useState(false);
+  const [confirmNaoDuplicidade, setConfirmNaoDuplicidade] = useState(false);
+  const [confirmNaoOrdinaria, setConfirmNaoOrdinaria] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const isSubmitted = processo.status === 'Enviado';
+  const isSubmitted = processo.status === 'Em triagem';
   const isFragile = isItemJuridicallyFragile(item);
   const allowsDecimals = item.quantidade_automatica || /tempo|m.s|ano/i.test(item.unidade_medida);
   const showDateFields = item.modo_calculo !== 'manual';
@@ -70,7 +71,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const resetUpload = useCallback(() => {
     setFile(null);
     setUploadMeta(null);
-    setSelectedDocId('');
     setUploadFeedback(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
@@ -84,6 +84,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setOngoing(false);
     setQuantidade('');
     setConfirmFragile(!isFragile);
+    setConfirmNaoDuplicidade(false);
+    setConfirmNaoOrdinaria(false);
     resetUpload();
   }, [isFragile, resetUpload]);
 
@@ -129,7 +131,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         const pages = await merged.copyPages(src, src.getPageIndices());
         pages.forEach((page) => merged.addPage(page));
       }
-      const mergedFile = new File([await merged.save()], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
+      const mergedFile = new File([await merged.save() as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
       if (mergedFile.size > 5 * 1024 * 1024) return void setUploadFeedback('O PDF consolidado excede 5MB.');
       setFile(mergedFile);
       setUploadMeta({ converted: true, originalName: `${fileList.length} arquivo(s) combinados`, originalMimeType: 'application/pdf' });
@@ -141,7 +143,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
-      if (docMode !== 'upload' || selectedDocId || isSubmitted) return;
+      if (docMode !== 'upload' || isSubmitted) return;
       const pasted = Array.from(event.clipboardData?.items ?? []).map((item) => item.getAsFile()).find((item): item is File => !!item);
       if (!pasted) return;
       event.preventDefault();
@@ -149,7 +151,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [docMode, isSubmitted, selectedDocId]);
+  }, [docMode, isSubmitted]);
 
   const addReference = () => {
     const trimmed = referenceInput.trim();
@@ -194,14 +196,16 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     if (!quantidade.trim() || Number.isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) return void toast.error('Informe uma quantidade maior que zero.');
     if (item.modo_calculo !== 'manual' && (!dataInicio || !effectiveEndDate)) return void toast.error('Este item exige datas de início e fim.');
     if (isFragile && !confirmFragile) return void toast.error('Confirme que revisou o enquadramento sensível deste item.');
+    if (!confirmNaoDuplicidade) return void toast.error('Confirme que este fato não está sendo utilizado em outro item do RSC.');
+    if (!confirmNaoOrdinaria) return void toast.error('Confirme que a atividade excede as atribuições ordinárias do cargo.');
     if (docMode === 'reference' && referenceLinks.length === 0) return void toast.error(`Adicione ao menos um ${institutionConfig.documentLinks.label}.`);
-    if (docMode === 'upload' && !file && !selectedDocId) return void toast.error('Anexe um documento comprobatório ou reutilize um já salvo.');
+    if (docMode === 'upload' && !file) return void toast.error('Anexe um documento comprobatório.');
     try {
       setSaving(true);
-      let documentoId: string | undefined = selectedDocId || undefined;
+      let documentoId: string | undefined = undefined;
       if (docMode === 'reference') {
         documentoId = (await addDocumentoFromGedocLinks({ servidorId: servidor.id, links: referenceLinks })).id;
-      } else if (file && !selectedDocId) {
+      } else if (file) {
         documentoId = (await addDocumentoFromFile({
           servidorId: servidor.id,
           file,
@@ -218,14 +222,19 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         data_inicio: showDateFields ? dataInicio : '',
         data_fim: showDateFields ? effectiveEndDate : '',
         quantidade_informada: quantidadeNumerica,
+        declaracao_nao_duplicidade: true,
+        declaracao_nao_ordinaria: true,
         pontos_calculados: pontosCalculados,
       });
       toast.success(`Lançamento salvo! +${formatPointValue(pontosCalculados)} pts.`);
       resetForm();
       setTab('history');
       onSaved();
-    } catch {
-      toast.error('Não foi possível salvar este lançamento.');
+    } catch (error) {
+      // Surface duplicate-upload validation and other recoverable messages.
+      const message =
+        error instanceof Error ? error.message : 'Não foi possível salvar este lançamento.';
+      toast.error(message);
     } finally {
       setSaving(false);
     }
@@ -263,68 +272,152 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-6 py-5">
         {tab === 'form' ? (
-          <div className={cn('space-y-8', isSubmitted && 'pointer-events-none opacity-60')}>
-            <section className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => { setDocMode('upload'); setReferenceLinks([]); setReferenceInput(''); }} className={cn('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold', docMode === 'upload' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-gray-200 bg-white text-gray-500')}><UploadCloud className="h-3.5 w-3.5" />Enviar arquivo</button>
-                <button type="button" onClick={() => { setDocMode('reference'); resetUpload(); }} className={cn('flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold', docMode === 'reference' ? 'border-primary/30 bg-primary/10 text-primary' : 'border-gray-200 bg-white text-gray-500')}><Link className="h-3.5 w-3.5" />{institutionConfig.documentLinks.inputLabel}</button>
-              </div>
-              {docMode === 'reference' ? (
-                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="mb-3 text-sm text-gray-600">{institutionConfig.documentLinks.helperText}</p>
-                  <div className="flex gap-2">
-                    <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-10 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
-                    <button type="button" onClick={addReference} className="flex h-10 w-10 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary"><Plus className="h-4 w-4" /></button>
-                  </div>
-                  {referenceLinks.length > 0 && <ul className="mt-3 space-y-2">{referenceLinks.map((link, index) => <li key={link} className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900"><FileText className="h-3.5 w-3.5 shrink-0" /><span className="flex-1 truncate font-mono">{link}</span><button type="button" onClick={() => setReferenceLinks((prev) => prev.filter((_, i) => i !== index))}><X className="h-3.5 w-3.5" /></button></li>)}</ul>}
-                </div>
-              ) : (
-                <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(260px,1fr)]">
-                  <div>
-                    <div className={`relative flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed text-center transition-all ${file ? 'border-emerald-400 bg-emerald-50' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-300 bg-white'}`} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); void mergeAndAcceptFiles(e.dataTransfer.files); }}>
-                      <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                      {file && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-3 top-3 rounded-full border border-emerald-200 bg-white p-2 text-emerald-700"><Trash2 className="h-4 w-4" /></button>}
-                      <div className="mb-3 rounded-full bg-white/80 p-2.5"><UploadCloud className="h-6 w-6 text-gray-500" /></div>
-                      <p className="max-w-[90%] truncate px-4 text-sm font-semibold text-gray-700" title={file?.name}>{file ? file.name : dragActive ? 'Solte os arquivos aqui' : 'Clique, arraste ou cole um arquivo'}</p>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">{file ? 'Arquivo pronto para persistir com hash' : 'PDF, JPG, PNG, TXT, MD ou JSON'}</p>
+          <div className={cn('space-y-5', isSubmitted && 'pointer-events-none opacity-60')}>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setDocMode('upload')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
+                  docMode === 'upload'
+                    ? 'border-primary/30 bg-primary/10 text-primary'
+                    : 'border-gray-200 bg-white text-gray-500',
+                )}
+              >
+                <UploadCloud className="h-3.5 w-3.5" />
+                Enviar arquivo
+              </button>
+              <button
+                type="button"
+                onClick={() => setDocMode('reference')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
+                  docMode === 'reference'
+                    ? 'border-primary/30 bg-primary/10 text-primary'
+                    : 'border-gray-200 bg-white text-gray-500',
+                )}
+              >
+                <Link className="h-3.5 w-3.5" />
+                {institutionConfig.documentLinks.inputLabel}
+              </button>
+            </div>
+
+            {/* ── Document + Fields side-by-side ── */}
+            <div className="grid gap-5 lg:grid-cols-2">
+
+              {/* Left: Document section */}
+              <section className="space-y-3">
+                {docMode === 'reference' ? (
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                    <p className="mb-3 text-xs text-gray-500">{institutionConfig.documentLinks.helperText}</p>
+                    <div className="flex gap-2">
+                      <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
+                      <button type="button" onClick={addReference} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary"><Plus className="h-4 w-4" /></button>
                     </div>
-                    {uploadFeedback && <p className={`mt-3 text-xs ${file ? 'text-emerald-700' : 'text-gray-500'}`}>{uploadFeedback}</p>}
+                    {referenceLinks.length > 0 && <ul className="mt-3 space-y-1.5">{referenceLinks.map((link, index) => <li key={link} className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900"><FileText className="h-3.5 w-3.5 shrink-0" /><span className="flex-1 truncate font-mono">{link}</span><button type="button" onClick={() => setReferenceLinks((prev) => prev.filter((_, i) => i !== index))}><X className="h-3.5 w-3.5" /></button></li>)}</ul>}
                   </div>
-                  <div className="rounded-xl border border-gray-200 bg-white p-4">
-                    <p className="mb-2 text-sm text-gray-600">Ou reutilize um documento já salvo.</p>
-                    <select value={selectedDocId} onChange={(e) => { setSelectedDocId(e.target.value); if (e.target.value) resetUpload(); }} disabled={!!file} className="h-11 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm">
-                      <option value="">Buscar em documentos salvos...</option>
-                      {documentos.filter((doc) => doc.servidor_id === servidor?.id).map((doc) => <option key={doc.id} value={doc.id}>{doc.nome_arquivo}{doc.hash_arquivo ? ` • hash ${doc.hash_arquivo.slice(0, 8)}` : ''}</option>)}
-                    </select>
+                ) : (
+                  <div>
+                    <div className={`relative flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed text-center transition-all ${file ? 'border-emerald-400 bg-emerald-50' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-300 bg-white'}`} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); void mergeAndAcceptFiles(e.dataTransfer.files); }}>
+                      <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
+                      {file && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-3 top-3 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      <div className="mb-2 rounded-full bg-white/80 p-2"><UploadCloud className="h-5 w-5 text-gray-400" /></div>
+                      <p className="max-w-[90%] truncate px-4 text-sm font-semibold text-gray-700" title={file?.name}>{file ? file.name : dragActive ? 'Solte os arquivos aqui' : 'Clique, arraste ou cole um arquivo'}</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{file ? 'Arquivo pronto' : 'PDF, JPG, PNG, TXT, MD ou JSON'}</p>
+                    </div>
+                    {uploadFeedback && <p className={`mt-2 text-xs ${file ? 'text-emerald-700' : 'text-gray-500'}`}>{uploadFeedback}</p>}
+                  </div>
+                )}
+              </section>
+
+              {/* Right: Period + Quantity fields */}
+              <section className="space-y-4">
+                {showDateFields && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="data-inicio" className="text-xs">Data de início <span className="text-red-500">*</span></Label>
+                      <Input id="data-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-9 text-sm" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="data-fim" className="text-xs">Data de fim <span className="text-red-500">*</span></Label>
+                      <Input id="data-fim" type="date" value={effectiveEndDate} onChange={(e) => setDataFim(e.target.value)} disabled={ongoing} className="h-9 text-sm" />
+                      <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
+                        <input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} className="h-3 w-3" />
+                        Ainda em vigor
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* Quantity with unit badge */}
+                <div className="space-y-1.5">
+                  <div className="flex items-baseline gap-2">
+                    <Label htmlFor="quantidade" className="text-xs">Quantidade</Label>
+                    <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                      {item.unidade_medida}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="quantidade"
+                      type="number"
+                      min="0"
+                      step={allowsDecimals ? '0.01' : '1'}
+                      value={quantidade}
+                      onChange={(e) => setQuantidade(e.target.value)}
+                      className="h-11 max-w-[180px] text-center text-xl font-bold"
+                      placeholder="0"
+                    />
+                    <span className="text-sm font-medium text-gray-400">{item.unidade_medida}</span>
+                    {item.quantidade_automatica && (
+                      <Button type="button" variant="outline" size="sm" onClick={calculateQuantityFromDates}>
+                        <Calculator className="mr-1.5 h-3.5 w-3.5" />Calcular
+                      </Button>
+                    )}
                   </div>
                 </div>
-              )}
-            </section>
 
-            <section className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-4">
-                {showDateFields && <>
-                  <div className="space-y-2"><Label htmlFor="data-inicio">Data de início <span className="text-red-500">*</span></Label><Input id="data-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} /></div>
-                  <div className="space-y-2"><Label htmlFor="data-fim">Data de fim <span className="text-red-500">*</span></Label><Input id="data-fim" type="date" value={effectiveEndDate} onChange={(e) => setDataFim(e.target.value)} disabled={ongoing} /><label className="flex items-center gap-2 text-xs text-gray-600"><input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} />Ainda em vigor</label></div>
-                </>}
-              </div>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="quantidade">Quantidade</Label>
-                  <div className="flex max-w-sm items-center gap-2">
-                    <Input id="quantidade" type="number" min="0" step={allowsDecimals ? '0.01' : '1'} value={quantidade} onChange={(e) => setQuantidade(e.target.value)} className="text-center text-lg font-bold" />
-                    {item.quantidade_automatica && <Button type="button" variant="outline" onClick={calculateQuantityFromDates}><Calculator className="mr-2 h-4 w-4" />Calcular</Button>}
-                  </div>
+                {/* Points preview */}
+                <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm text-blue-800">
+                  <span className="font-semibold">{formatPointValue(item.pontos_por_unidade)} pts</span>
+                  <span className="text-blue-600"> por {item.unidade_medida} → </span>
+                  <span className="font-bold">{formatPointValue(pointsPreview)} pts</span>
+                  <span className="text-blue-600"> neste lançamento</span>
                 </div>
-                <div className="rounded-xl border border-blue-200 bg-blue-50/50 p-4 text-sm text-blue-800">Cada unidade informada computará <strong>{formatPointValue(item.pontos_por_unidade)} pts</strong>.<br />Isto totalizará <strong>{formatPointValue(pointsPreview)} pts</strong> para este lançamento.</div>
+              </section>
+            </div>
+
+            {isFragile && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" /><div><p className="font-semibold">Item com enquadramento sensível</p><label className="mt-2 flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={confirmFragile} onChange={(e) => setConfirmFragile(e.target.checked)} />Confirmo que revisei o enquadramento deste item.</label></div></div></div>}
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800">
+              <p className="font-semibold text-gray-900">Declarações para a pré-análise</p>
+              <div className="mt-3 space-y-3">
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmNaoDuplicidade}
+                    onChange={(e) => setConfirmNaoDuplicidade(e.target.checked)}
+                  />
+                  <span>Confirmo que este fato ou documento não está sendo aproveitado simultaneamente em outro item do RSC.</span>
+                </label>
+                <label className="flex items-start gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmNaoOrdinaria}
+                    onChange={(e) => setConfirmNaoOrdinaria(e.target.checked)}
+                  />
+                  <span>Confirmo que a atividade informada excede a rotina ordinária do meu cargo e ainda dependerá de análise posterior da comissão.</span>
+                </label>
               </div>
-            </section>
+            </div>
 
-            {isFragile && <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" /><div><p className="font-semibold">Item com enquadramento sensível</p><label className="mt-3 flex items-center gap-2"><input type="checkbox" checked={confirmFragile} onChange={(e) => setConfirmFragile(e.target.checked)} />Confirmo que revisei o enquadramento deste item.</label></div></div></div>}
-
-            <div className="flex justify-end border-t border-gray-100 pt-4"><Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">{saving ? 'Salvando...' : 'Salvar lançamento'}</Button></div>
+            <div className="flex justify-end border-t border-gray-100 pt-4">
+              <Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">
+                {saving ? 'Salvando...' : 'Salvar lançamento'}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

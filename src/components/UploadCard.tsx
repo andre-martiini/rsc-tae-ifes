@@ -24,7 +24,6 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
   const [quantidade, setQuantidade] = useState<number>(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [justificativa, setJustificativa] = useState('');
-  const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [file, setFile] = useState<File | null>(null);
 
   // Auto-calculate quantity based on dates (only for items with quantidade_automatica)
@@ -55,14 +54,14 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
       return;
     }
 
-    if (!file && !selectedDocId) {
-      toast.error('Anexe um documento ou selecione um existente.');
+    if (!file) {
+      toast.error('Anexe um documento.');
       return;
     }
 
-    let docId = selectedDocId;
+    let docId: string | undefined;
 
-    if (file && !selectedDocId) {
+    if (file) {
       const newDoc = addDocumento({
         servidor_id: servidor.id,
         nome_arquivo: file.name,
@@ -92,7 +91,6 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     setIsUnlocked(false);
     setJustificativa('');
     setFile(null);
-    setSelectedDocId('');
     onToggle(); // Close accordion
   };
 
@@ -123,16 +121,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
             transition={{ duration: 0.2 }}
           >
             <CardContent className="pt-0 pb-4 px-4 border-t border-gray-100">
-              <div className="mt-4 space-y-2 mb-6">
-                <div className="p-3 bg-blue-50 text-blue-800 text-sm italic rounded-md border border-blue-100">
-                  <strong>Regra de Aceite:</strong> {item.regra_aceite}
-                </div>
-                {item.documentos_comprobatorios && (
-                  <div className="p-3 bg-amber-50 text-amber-800 text-sm rounded-md border border-amber-100">
-                    <strong>Documentos comprobatórios:</strong> {item.documentos_comprobatorios}
-                  </div>
-                )}
-              </div>
+
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div className="space-y-4">
@@ -197,44 +186,18 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                 <div className="space-y-4">
                   <Label>Comprovação Documental</Label>
                   
-                  {!selectedDocId && (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors relative">
-                      <input 
-                        type="file" 
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        accept=".pdf"
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
-                      />
-                      <UploadCloud className="w-8 h-8 text-gray-400 mb-2" />
-                      <p className="text-sm font-medium text-gray-900">
-                        {file ? file.name : 'Arraste o PDF ou clique para buscar'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">Tamanho máximo: 5MB</p>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-4 my-2">
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                    <span className="text-xs text-gray-400 uppercase font-semibold">OU</span>
-                    <div className="h-px bg-gray-200 flex-1"></div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs text-gray-500">Reutilizar Documento</Label>
-                    <select 
-                      className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50"
-                      value={selectedDocId}
-                      onChange={(e) => {
-                        setSelectedDocId(e.target.value);
-                        if (e.target.value) setFile(null);
-                      }}
-                      disabled={!!file}
-                    >
-                      <option value="">Selecione um documento enviado...</option>
-                      {documentos.map(doc => (
-                        <option key={doc.id} value={doc.id}>{doc.nome_arquivo}</option>
-                      ))}
-                    </select>
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors relative">
+                    <input 
+                      type="file" 
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      accept=".pdf"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                    />
+                    <UploadCloud className="w-8 h-8 text-gray-400 mb-2" />
+                    <p className="text-sm font-medium text-gray-900">
+                      {file ? file.name : 'Arraste o PDF ou clique para buscar'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">Tamanho máximo: 5MB</p>
                   </div>
                 </div>
               </div>

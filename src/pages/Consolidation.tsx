@@ -1,18 +1,20 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
 import AppHeader from '../components/AppHeader';
 import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
 import { exportPacoteRSC } from '../lib/pacoteExport';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
-import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
+import { getEligibleRscLevel, getEligibleRscLevels, validateLevelConstraints } from '../lib/rsc';
 
 export default function Consolidation() {
-  const { servidor, itensRSC, documentos, lancamentos, processo } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -38,23 +40,40 @@ export default function Consolidation() {
     [lancamentosDoServidor],
   );
 
+  const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
+  const niveisPleiteaveis = useMemo(
+    () => getEligibleRscLevels(servidor.escolaridade_atual),
+    [servidor.escolaridade_atual],
+  );
+  const [nivelPleiteadoId, setNivelPleiteadoId] = useState(
+    processo.nivel_pleiteado_id ?? nivelElegivel?.id ?? '',
+  );
+  const [saldoConcessaoAnterior, setSaldoConcessaoAnterior] = useState(
+    processo.saldo_concessao_anterior?.toString() ?? '',
+  );
+  const [numeroProcessoAnterior, setNumeroProcessoAnterior] = useState(
+    processo.numero_processo_anterior ?? '',
+  );
+  const [dataUltimaConcessao, setDataUltimaConcessao] = useState(
+    processo.data_ultima_concessao ?? '',
+  );
+  const nivelPleiteado = useMemo(
+    () => niveisPleiteaveis.find((nivel) => nivel.id === nivelPleiteadoId) ?? null,
+    [nivelPleiteadoId, niveisPleiteaveis],
+  );
   const incisoViolations = useMemo(
     () =>
-      nivelElegivel
-        ? validateLevelConstraints(nivelElegivel.id as string, lancamentosDoServidor, itensRSC)
+      nivelPleiteado
+        ? validateLevelConstraints(nivelPleiteado.id as string, lancamentosDoServidor, itensRSC)
         : [],
-    [nivelElegivel, lancamentosDoServidor, itensRSC],
+    [nivelPleiteado, lancamentosDoServidor, itensRSC],
   );
 
   const metasAtingidas =
-    !!nivelElegivel &&
-    totalPontos >= nivelElegivel.pontosMinimos &&
-    itensDistintos >= nivelElegivel.itensMinimos &&
+    !!nivelPleiteado &&
+    totalPontos >= nivelPleiteado.pontosMinimos &&
+    itensDistintos >= nivelPleiteado.itensMinimos &&
     incisoViolations.length === 0;
-
-
-
-  const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
 
   const resumoItens = useMemo(() => {
     const map = new Map<string, { itemId: string; numero: number; inciso: string; descricao: string; pontos: number; docCount: number }>();
@@ -91,29 +110,72 @@ export default function Consolidation() {
       .sort((a, b) => (a.data_upload < b.data_upload ? 1 : -1));
   }, [documentos, lancamentosDoServidor]);
 
+  useEffect(() => {
+    if (!nivelPleiteadoId && nivelElegivel?.id) {
+      setNivelPleiteadoId(nivelElegivel.id);
+    }
+  }, [nivelElegivel?.id, nivelPleiteadoId]);
+
+  useEffect(() => {
+    updateProcesso({
+      nivel_pleiteado_id: nivelPleiteadoId || undefined,
+      saldo_concessao_anterior:
+        saldoConcessaoAnterior.trim() === ''
+          ? undefined
+          : Number.parseFloat(saldoConcessaoAnterior),
+      numero_processo_anterior: numeroProcessoAnterior.trim() || undefined,
+      data_ultima_concessao: dataUltimaConcessao || undefined,
+    });
+  }, [
+    dataUltimaConcessao,
+    nivelPleiteadoId,
+    numeroProcessoAnterior,
+    saldoConcessaoAnterior,
+    updateProcesso,
+  ]);
+
+  const possuiDadosConcessaoAnterior =
+    !!numeroProcessoAnterior.trim() ||
+    !!saldoConcessaoAnterior.trim() ||
+    !!dataUltimaConcessao;
+
+  const intersticioOk = useMemo(() => {
+    if (!dataUltimaConcessao) return true;
+    const ultimaConcessao = new Date(`${dataUltimaConcessao}T00:00:00`);
+    if (Number.isNaN(ultimaConcessao.getTime())) return false;
+    const hoje = new Date();
+    const dataLimite = new Date(ultimaConcessao);
+    dataLimite.setFullYear(dataLimite.getFullYear() + 3);
+    return hoje >= dataLimite;
+  }, [dataUltimaConcessao]);
+
   const checks = useMemo(() => {
     const profileOk =
       !!servidor.email_institucional?.trim() &&
       !!servidor.lotacao?.trim() &&
-      !!servidor.cargo?.trim();
-    const nivelOk = !!nivelElegivel;
+      !!servidor.cargo?.trim() &&
+      !!servidor.nivel_classificacao &&
+      !!servidor.data_ingresso_ife;
+    const nivelOk = !!nivelPleiteado;
     const lancamentosOk = lancamentosDoServidor.length > 0;
-    const pontosOk = nivelElegivel ? totalPontos >= nivelElegivel.pontosMinimos : false;
-    const itensOk = nivelElegivel ? itensDistintos >= nivelElegivel.itensMinimos : false;
+    const pontosOk = nivelPleiteado ? totalPontos >= nivelPleiteado.pontosMinimos : false;
+    const itensOk = nivelPleiteado ? itensDistintos >= nivelPleiteado.itensMinimos : false;
 
     return [
       {
         ok: profileOk,
         label: 'Perfil completo',
-        detail: profileOk ? 'E-mail, lotação e cargo preenchidos.' : 'Faltam campos obrigatórios no perfil.',
+        detail: profileOk
+          ? 'Dados do servidor suficientes para preencher o memorial e o requerimento.'
+          : 'Faltam dados obrigatórios do perfil para fechar a documentação.',
         action: profileOk ? undefined : { label: 'Completar perfil', href: '/perfil' },
       },
       {
         ok: nivelOk,
-        label: 'Nível pleiteável determinado',
+        label: 'Nível pleiteado definido',
         detail: nivelOk
-          ? `${nivelElegivel!.label} (${nivelElegivel!.equivalencia})`
-          : 'Não foi possível determinar o nível pela escolaridade atual.',
+          ? `${nivelPleiteado!.label} (${nivelPleiteado!.equivalencia})`
+          : 'Selecione o nível que será levado para o requerimento.',
       },
       {
         ok: lancamentosOk,
@@ -126,20 +188,20 @@ export default function Consolidation() {
       {
         ok: pontosOk,
         label: 'Pontuação mínima atingida',
-        detail: nivelElegivel
+        detail: nivelPleiteado
           ? pontosOk
-            ? `${formatPointValue(totalPontos)} pts — meta de ${formatPointValue(nivelElegivel.pontosMinimos)} pts atingida.`
-            : `${formatPointValue(totalPontos)} / ${formatPointValue(nivelElegivel.pontosMinimos)} pts — faltam ${formatPointValue(nivelElegivel.pontosMinimos - totalPontos)} pts.`
-          : 'Nível não determinado.',
+            ? `${formatPointValue(totalPontos)} pts — meta de ${formatPointValue(nivelPleiteado.pontosMinimos)} pts atingida.`
+            : `${formatPointValue(totalPontos)} / ${formatPointValue(nivelPleiteado.pontosMinimos)} pts — faltam ${formatPointValue(nivelPleiteado.pontosMinimos - totalPontos)} pts.`
+          : 'Nível não definido.',
       },
       {
         ok: itensOk,
         label: 'Itens distintos mínimos',
-        detail: nivelElegivel
+        detail: nivelPleiteado
           ? itensOk
-            ? `${itensDistintos} itens — meta de ${nivelElegivel.itensMinimos} atingida.`
-            : `${itensDistintos} / ${nivelElegivel.itensMinimos} itens — faltam ${nivelElegivel.itensMinimos - itensDistintos}.`
-          : 'Nível não determinado.',
+            ? `${itensDistintos} itens — meta de ${nivelPleiteado.itensMinimos} atingida.`
+            : `${itensDistintos} / ${nivelPleiteado.itensMinimos} itens — faltam ${nivelPleiteado.itensMinimos - itensDistintos}.`
+          : 'Nível não definido.',
       },
       {
         ok: incisoViolations.length === 0,
@@ -152,29 +214,40 @@ export default function Consolidation() {
                 .join(' · '),
       },
       {
+        ok: intersticioOk,
+        label: 'Interstício de 3 anos',
+        detail: dataUltimaConcessao
+          ? intersticioOk
+            ? 'Data da última concessão compatível com novo requerimento.'
+            : 'A data informada da última concessão ainda não completa 3 anos.'
+          : 'Sem concessão anterior informada.',
+      },
+      {
         ok: autodeclaracaoGeral,
         label: 'Veracidade das Informações',
         detail: autodeclaracaoGeral
-          ? 'Declaração de veracidade das informações assinada eletronicamente.'
+          ? 'Declaração de veracidade registrada nesta preparação do dossiê.'
           : 'Falta concordar com a Autodeclaração Geral atestando a veracidade das informações.',
       },
     ];
-  }, [servidor, nivelElegivel, lancamentosDoServidor, totalPontos, itensDistintos, incisoViolations, documentosUtilizados, autodeclaracaoGeral]);
+  }, [autodeclaracaoGeral, dataUltimaConcessao, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos]);
 
   const pendencias = useMemo(() => {
     const issues: string[] = [];
-    if (!nivelElegivel) issues.push('Não foi possível determinar o nível pleiteável pela escolaridade atual.');
+    if (!nivelPleiteado) issues.push('Selecione o nível que será levado para o requerimento.');
     if (lancamentosDoServidor.length === 0) issues.push('Nenhum lançamento foi registrado ainda.');
-    if (nivelElegivel && totalPontos < nivelElegivel.pontosMinimos)
-      issues.push(`Ainda faltam ${formatPointValue(nivelElegivel.pontosMinimos - totalPontos)} pontos para liberar o envio.`);
-    if (nivelElegivel && itensDistintos < nivelElegivel.itensMinimos)
-      issues.push(`Ainda faltam ${nivelElegivel.itensMinimos - itensDistintos} itens distintos para liberar o envio.`);
+    if (nivelPleiteado && totalPontos < nivelPleiteado.pontosMinimos)
+      issues.push(`Ainda faltam ${formatPointValue(nivelPleiteado.pontosMinimos - totalPontos)} pontos para liberar o envio.`);
+    if (nivelPleiteado && itensDistintos < nivelPleiteado.itensMinimos)
+      issues.push(`Ainda faltam ${nivelPleiteado.itensMinimos - itensDistintos} itens distintos para liberar o envio.`);
     for (const v of incisoViolations)
       issues.push(`Falta ao menos um lançamento em algum dos Incisos: ${[...v.requiredIncisos].join('/')}.`);
+    if (!intersticioOk)
+      issues.push('A data informada da última concessão ainda não completa o interstício de 3 anos.');
     if (!autodeclaracaoGeral)
       issues.push('Você precisa concordar com a Autodeclaração de veracidade das informações.');
     return issues;
-  }, [itensDistintos, lancamentosDoServidor.length, nivelElegivel, totalPontos, incisoViolations, autodeclaracaoGeral]);
+  }, [autodeclaracaoGeral, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
 
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
@@ -191,10 +264,26 @@ export default function Consolidation() {
     try {
       await exportPacoteRSC({
         servidor,
-        nivelElegivel,
+        nivelElegivel: nivelPleiteado,
         lancamentos: lancamentosDoServidor,
         itensRSC,
         documentos,
+        processo: {
+          ...processo,
+          nivel_pleiteado_id: nivelPleiteado?.id,
+          saldo_concessao_anterior:
+            saldoConcessaoAnterior.trim() === ''
+              ? undefined
+              : Number.parseFloat(saldoConcessaoAnterior),
+          numero_processo_anterior: numeroProcessoAnterior.trim() || undefined,
+          data_ultima_concessao: dataUltimaConcessao || undefined,
+        },
+      });
+      updateProcesso({
+        nivel_pleiteado_id: nivelPleiteado?.id,
+        pontos_total_submissao: totalPontos,
+        itens_distintos_submissao: itensDistintos,
+        submitted_at: new Date().toISOString(),
       });
       toast.success('Pacote RSC gerado e baixado com sucesso!');
     } catch (err) {
@@ -232,8 +321,8 @@ export default function Consolidation() {
                 </div>
               )}
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
-                {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
+                <span className="font-semibold text-gray-900">Nível pleiteado:</span>{' '}
+                {nivelPleiteado ? nivelPleiteado.label : 'Não definido'}
               </div>
             </>
           }
@@ -284,6 +373,77 @@ export default function Consolidation() {
                 </li>
               ))}
             </ul>
+          </div>
+        </div>
+
+        <div className="mb-4 print:hidden">
+          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4">
+              <p className="text-sm font-bold text-gray-900">Dados do Requerimento</p>
+              <p className="text-sm text-gray-500">
+                Esses dados entram no requerimento e no memorial exportados pelo sistema.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="nivel-pleiteado">Nível pleiteado</Label>
+                <select
+                  id="nivel-pleiteado"
+                  value={nivelPleiteadoId}
+                  onChange={(e) => setNivelPleiteadoId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Selecione...</option>
+                  {niveisPleiteaveis.map((nivel) => (
+                    <option key={nivel.id} value={nivel.id}>
+                      {nivel.label} ({nivel.equivalencia})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="saldo-anterior">Saldo de pontos da concessão anterior</Label>
+                <Input
+                  id="saldo-anterior"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="Ex.: 4.5"
+                  value={saldoConcessaoAnterior}
+                  onChange={(e) => setSaldoConcessaoAnterior(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="processo-anterior">Número do processo anterior</Label>
+                <Input
+                  id="processo-anterior"
+                  placeholder="Ex.: 23000.000000/2024-00"
+                  value={numeroProcessoAnterior}
+                  onChange={(e) => setNumeroProcessoAnterior(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="ultima-concessao">Data da última concessão</Label>
+                <Input
+                  id="ultima-concessao"
+                  type="date"
+                  value={dataUltimaConcessao}
+                  onChange={(e) => setDataUltimaConcessao(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {possuiDadosConcessaoAnterior && (
+              <p className={`mt-4 text-xs ${intersticioOk ? 'text-gray-500' : 'text-amber-700'}`}>
+                {intersticioOk
+                  ? 'Os dados de concessão anterior serão incluídos no pacote exportado.'
+                  : 'Revise a data da última concessão: o sistema identificou que o interstício de 3 anos ainda não foi cumprido.'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -397,29 +557,29 @@ export default function Consolidation() {
             </div>
             <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100 sm:grid-cols-4">
               <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Nível pleiteável</p>
+                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Nível pleiteado</p>
                 <p className="mt-0.5 text-xs font-bold text-gray-900">
-                  {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
+                  {nivelPleiteado ? nivelPleiteado.label : 'Não definido'}
                 </p>
               </div>
               <div className="px-4 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Equivalência</p>
                 <p className="mt-0.5 text-xs font-semibold text-gray-900">
-                  {nivelElegivel ? nivelElegivel.equivalencia : '—'}
+                  {nivelPleiteado ? nivelPleiteado.equivalencia : '—'}
                 </p>
               </div>
               <div className="px-4 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Pontuação total</p>
                 <p className="mt-0.5 text-base font-black text-gray-900">{formatPointValue(totalPontos)} <span className="text-[10px] font-normal text-gray-500">pts</span></p>
-                {nivelElegivel && (
-                  <p className="text-[9px] text-gray-400">mín. {nivelElegivel.pontosMinimos} pts</p>
+                {nivelPleiteado && (
+                  <p className="text-[9px] text-gray-400">mín. {nivelPleiteado.pontosMinimos} pts</p>
                 )}
               </div>
               <div className="px-4 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Itens distintos</p>
                 <p className="mt-0.5 text-base font-black text-gray-900">{itensDistintos} <span className="text-[10px] font-normal text-gray-500">iten{itensDistintos !== 1 ? 's' : ''}</span></p>
-                {nivelElegivel && (
-                  <p className="text-[9px] text-gray-400">mín. {nivelElegivel.itensMinimos} itens</p>
+                {nivelPleiteado && (
+                  <p className="text-[9px] text-gray-400">mín. {nivelPleiteado.itensMinimos} itens</p>
                 )}
               </div>
             </div>
@@ -586,7 +746,7 @@ export default function Consolidation() {
             <div className="flex items-center justify-between text-[9px] text-gray-400">
               <span>{institutionConfig.shortName} · Ficha gerada em {today}</span>
               <span className="font-mono">
-                {servidor.siape} · {nivelElegivel?.label ?? '—'}
+                {servidor.siape} · {nivelPleiteado?.label ?? '—'}
               </span>
             </div>
           </div>

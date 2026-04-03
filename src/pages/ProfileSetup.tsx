@@ -21,6 +21,8 @@ const ESCOLARIDADES = [
   'Doutorado',
 ];
 
+const NIVEIS_CLASSIFICACAO = ['A', 'B', 'C', 'D', 'E'] as const;
+
 export default function ProfileSetup() {
   const { servidor, activeSessionId, setPerfil } = useAppContext();
   const navigate = useNavigate();
@@ -37,6 +39,10 @@ export default function ProfileSetup() {
     lotacao: servidor?.lotacao ?? '',
     escolaridade_atual: servidor?.escolaridade_atual ?? '',
     cargo: servidor?.cargo ?? '',
+    nivel_classificacao: servidor?.nivel_classificacao ?? '',
+    data_ingresso_ife: servidor?.data_ingresso_ife ?? servidor?.data_ingresso ?? '',
+    funcao_encargo: servidor?.funcao_encargo ?? '',
+    telefone: servidor?.telefone ?? '',
   });
 
   const set =
@@ -54,6 +60,8 @@ export default function ProfileSetup() {
       !form.instituicao.trim() ||
       !form.lotacao.trim() ||
       !form.cargo.trim() ||
+      !form.nivel_classificacao ||
+      !form.data_ingresso_ife ||
       !form.escolaridade_atual
     ) {
       toast.error('Preencha todos os campos obrigatórios.');
@@ -69,6 +77,10 @@ export default function ProfileSetup() {
       lotacao: form.lotacao.trim(),
       escolaridade_atual: form.escolaridade_atual,
       cargo: form.cargo.trim(),
+      nivel_classificacao: form.nivel_classificacao as Servidor['nivel_classificacao'],
+      data_ingresso_ife: form.data_ingresso_ife,
+      funcao_encargo: form.funcao_encargo.trim() || undefined,
+      telefone: form.telefone.trim() || undefined,
     };
 
     setPerfil(perfil);
@@ -188,6 +200,61 @@ export default function ProfileSetup() {
                 value={form.lotacao}
                 onChange={set('lotacao')}
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="nivel_classificacao">
+                  Nível de Classificação <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="nivel_classificacao"
+                  value={form.nivel_classificacao}
+                  onChange={set('nivel_classificacao')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Selecione...</option>
+                  {NIVEIS_CLASSIFICACAO.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="data_ingresso_ife">
+                  Data de ingresso na IFE <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="data_ingresso_ife"
+                  type="date"
+                  value={form.data_ingresso_ife}
+                  onChange={set('data_ingresso_ife')}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="funcao_encargo">Função/Encargo</Label>
+                <Input
+                  id="funcao_encargo"
+                  placeholder="Ex.: Coordenador(a), FG, CD ou equivalente"
+                  value={form.funcao_encargo}
+                  onChange={set('funcao_encargo')}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="telefone">Telefone</Label>
+                <Input
+                  id="telefone"
+                  placeholder="Ex.: (27) 99999-9999"
+                  value={form.telefone}
+                  onChange={set('telefone')}
+                />
+              </div>
             </div>
 
             <div className="flex gap-3 pt-2">

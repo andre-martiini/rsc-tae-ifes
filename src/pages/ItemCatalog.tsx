@@ -109,8 +109,6 @@ export default function ItemCatalog() {
           item.descricao,
           item.inciso,
           incisoLabels[item.inciso],
-          item.regra_aceite,
-          item.documentos_comprobatorios,
           item.unidade_medida,
         ]
           .map(normalizeSearch)
@@ -191,7 +189,7 @@ export default function ItemCatalog() {
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900">Encontre o item certo antes do lançamento</h2>
                 <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                  Pesquise por descrição, inciso, regra de aceite ou documento comprobatório e abra o item
+                  Pesquise por descrição, inciso ou unidade de medida e abra o item
                   diretamente na tela de lançamento.
                 </p>
               </div>
@@ -202,7 +200,7 @@ export default function ItemCatalog() {
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Buscar item, inciso, documento ou regra..."
+                    placeholder="Buscar item ou inciso..."
                     className="h-11 border-gray-200 pl-10"
                   />
                 </div>
@@ -340,7 +338,7 @@ export default function ItemCatalog() {
                   onClick={() => navigate(`/workspace?item=${item.id}`)}
                   className="group text-left"
                 >
-                  <Card className="h-full min-h-[430px] border-gray-200 bg-white transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
+                  <Card className="h-full border-gray-200 bg-white transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
                     <CardContent className="space-y-4 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-start gap-3">
@@ -402,18 +400,7 @@ export default function ItemCatalog() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border border-gray-100 bg-white p-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Regra de aceite</p>
-                          <p className="mt-1 line-clamp-5 text-[13px] leading-relaxed text-gray-600">{item.regra_aceite}</p>
-                        </div>
-                        <div className="rounded-xl border border-gray-100 bg-white p-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Comprovação</p>
-                          <p className="mt-1 line-clamp-5 text-[13px] leading-relaxed text-gray-600">
-                            {item.documentos_comprobatorios}
-                          </p>
-                        </div>
-                      </div>
+
                     </CardContent>
                   </Card>
                 </button>

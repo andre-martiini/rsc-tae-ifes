@@ -67,7 +67,7 @@ export function getEligibleRscLevels(escolaridade: string) {
 }
 
 export function isItemJuridicallyFragile(item: ItemRSC) {
-  const rule = normalizeText(item.regra_aceite);
+  const rule = normalizeText(item.descricao);
   return rule.includes('risco de nao enquadramento') || rule.includes('enquadramento questionavel');
 }
 
