@@ -6,6 +6,7 @@ import { useAppContext } from '../context/AppContext';
 import { RSC_LEVELS } from '../data/mock';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
+import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getEligibleRscLevel } from '../lib/rsc';
 import { exportSession } from '../lib/sessionExport';
 import { importSession } from '../lib/sessionImport';
@@ -80,7 +81,7 @@ export default function Dashboard() {
   }
 
   const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
-  const totalPontos = lancamentosDoServidor.reduce((acc, lancamento) => acc + lancamento.pontos_calculados, 0);
+  const totalPontos = sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados));
   const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
 
@@ -132,7 +133,7 @@ export default function Dashboard() {
         itemId: item.id,
         numero: item.numero,
         descricao: item.descricao,
-        pontos: Number(((current?.pontos ?? 0) + lancamento.pontos_calculados).toFixed(2)),
+        pontos: addPointValues(current?.pontos ?? 0, lancamento.pontos_calculados),
       });
     });
 
@@ -165,7 +166,7 @@ export default function Dashboard() {
               <span className="font-semibold text-gray-900">Status:</span> {processo.status}
             </div>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
+              <span className="font-semibold text-gray-900">Total:</span> {formatPointValue(totalPontos)} pts
             </div>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
               <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
@@ -433,12 +434,12 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-end justify-between gap-4">
                     <p className="text-3xl font-black text-gray-900">
-                      {totalPontos.toFixed(2)}
+                      {formatPointValue(totalPontos)}
                       <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.pontosMinimos} pts</span>
                     </p>
                     {nivelPleiteavel.pontosFaltantes > 0 ? (
                       <p className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                        Faltam {nivelPleiteavel.pontosFaltantes.toFixed(2)} pontos
+                        Faltam {formatPointValue(nivelPleiteavel.pontosFaltantes)} pontos
                       </p>
                     ) : (
                       <p className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
@@ -551,7 +552,7 @@ export default function Dashboard() {
                       </div>
                       <div className="flex shrink-0 items-center gap-3 text-right">
                         <ChevronRight className="h-4 w-4 text-gray-300" />
-                        <p className="text-lg font-black text-gray-900">{item.pontos.toFixed(2)}</p>
+                        <p className="text-lg font-black text-gray-900">{formatPointValue(item.pontos)}</p>
                         <div>
                           <p className="text-[11px] text-gray-500">pts</p>
                         </div>
@@ -584,7 +585,7 @@ export default function Dashboard() {
                           </td>
                           <td className="px-3 py-2.5 text-gray-800">{item.descricao}</td>
                           <td className="px-3 py-2.5 text-right font-black text-gray-900 whitespace-nowrap">
-                            {item.pontos.toFixed(2)} <span className="text-[11px] font-normal text-gray-500">pts</span>
+                            {formatPointValue(item.pontos)} <span className="text-[11px] font-normal text-gray-500">pts</span>
                           </td>
                           <td className="px-3 py-2.5">
                             <ChevronRight className="h-4 w-4 text-gray-300" />
@@ -602,4 +603,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

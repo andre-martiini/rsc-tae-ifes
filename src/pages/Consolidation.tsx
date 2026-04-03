@@ -2,11 +2,14 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import AppLogo from '../components/AppLogo';
 import AppHeader from '../components/AppHeader';
 import { Button } from '../components/ui/button';
+import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
 import { exportPacoteRSC } from '../lib/pacoteExport';
-import { getEligibleRscLevel } from '../lib/rsc';
+import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
+import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
 
 export default function Consolidation() {
   const { servidor, itensRSC, documentos, lancamentos, processo } = useAppContext();
@@ -22,7 +25,7 @@ export default function Consolidation() {
     [lancamentos, servidor.id],
   );
   const totalPontos = useMemo(
-    () => lancamentosDoServidor.reduce((acc, l) => acc + l.pontos_calculados, 0),
+    () => sumPointValues(lancamentosDoServidor.map((entry) => entry.pontos_calculados)),
     [lancamentosDoServidor],
   );
   const docUtilizadosSet = useMemo(
@@ -35,10 +38,19 @@ export default function Consolidation() {
     [lancamentosDoServidor],
   );
 
+  const incisoViolations = useMemo(
+    () =>
+      nivelElegivel
+        ? validateLevelConstraints(nivelElegivel.id as string, lancamentosDoServidor, itensRSC)
+        : [],
+    [nivelElegivel, lancamentosDoServidor, itensRSC],
+  );
+
   const metasAtingidas =
     !!nivelElegivel &&
     totalPontos >= nivelElegivel.pontosMinimos &&
-    itensDistintos >= nivelElegivel.itensMinimos;
+    itensDistintos >= nivelElegivel.itensMinimos &&
+    incisoViolations.length === 0;
 
 
 
@@ -55,12 +67,22 @@ export default function Consolidation() {
         numero: item.numero,
         inciso: item.inciso,
         descricao: item.descricao,
-        pontos: Number(((cur?.pontos ?? 0) + l.pontos_calculados).toFixed(2)),
+        pontos: addPointValues(cur?.pontos ?? 0, l.pontos_calculados),
         docCount: (cur?.docCount ?? 0) + 1,
       });
     });
     return Array.from(map.values()).sort((a, b) => a.numero - b.numero);
   }, [itensRSC, lancamentosDoServidor]);
+
+  const resumoByInciso = useMemo(() => {
+    const groups = new Map<string, typeof resumoItens>();
+    for (const row of resumoItens) {
+      const group = groups.get(row.inciso) ?? [];
+      group.push(row);
+      groups.set(row.inciso, group);
+    }
+    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+  }, [resumoItens]);
 
   const documentosUtilizados = useMemo(() => {
     const ids = new Set(lancamentosDoServidor.map((l) => l.documento_id));
@@ -106,8 +128,8 @@ export default function Consolidation() {
         label: 'Pontuação mínima atingida',
         detail: nivelElegivel
           ? pontosOk
-            ? `${totalPontos.toFixed(2)} pts — meta de ${nivelElegivel.pontosMinimos} pts atingida.`
-            : `${totalPontos.toFixed(2)} / ${nivelElegivel.pontosMinimos} pts — faltam ${Number((nivelElegivel.pontosMinimos - totalPontos).toFixed(2))} pts.`
+            ? `${formatPointValue(totalPontos)} pts — meta de ${formatPointValue(nivelElegivel.pontosMinimos)} pts atingida.`
+            : `${formatPointValue(totalPontos)} / ${formatPointValue(nivelElegivel.pontosMinimos)} pts — faltam ${formatPointValue(nivelElegivel.pontosMinimos - totalPontos)} pts.`
           : 'Nível não determinado.',
       },
       {
@@ -120,6 +142,16 @@ export default function Consolidation() {
           : 'Nível não determinado.',
       },
       {
+        ok: incisoViolations.length === 0,
+        label: 'Incisos obrigatórios atendidos',
+        detail:
+          incisoViolations.length === 0
+            ? 'Lançamentos presentes nos incisos exigidos para o nível.'
+            : incisoViolations
+                .map((v) => `Falta item dos Incisos ${[...v.requiredIncisos].join('/')}`)
+                .join(' · '),
+      },
+      {
         ok: autodeclaracaoGeral,
         label: 'Veracidade das Informações',
         detail: autodeclaracaoGeral
@@ -127,20 +159,22 @@ export default function Consolidation() {
           : 'Falta concordar com a Autodeclaração Geral atestando a veracidade das informações.',
       },
     ];
-  }, [servidor, nivelElegivel, lancamentosDoServidor, totalPontos, itensDistintos, documentosUtilizados, autodeclaracaoGeral]);
+  }, [servidor, nivelElegivel, lancamentosDoServidor, totalPontos, itensDistintos, incisoViolations, documentosUtilizados, autodeclaracaoGeral]);
 
   const pendencias = useMemo(() => {
     const issues: string[] = [];
     if (!nivelElegivel) issues.push('Não foi possível determinar o nível pleiteável pela escolaridade atual.');
     if (lancamentosDoServidor.length === 0) issues.push('Nenhum lançamento foi registrado ainda.');
     if (nivelElegivel && totalPontos < nivelElegivel.pontosMinimos)
-      issues.push(`Ainda faltam ${Number((nivelElegivel.pontosMinimos - totalPontos).toFixed(2))} pontos para liberar o envio.`);
+      issues.push(`Ainda faltam ${formatPointValue(nivelElegivel.pontosMinimos - totalPontos)} pontos para liberar o envio.`);
     if (nivelElegivel && itensDistintos < nivelElegivel.itensMinimos)
       issues.push(`Ainda faltam ${nivelElegivel.itensMinimos - itensDistintos} itens distintos para liberar o envio.`);
+    for (const v of incisoViolations)
+      issues.push(`Falta ao menos um lançamento em algum dos Incisos: ${[...v.requiredIncisos].join('/')}.`);
     if (!autodeclaracaoGeral)
       issues.push('Você precisa concordar com a Autodeclaração de veracidade das informações.');
     return issues;
-  }, [itensDistintos, lancamentosDoServidor.length, nivelElegivel, totalPontos, autodeclaracaoGeral]);
+  }, [itensDistintos, lancamentosDoServidor.length, nivelElegivel, totalPontos, incisoViolations, autodeclaracaoGeral]);
 
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
@@ -186,7 +220,7 @@ export default function Consolidation() {
           secondaryContent={
             <>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
+              <span className="font-semibold text-gray-900">Total:</span> {formatPointValue(totalPontos)} pts
               </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
                 <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
@@ -307,12 +341,12 @@ export default function Consolidation() {
           <div className="flex items-stretch border-b-2 border-gray-800 print:border-gray-900">
             {/* Logo block */}
             <div className="flex shrink-0 flex-col items-center justify-center border-r border-gray-300 px-4 py-3">
-              <img src="/logo_ifes.png" alt="Logo IFES" className="h-9 w-9 object-contain" />
+              <AppLogo className="h-9 w-9 object-contain" />
             </div>
             {/* Title block */}
             <div className="flex flex-col justify-center px-5 py-3 flex-1">
               <p className="text-[9px] font-semibold uppercase tracking-widest text-gray-500">
-                Instituto Federal do Espírito Santo
+                {institutionConfig.networkName}
               </p>
               <h1 className="text-sm font-black text-gray-900 leading-tight">
                 Ficha de Consolidação — RSC-TAE
@@ -376,7 +410,7 @@ export default function Consolidation() {
               </div>
               <div className="px-4 py-2">
                 <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Pontuação total</p>
-                <p className="mt-0.5 text-base font-black text-gray-900">{totalPontos.toFixed(2)} <span className="text-[10px] font-normal text-gray-500">pts</span></p>
+                <p className="mt-0.5 text-base font-black text-gray-900">{formatPointValue(totalPontos)} <span className="text-[10px] font-normal text-gray-500">pts</span></p>
                 {nivelElegivel && (
                   <p className="text-[9px] text-gray-400">mín. {nivelElegivel.pontosMinimos} pts</p>
                 )}
@@ -426,48 +460,65 @@ export default function Consolidation() {
               </p>
             </div>
 
-            {resumoItens.length > 0 ? (
+            {resumoByInciso.length > 0 ? (
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 text-left">
-                    <th className="px-4 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 w-10">Nº</th>
-                    <th className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 w-14">Inciso</th>
+                    <th className="w-10 px-4 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Nº</th>
                     <th className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Descrição</th>
-                    <th className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 text-center w-12">Docs</th>
-                    <th className="px-4 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 text-right w-20">Pontos</th>
+                    <th className="w-12 px-3 py-1.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400">Docs</th>
+                    <th className="w-20 px-4 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide text-gray-400">Pontos</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {resumoItens.map((item) => (
-                    <tr
-                      key={item.itemId}
-                      onClick={() => navigate(`/workspace?item=${item.itemId}`)}
-                      className="cursor-pointer transition-colors hover:bg-primary/5 print:cursor-default print:hover:bg-transparent"
-                    >
-                      <td className="px-4 py-1.5">
-                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                          {item.numero}
-                        </span>
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <span className="text-[10px] font-semibold text-gray-500">Inc. {item.inciso}</span>
-                      </td>
-                      <td className="px-3 py-1.5 text-xs text-gray-800">{item.descricao}</td>
-                      <td className="px-3 py-1.5 text-center text-[10px] text-gray-500">{item.docCount}</td>
-                      <td className="px-4 py-1.5 text-right text-xs font-black text-gray-900 tabular-nums">
-                        {item.pontos.toFixed(2)}
-                        <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
-                      </td>
-                    </tr>
-                  ))}
+                <tbody>
+                  {resumoByInciso.map(([inciso, items]) => {
+                    const incisoSubtotal = sumPointValues(items.map((i) => i.pontos));
+                    return (
+                      <React.Fragment key={inciso}>
+                        <tr className="border-t border-gray-100 bg-gray-50/80">
+                          <td colSpan={4} className="px-4 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-500">
+                            Inciso {inciso}
+                          </td>
+                        </tr>
+                        {items.map((item) => (
+                          <tr
+                            key={item.itemId}
+                            onClick={() => navigate(`/workspace?item=${item.itemId}`)}
+                            className="cursor-pointer transition-colors hover:bg-primary/5 print:cursor-default print:hover:bg-transparent"
+                          >
+                            <td className="px-4 py-1.5">
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
+                                {item.numero}
+                              </span>
+                            </td>
+                            <td className="px-3 py-1.5 text-xs text-gray-800">{item.descricao}</td>
+                            <td className="px-3 py-1.5 text-center text-[10px] text-gray-500">{item.docCount}</td>
+                            <td className="px-4 py-1.5 text-right text-xs font-black text-gray-900 tabular-nums">
+                              {formatPointValue(item.pontos)}
+                              <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-gray-100/60 bg-gray-50/40">
+                          <td colSpan={3} className="px-4 py-1 text-right text-[9px] font-semibold text-gray-400">
+                            Subtotal Inciso {inciso}
+                          </td>
+                          <td className="px-4 py-1 text-right text-[10px] font-bold text-gray-600 tabular-nums">
+                            {formatPointValue(incisoSubtotal)}
+                            <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
+                          </td>
+                        </tr>
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-gray-200 bg-gray-50">
-                    <td colSpan={4} className="px-4 py-1.5 text-[9px] font-bold text-gray-600 uppercase tracking-wide">
+                    <td colSpan={3} className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
                       Total
                     </td>
                     <td className="px-4 py-1.5 text-right text-xs font-black text-gray-900 tabular-nums">
-                      {totalPontos.toFixed(2)}
+                      {formatPointValue(totalPontos)}
                       <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
                     </td>
                   </tr>
@@ -507,7 +558,7 @@ export default function Consolidation() {
                         </div>
                         {doc.gedoc_links && doc.gedoc_links.length > 0 && (
                           <p className="mt-0.5 pl-4.5 text-[9px] text-gray-400">
-                            {doc.gedoc_links.length} link(s) GeDoc mesclado(s)
+                            {doc.gedoc_links.length} link(s) de referência registrado(s)
                           </p>
                         )}
                       </td>
@@ -533,7 +584,7 @@ export default function Consolidation() {
           {/* Document footer */}
           <div className="border-t-2 border-gray-200 px-5 py-3 print:border-gray-400">
             <div className="flex items-center justify-between text-[9px] text-gray-400">
-              <span>RSC-TAE — IFES · Ficha gerada em {today}</span>
+              <span>{institutionConfig.shortName} · Ficha gerada em {today}</span>
               <span className="font-mono">
                 {servidor.siape} · {nivelElegivel?.label ?? '—'}
               </span>

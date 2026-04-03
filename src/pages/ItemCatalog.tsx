@@ -5,6 +5,7 @@ import AppHeader from '../components/AppHeader';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { useAppContext } from '../context/AppContext';
+import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getEligibleRscLevel, isItemJuridicallyFragile } from '../lib/rsc';
 import type { Inciso } from '../data/mock';
 
@@ -60,7 +61,7 @@ export default function ItemCatalog() {
     [lancamentos, servidorId],
   );
   const totalPontos = useMemo(
-    () => lancamentosDoServidor.reduce((acc, lancamento) => acc + lancamento.pontos_calculados, 0),
+    () => sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados)),
     [lancamentosDoServidor],
   );
 
@@ -77,7 +78,10 @@ export default function ItemCatalog() {
   const lancamentosByItemId = useMemo(() => {
     const map = new Map<string, number>();
     lancamentosDoServidor.forEach((lancamento) => {
-      map.set(lancamento.item_rsc_id, (map.get(lancamento.item_rsc_id) ?? 0) + lancamento.pontos_calculados);
+      map.set(
+        lancamento.item_rsc_id,
+        addPointValues(map.get(lancamento.item_rsc_id) ?? 0, lancamento.pontos_calculados),
+      );
     });
     return map;
   }, [lancamentosDoServidor]);
@@ -157,7 +161,7 @@ export default function ItemCatalog() {
               <span className="font-semibold text-gray-900">Status:</span> {processo.status}
             </div>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
+              <span className="font-semibold text-gray-900">Total:</span> {formatPointValue(totalPontos)} pts
             </div>
             <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
               <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
@@ -349,7 +353,7 @@ export default function ItemCatalog() {
                                 Inciso {item.inciso}
                               </span>
                               <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] text-gray-600">
-                                {item.pontos_por_unidade} pts/un
+                                {formatPointValue(item.pontos_por_unidade)} pts/un
                               </span>
                               {item.quantidade_automatica && (
                                 <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
@@ -390,9 +394,9 @@ export default function ItemCatalog() {
                               : 'text-gray-800'
                             }`}>
                             {itemStatus === 'completo'
-                              ? `Completo — ${pontosLancados.toFixed(2)} pts`
+                              ? `Completo — ${formatPointValue(pontosLancados)} pts`
                               : itemStatus === 'em_andamento'
-                                ? `${pontosLancados.toFixed(2)} pts lançados`
+                                ? `${formatPointValue(pontosLancados)} pts lançados`
                                 : 'Ainda sem lançamento'}
                           </p>
                         </div>
@@ -476,16 +480,16 @@ export default function ItemCatalog() {
                       </td>
                       <td className="px-4 py-3 text-gray-600">{item.unidade_medida}</td>
                       <td className="px-4 py-3 text-right font-bold text-gray-900 whitespace-nowrap">
-                        {item.pontos_por_unidade}
+                        {formatPointValue(item.pontos_por_unidade)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {itemStatus === 'completo' ? (
                           <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                            Completo — {pontosLancados.toFixed(2)} pts
+                            Completo — {formatPointValue(pontosLancados)} pts
                           </span>
                         ) : itemStatus === 'em_andamento' ? (
                           <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-                            {pontosLancados.toFixed(2)} pts
+                            {formatPointValue(pontosLancados)} pts
                           </span>
                         ) : (
                           <span className="text-[11px] text-gray-400">Sem lançamento</span>

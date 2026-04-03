@@ -1,0 +1,322 @@
+[
+  {
+    "Instituição": "Centro Federal de Educação Tecnológica Celso Suckow da Fonseca",
+    "Sigla": "CEFET/RJ"
+  },
+  {
+    "Instituição": "Centro Federal de Educação Tecnológica de Minas Gerais",
+    "Sigla": "CEFET/MG"
+  },
+  {
+    "Instituição": "Colégio Pedro II",
+    "Sigla": "CP II"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal da Grande Dourados",
+    "Sigla": "UFGD"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal de Ciências da Saúde de Porto Alegre",
+    "Sigla": "UFCSPA"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal de Rondônia",
+    "Sigla": "UNIR"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal do ABC",
+    "Sigla": "UFABC"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal do Pampa - Unipampa",
+    "Sigla": "UNIPAMPA"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal do Tocantins",
+    "Sigla": "UFT"
+  },
+  {
+    "Instituição": "Fundação Universidade Federal do Vale do São Francisco",
+    "Sigla": "UNIVASF"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia Baiano",
+    "Sigla": "IFBAIANO"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia Catarinense",
+    "Sigla": "IF Catarinense"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia da Bahia",
+    "Sigla": "IFBA"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia da Paraíba",
+    "Sigla": "IFPB"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Alagoas",
+    "Sigla": "IFAL"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Brasília",
+    "Sigla": "IFB"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Goiás",
+    "Sigla": "IFG"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Mato Grosso",
+    "Sigla": "IFMT"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Mato Grosso do Sul",
+    "Sigla": "IFMS"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Minas Gerais",
+    "Sigla": "IFMG"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Pernambuco",
+    "Sigla": "IFPE"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Rondônia",
+    "Sigla": "IFRO"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Roraima",
+    "Sigla": "IFRR"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Santa Catarina",
+    "Sigla": "IFSC"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de São Paulo",
+    "Sigla": "IFSP"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia de Sergipe",
+    "Sigla": "IFS"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Acre",
+    "Sigla": "IFAC"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Amapá",
+    "Sigla": "IFAP"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Amazonas",
+    "Sigla": "IFAM"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Ceará",
+    "Sigla": "IFCE"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Espírito Santo",
+    "Sigla": "IFES"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Maranhão",
+    "Sigla": "IFMA"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Norte de Minas Gerais",
+    "Sigla": "IFNMG"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Pará",
+    "Sigla": "IFPA"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Paraná",
+    "Sigla": "IFPR"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Piauí",
+    "Sigla": "IFPI"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Rio de Janeiro",
+    "Sigla": "IFRJ"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Rio Grande do Norte",
+    "Sigla": "IFRN"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Rio Grande do Sul",
+    "Sigla": "IFRS"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Sertão Pernambucano",
+    "Sigla": "IF SERTÃO-PE"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Sudeste de Minas Gerais",
+    "Sigla": "IFSEMG"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Sul de Minas Gerais",
+    "Sigla": "IF SUL DE MINAS"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Tocantins",
+    "Sigla": "IFTO"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia do Triângulo Mineiro",
+    "Sigla": "IFTM"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia Farroupilha",
+    "Sigla": "IFFarroupilha"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia Fluminense",
+    "Sigla": "IF Fluminense"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia Goiano",
+    "Sigla": "IF Goiano"
+  },
+  {
+    "Instituição": "Instituto Federal de Educação, Ciência e Tecnologia Sul-Rio-Grandense",
+    "Sigla": "IFSul"
+  },
+  {
+    "Instituição": "Universidade da Integração Internacional da Lusofonia Afro-Brasileira",
+    "Sigla": "UNILAB"
+  },
+  {
+    "Instituição": "Universidade de Brasília",
+    "Sigla": "UNB"
+  },
+  {
+    "Instituição": "Universidade Federal da Bahia",
+    "Sigla": "UFBA"
+  },
+  {
+    "Instituição": "Universidade Federal da Fronteira Sul",
+    "Sigla": "UFFS"
+  },
+  {
+    "Instituição": "Universidade Federal da Integração Latino-Americana",
+    "Sigla": "UNILA"
+  },
+  {
+    "Instituição": "Universidade Federal da Paraíba",
+    "Sigla": "UFPB"
+  },
+  {
+    "Instituição": "Universidade Federal de Alagoas",
+    "Sigla": "UFAL"
+  },
+  {
+    "Instituição": "Universidade Federal de Alfenas",
+    "Sigla": "UNIFAL-MG"
+  },
+  {
+    "Instituição": "Universidade Federal de Campina Grande",
+    "Sigla": "UFCG"
+  },
+  {
+    "Instituição": "Universidade Federal de Catalão",
+    "Sigla": "UFCAT"
+  },
+  {
+    "Instituição": "Universidade Federal de Goiás",
+    "Sigla": "UFG"
+  },
+  {
+    "Instituição": "Universidade Federal de Itajubá - Unifei",
+    "Sigla": "UNIFEI"
+  },
+  {
+    "Instituição": "Universidade Federal do Oeste da Bahia",
+    "Sigla": "UFOB"
+  },
+  {
+    "Instituição": "Universidade Federal do Oeste do Pará",
+    "Sigla": "UFOPA"
+  },
+  {
+    "Instituição": "Universidade Federal do Pará",
+    "Sigla": "UFPA"
+  },
+  {
+    "Instituição": "Universidade Federal do Paraná",
+    "Sigla": "UFPR"
+  },
+  {
+    "Instituição": "Universidade Federal do Piauí",
+    "Sigla": "UFPI"
+  },
+  {
+    "Instituição": "Universidade Federal do Recôncavo da Bahia",
+    "Sigla": "UFRB"
+  },
+  {
+    "Instituição": "Universidade Federal do Rio de Janeiro",
+    "Sigla": "UFRJ"
+  },
+  {
+    "Instituição": "Universidade Federal do Rio Grande",
+    "Sigla": "FURG"
+  },
+  {
+    "Instituição": "Universidade Federal do Rio Grande do Norte",
+    "Sigla": "UFRN"
+  },
+  {
+    "Instituição": "Universidade Federal do Rio Grande do Sul",
+    "Sigla": "UFRGS"
+  },
+  {
+    "Instituição": "Universidade Federal do Sul da Bahia",
+    "Sigla": "UFSB"
+  },
+  {
+    "Instituição": "Universidade Federal do Sul e Sudeste do Pará",
+    "Sigla": "UNIFESSPA"
+  },
+  {
+    "Instituição": "Universidade Federal dos Vales do Jequitinhonha e Mucuri",
+    "Sigla": "UFVJM"
+  },
+  {
+    "Instituição": "Universidade Federal do Triângulo Mineiro",
+    "Sigla": "UFTM"
+  },
+  {
+    "Instituição": "Universidade Federal Fluminense",
+    "Sigla": "UFF"
+  },
+  {
+    "Instituição": "Universidade Federal Rural da Amazônia",
+    "Sigla": "UFRA"
+  },
+  {
+    "Instituição": "Universidade Federal Rural de Pernambuco",
+    "Sigla": "UFRPE"
+  },
+  {
+    "Instituição": "Universidade Federal Rural do Rio de Janeiro",
+    "Sigla": "UFRRJ"
+  },
+  {
+    "Instituição": "Universidade Federal Rural do Semi-Árido",
+    "Sigla": "UFERSA"
+  },
+  {
+    "Instituição": "Universidade Tecnológica Federal do Paraná",
+    "Sigla": "UTFPR"
+  }
+]

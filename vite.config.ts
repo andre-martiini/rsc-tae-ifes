@@ -5,6 +5,7 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const documentProxyTarget = env.DOCUMENT_PROXY_TARGET;
   return {
     plugins: [react(), tailwindcss()],
     define: {
@@ -19,13 +20,15 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify — file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      proxy: {
-        '/proxy/gedoc': {
-          target: 'https://gedoc.ifes.edu.br',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/proxy\/gedoc/, ''),
-        },
-      },
+      proxy: documentProxyTarget
+        ? {
+            '/proxy/documentos': {
+              target: documentProxyTarget,
+              changeOrigin: true,
+              rewrite: (path) => path.replace(/^\/proxy\/documentos/, ''),
+            },
+          }
+        : undefined,
     },
   };
 });
