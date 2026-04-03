@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { useNavigate, Navigate } from 'react-router-dom';
-import { UserCircle, Save } from 'lucide-react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Save, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAppContext } from '../context/AppContext';
-import { Servidor, CAMPI_IFES } from '../data/mock';
+import AppHeader from '../components/AppHeader';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import AppHeader from '../components/AppHeader';
+import { institutionConfig } from '../config/institution';
+import { useAppContext } from '../context/AppContext';
+import type { Servidor } from '../data/mock';
+import InstituicaoCombobox from '../components/InstituicaoCombobox';
 
 const ESCOLARIDADES = [
   'Ensino Fundamental Incompleto',
@@ -23,7 +25,6 @@ export default function ProfileSetup() {
   const { servidor, activeSessionId, setPerfil } = useAppContext();
   const navigate = useNavigate();
 
-  // If there's no active session, send back to landing
   if (!activeSessionId) {
     return <Navigate to="/" replace />;
   }
@@ -32,12 +33,14 @@ export default function ProfileSetup() {
     siape: servidor?.siape ?? '',
     nome_completo: servidor?.nome_completo ?? '',
     email_institucional: servidor?.email_institucional ?? '',
+    instituicao: servidor?.instituicao ?? '',
     lotacao: servidor?.lotacao ?? '',
     escolaridade_atual: servidor?.escolaridade_atual ?? '',
     cargo: servidor?.cargo ?? '',
   });
 
-  const set = (field: keyof typeof form) =>
+  const set =
+    (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
@@ -48,6 +51,7 @@ export default function ProfileSetup() {
       !form.siape.trim() ||
       !form.nome_completo.trim() ||
       !form.email_institucional.trim() ||
+      !form.instituicao.trim() ||
       !form.lotacao.trim() ||
       !form.cargo.trim() ||
       !form.escolaridade_atual
@@ -61,6 +65,7 @@ export default function ProfileSetup() {
       siape: form.siape.trim(),
       nome_completo: form.nome_completo.trim(),
       email_institucional: form.email_institucional.trim(),
+      instituicao: form.instituicao.trim(),
       lotacao: form.lotacao.trim(),
       escolaridade_atual: form.escolaridade_atual,
       cargo: form.cargo.trim(),
@@ -115,9 +120,9 @@ export default function ProfileSetup() {
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   <option value="">Selecione...</option>
-                  {ESCOLARIDADES.map((e) => (
-                    <option key={e} value={e}>
-                      {e}
+                  {ESCOLARIDADES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
                     </option>
                   ))}
                 </select>
@@ -130,7 +135,7 @@ export default function ProfileSetup() {
               </Label>
               <Input
                 id="nome_completo"
-                placeholder="Ex.: João da Silva Sauro"
+                placeholder="Ex.: Joao da Silva"
                 value={form.nome_completo}
                 onChange={set('nome_completo')}
               />
@@ -143,7 +148,7 @@ export default function ProfileSetup() {
               <Input
                 id="email_institucional"
                 type="email"
-                placeholder="joao.silva@ifes.edu.br"
+                placeholder={institutionConfig.emailPlaceholder}
                 value={form.email_institucional}
                 onChange={set('email_institucional')}
               />
@@ -151,20 +156,13 @@ export default function ProfileSetup() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label htmlFor="lotacao">
-                  Lotação <span className="text-red-500">*</span>
+                <Label htmlFor="instituicao">
+                  Instituição <span className="text-red-500">*</span>
                 </Label>
-                <select
-                  id="lotacao"
-                  value={form.lotacao}
-                  onChange={set('lotacao')}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                >
-                  <option value="">Selecione...</option>
-                  {CAMPI_IFES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
+                <InstituicaoCombobox
+                  value={form.instituicao}
+                  onChange={(v) => setForm((prev) => ({ ...prev, instituicao: v }))}
+                />
               </div>
 
               <div className="space-y-1.5">
@@ -180,7 +178,19 @@ export default function ProfileSetup() {
               </div>
             </div>
 
-            <div className="pt-2 flex gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="lotacao">
+                Unidade de Lotação <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="lotacao"
+                placeholder="Ex.: Campus Vitória, Reitoria, Pró-Reitoria de Ensino..."
+                value={form.lotacao}
+                onChange={set('lotacao')}
+              />
+            </div>
+
+            <div className="flex gap-3 pt-2">
               <Button
                 type="button"
                 variant="outline"

@@ -1,5 +1,7 @@
 import React from 'react';
 import { LogOut } from 'lucide-react';
+import { institutionConfig } from '../config/institution';
+import AppLogo from './AppLogo';
 import { Button } from './ui/button';
 
 interface AppHeaderProps {
@@ -52,12 +54,12 @@ export default function AppHeader({
               title="Trocar sessão"
               className="group flex shrink-0 items-center gap-2 rounded-lg p-1 transition-colors hover:bg-gray-100"
             >
-              <img src="/logo_ifes.png" alt="Logo IFES" className="h-10 w-10 object-contain" />
+              <AppLogo className="h-10 w-10 object-contain" />
               <LogOut className="h-3.5 w-3.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
             </button>
             <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold text-gray-900">Assistente RSC-TAE Ifes</h1>
-              <p className="truncate text-sm text-gray-500">Reconhecimento de Saberes e Competências</p>
+              <h1 className="truncate text-xl font-bold text-gray-900">{institutionConfig.appName}</h1>
+              <p className="truncate text-sm text-gray-500">{institutionConfig.appSubtitle}</p>
             </div>
           </div>
 

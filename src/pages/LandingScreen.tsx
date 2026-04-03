@@ -1,14 +1,24 @@
 import React, { useState } from 'react';
+import InstituicaoCombobox from '../components/InstituicaoCombobox';
 import { useNavigate } from 'react-router-dom';
-import { PlusCircle, UserCircle, ChevronRight, Trash2, Calendar, AlertTriangle, ArrowLeft } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  ChevronRight,
+  PlusCircle,
+  Trash2,
+  UserCircle,
+} from 'lucide-react';
 import { toast } from 'sonner';
-import { useAppContext } from '../context/AppContext';
-import type { SessionSummary } from '../context/AppContext';
+import AppLogo from '../components/AppLogo';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { institutionConfig } from '../config/institution';
+import { useAppContext } from '../context/AppContext';
+import type { SessionSummary } from '../context/AppContext';
 import type { Servidor } from '../data/mock';
-import { CAMPI_IFES } from '../data/mock';
 
 const ESCOLARIDADES = [
   'Ensino Fundamental Incompleto',
@@ -37,12 +47,14 @@ export default function LandingScreen() {
     siape: '',
     nome_completo: '',
     email_institucional: '',
+    instituicao: '',
     lotacao: '',
     cargo: '',
     escolaridade_atual: '',
   });
 
-  const set = (field: keyof typeof form) =>
+  const set =
+    (field: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
@@ -51,6 +63,7 @@ export default function LandingScreen() {
     siape: form.siape.trim(),
     nome_completo: form.nome_completo.trim(),
     email_institucional: form.email_institucional.trim(),
+    instituicao: form.instituicao.trim(),
     lotacao: form.lotacao.trim(),
     cargo: form.cargo.trim(),
     escolaridade_atual: form.escolaridade_atual,
@@ -63,6 +76,7 @@ export default function LandingScreen() {
       !form.siape.trim() ||
       !form.nome_completo.trim() ||
       !form.email_institucional.trim() ||
+      !form.instituicao.trim() ||
       !form.lotacao.trim() ||
       !form.cargo.trim() ||
       !form.escolaridade_atual
@@ -72,7 +86,7 @@ export default function LandingScreen() {
     }
 
     const siape = form.siape.trim();
-    const existing = sessions.find((s) => s.siape === siape);
+    const existing = sessions.find((session) => session.siape === siape);
 
     if (existing) {
       setConflict({ existingSession: existing, pendingPerfil: buildPerfil() });
@@ -85,6 +99,7 @@ export default function LandingScreen() {
 
   const handleConfirmOverwrite = async () => {
     if (!conflict) return;
+
     await deleteSession(conflict.existingSession.id);
     createSession(conflict.pendingPerfil);
     setConflict(null);
@@ -115,10 +130,9 @@ export default function LandingScreen() {
       minute: '2-digit',
     });
 
-  // ── Conflict dialog ─────────────────────────────────────────────────────────
   if (conflict) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
         <div className="w-full max-w-md rounded-2xl border border-amber-200 bg-white p-8 shadow-sm">
           <div className="mb-5 flex items-center gap-3">
             <div className="rounded-xl bg-amber-100 p-2.5 text-amber-600">
@@ -126,12 +140,12 @@ export default function LandingScreen() {
             </div>
             <h2 className="text-base font-bold text-gray-900">Sessão já existente</h2>
           </div>
-          <p className="text-sm text-gray-600 leading-relaxed">
+          <p className="text-sm leading-relaxed text-gray-600">
             Já existe uma sessão salva para o SIAPE{' '}
             <span className="font-semibold text-gray-900">{conflict.existingSession.siape}</span>{' '}
             ({conflict.existingSession.nome_completo}).
           </p>
-          <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">
             Deseja substituí-la? Todos os dados anteriores serão apagados permanentemente.
           </p>
           <div className="mt-6 flex gap-3">
@@ -155,21 +169,16 @@ export default function LandingScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-12">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-xl">
-
-        {/* Header */}
         <div className="mb-8 text-center">
-          <div className="inline-flex items-center justify-center rounded-2xl bg-primary/10 p-4 mb-4">
-            <img src="/logo_ifes.png" alt="Logo IFES" className="h-10 w-10 object-contain" />
+          <div className="mb-4 inline-flex items-center justify-center rounded-2xl bg-primary/10 p-4">
+            <AppLogo className="h-10 w-10 object-contain" />
           </div>
-          <h1 className="text-3xl font-black text-gray-900">Assistente RSC-TAE Ifes</h1>
-          <p className="mt-1.5 text-sm text-gray-500">
-            Reconhecimento de Saberes e Competências — Técnicos Administrativos em Educação
-          </p>
+          <h1 className="text-3xl font-black text-gray-900">{institutionConfig.appName}</h1>
+          <p className="mt-1.5 text-sm text-gray-500">{institutionConfig.appSubtitle}</p>
         </div>
 
-        {/* ── Nova sessão: toggle form ─────────────────────────────────────── */}
         {showForm ? (
           <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <div className="mb-6 flex items-center gap-3">
@@ -203,7 +212,7 @@ export default function LandingScreen() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="escolaridade_atual">
-                    Escolaridade <span className="text-red-500">*</span>
+                    Escolaridade Atual <span className="text-red-500">*</span>
                   </Label>
                   <select
                     id="escolaridade_atual"
@@ -212,9 +221,9 @@ export default function LandingScreen() {
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   >
                     <option value="">Selecione...</option>
-                    {ESCOLARIDADES.map((e) => (
-                      <option key={e} value={e}>
-                        {e}
+                    {ESCOLARIDADES.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
                       </option>
                     ))}
                   </select>
@@ -227,7 +236,7 @@ export default function LandingScreen() {
                 </Label>
                 <Input
                   id="nome_completo"
-                  placeholder="Ex.: João da Silva Sauro"
+                  placeholder="Ex.: Joao da Silva"
                   value={form.nome_completo}
                   onChange={set('nome_completo')}
                 />
@@ -240,7 +249,7 @@ export default function LandingScreen() {
                 <Input
                   id="email_institucional"
                   type="email"
-                  placeholder="joao.silva@ifes.edu.br"
+                  placeholder={institutionConfig.emailPlaceholder}
                   value={form.email_institucional}
                   onChange={set('email_institucional')}
                 />
@@ -248,20 +257,13 @@ export default function LandingScreen() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="lotacao">
-                    Lotação <span className="text-red-500">*</span>
+                  <Label htmlFor="instituicao">
+                    Instituição <span className="text-red-500">*</span>
                   </Label>
-                  <select
-                    id="lotacao"
-                    value={form.lotacao}
-                    onChange={set('lotacao')}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="">Selecione...</option>
-                    {CAMPI_IFES.map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <InstituicaoCombobox
+                    value={form.instituicao}
+                    onChange={(v) => setForm((prev) => ({ ...prev, instituicao: v }))}
+                  />
                 </div>
 
                 <div className="space-y-1.5">
@@ -270,11 +272,23 @@ export default function LandingScreen() {
                   </Label>
                   <Input
                     id="cargo"
-                    placeholder="Ex.: Assistente em Adm."
+                    placeholder="Ex.: Assistente em Administração"
                     value={form.cargo}
                     onChange={set('cargo')}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="lotacao">
+                  Unidade de Lotação <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="lotacao"
+                  placeholder="Ex.: Campus Vitória, Reitoria, Pró-Reitoria de Ensino..."
+                  value={form.lotacao}
+                  onChange={set('lotacao')}
+                />
               </div>
 
               <div className="pt-2">
@@ -304,9 +318,8 @@ export default function LandingScreen() {
           </button>
         )}
 
-        {/* ── Sessões salvas: sempre visível ───────────────────────────────── */}
         {sessions.length > 0 && (
-          <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
               <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Sessões salvas</p>
               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-500">

@@ -6,7 +6,9 @@ import {
   StandardFonts,
   rgb,
 } from 'pdf-lib';
+import { institutionConfig } from '../config/institution';
 import type { Documento, ItemRSC, Lancamento, Servidor } from '../data/mock';
+import { addPointValues, formatPointValue, sumPointValues } from './points';
 
 export type NivelRsc = {
   label: string;
@@ -42,21 +44,21 @@ const COLORS = {
 };
 
 const INCISO_DESC: Record<string, string> = {
-  I: 'Comissões e grupos de trabalho',
-  II: 'Projetos institucionais',
-  III: 'Premiações e reconhecimentos',
-  IV: 'Responsabilidades técnicas',
-  V: 'Direção, assessoramento e chefia',
-  VI: 'Publicações e produção técnica',
+  I: 'Grupos de trabalho, comissões, comitês, núcleos e representações',
+  II: 'Projetos institucionais, ensino, pesquisa, extensão e inovação',
+  III: 'Premiações e reconhecimentos públicos',
+  IV: 'Responsabilidades técnico-administrativas e especializadas',
+  V: 'Direção e assessoramento institucional',
+  VI: 'Produção, prospecção e difusão de conhecimento científico ou técnico',
 };
 
 const RSC_OPTIONS_INFO = [
-  { roman: 'I', textTarget: 'RSC-PCCTAE - I (destinado a servidor(a) que não concluiu o ensino fundamental)', req: 'RSC-PCCTAE - I: comprovante de ensino fundamental incompleto, acrescido de 10 pontos, distribuídos em no mínimo 2 itens do rol de saberes e competências;' },
-  { roman: 'II', textTarget: 'RSC-PCCTAE - II (destinado a servidor(a) com certificado de conclusão do ensino fundamental)', req: 'RSC-PCCTAE - II: diploma de ensino fundamental completo, acrescido de 20 pontos, distribuídos em no mínimo 3 itens do rol de saberes e competências;' },
-  { roman: 'III', textTarget: 'RSC-PCCTAE - III (destinado a servidor(a) com certificado ou diploma de conclusão de ensino médio ou de técnico de nível médio)', req: 'RSC-PCCTAE - III: diploma de ensino médio ou técnico de nível médio, acrescido de 25 pontos, distribuídos em no mínimo 4 itens do rol de saberes e competências;' },
-  { roman: 'IV', textTarget: 'RSC-PCCTAE - IV (destinado a servidor(a) com diploma de graduação)', req: 'RSC-PCCTAE - IV: diploma de graduação, acrescido de 30 pontos, distribuídos em no mínimo 5 itens do rol de saberes e competências;' },
-  { roman: 'V', textTarget: 'RSC-PCCTAE - V (destinado a servidor(a) com certificado de pós-graduação lato sensu)', req: 'RSC-PCCTAE - V: certificado de pós-graduação lato sensu, acrescido de 52 pontos, distribuídos em no mínimo 8 itens do rol de saberes e competências;' },
-  { roman: 'VI', textTarget: 'RSC-PCCTAE - VI (destinado a servidor(a) com diploma de mestrado)', req: 'RSC-PCCTAE - VI: diploma de mestrado, acrescido de 75 pontos, distribuídos em no mínimo 12 itens do rol de saberes e competências.' },
+  { roman: 'I',   textTarget: 'RSC-PCCTAE - I (destinado a servidor(a) que não concluiu o ensino fundamental)',                                         req: 'RSC-PCCTAE - I: comprovante de ensino fundamental incompleto, acrescido de 10 pontos, distribuídos em no mínimo 1 item do rol de saberes e competências;' },
+  { roman: 'II',  textTarget: 'RSC-PCCTAE - II (destinado a servidor(a) com certificado de conclusão do ensino fundamental)',                            req: 'RSC-PCCTAE - II: diploma de ensino fundamental completo, acrescido de 20 pontos, distribuídos em no mínimo 2 itens do rol de saberes e competências;' },
+  { roman: 'III', textTarget: 'RSC-PCCTAE - III (destinado a servidor(a) com certificado ou diploma de conclusão de ensino médio ou técnico de nível médio)', req: 'RSC-PCCTAE - III: diploma de ensino médio ou técnico de nível médio, acrescido de 25 pontos, distribuídos em no mínimo 2 itens do rol de saberes e competências;' },
+  { roman: 'IV',  textTarget: 'RSC-PCCTAE - IV (destinado a servidor(a) com diploma de graduação)',                                                      req: 'RSC-PCCTAE - IV: diploma de graduação, acrescido de 30 pontos, distribuídos em no mínimo 3 itens do rol de saberes e competências, com ao menos um item dos Incisos II, IV, V ou VI;' },
+  { roman: 'V',   textTarget: 'RSC-PCCTAE - V (destinado a servidor(a) com certificado de pós-graduação lato sensu)',                                    req: 'RSC-PCCTAE - V: certificado de pós-graduação lato sensu, acrescido de 52 pontos, distribuídos em no mínimo 5 itens do rol de saberes e competências, com ao menos um item dos Incisos IV, V ou VI;' },
+  { roman: 'VI',  textTarget: 'RSC-PCCTAE - VI (destinado a servidor(a) com diploma de mestrado)',                                                       req: 'RSC-PCCTAE - VI: diploma de mestrado, acrescido de 75 pontos, distribuídos em no mínimo 7 itens do rol de saberes e competências, com ao menos um item do Inciso VI.' },
 ];
 
 let logoBytesPromise: Promise<Uint8Array | null> | null = null;
@@ -84,10 +86,7 @@ function todayYear(): string {
 }
 
 function formatNumber(value: number): string {
-  return value.toLocaleString('pt-BR', {
-    minimumFractionDigits: value % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  });
+  return formatPointValue(value);
 }
 
 function uniqById<T extends { id: string }>(items: T[]): T[] {
@@ -96,7 +95,11 @@ function uniqById<T extends { id: string }>(items: T[]): T[] {
 
 async function getLogoBytes(): Promise<Uint8Array | null> {
   if (!logoBytesPromise) {
-    logoBytesPromise = fetch('/logo_ifes.png')
+    if (institutionConfig.logoPath.endsWith('.svg')) {
+      return null;
+    }
+
+    logoBytesPromise = fetch(institutionConfig.logoPath)
       .then(async (response) => {
         if (!response.ok) return null;
         return new Uint8Array(await response.arrayBuffer());
@@ -199,7 +202,7 @@ class Writer {
         height: size,
       });
     } else {
-      this.page.drawText('IFES', {
+      this.page.drawText(institutionConfig.shortName, {
         x: MARGIN_X + 10,
         y: headerY + HEADER_H / 2 - 5,
         size: 14,
@@ -210,7 +213,7 @@ class Writer {
 
     const centerX = MARGIN_X + logoBoxW + 14;
     const centerW = PAGE_W - MARGIN_X * 2 - logoBoxW - rightBoxW - 28;
-    this.page.drawText('Instituto Federal do Espírito Santo', {
+    this.page.drawText(institutionConfig.networkName, {
       x: centerX,
       y: headerY + 48,
       size: 8,
@@ -274,7 +277,7 @@ class Writer {
       thickness: 1,
       color: COLORS.border,
     });
-    this.page.drawText(`RSC-TAE - IFES · documento gerado em ${todayLabel()}`, {
+    this.page.drawText(`${institutionConfig.shortName} · documento gerado em ${todayLabel()}`, {
       x: MARGIN_X,
       y: footerY,
       size: 7,
@@ -556,7 +559,7 @@ function buildIncisoSummary(lancamentos: Lancamento[], itensRSC: ItemRSC[]) {
   lancamentos.forEach((lancamento) => {
     const item = itensRSC.find((entry) => entry.id === lancamento.item_rsc_id);
     if (!item) return;
-    totals.set(item.inciso, (totals.get(item.inciso) ?? 0) + lancamento.pontos_calculados);
+    totals.set(item.inciso, addPointValues(totals.get(item.inciso) ?? 0, lancamento.pontos_calculados));
   });
   return Array.from(totals.entries()).sort(([a], [b]) => a.localeCompare(b));
 }
@@ -688,7 +691,7 @@ export async function generateMemorialDescritivo(
   });
   writer.gap(26);
   writer.text(servidor.nome_completo, { align: 'center', bold: true, size: 12 });
-  writer.text(servidor.lotacao || 'Instituto Federal do Espírito Santo', {
+  writer.text(servidor.lotacao || institutionConfig.networkName, {
     align: 'center',
     size: 9.5,
     color: COLORS.muted,
@@ -696,11 +699,11 @@ export async function generateMemorialDescritivo(
   writer.text(todayYear(), { align: 'center', size: 9.5, color: COLORS.muted });
   writer.gap(20);
   writer.text(
-    'Memorial Descritivo apresentado à Comissão Institucional de Reconhecimento de Saberes e Competências do Ifes como parte do processo de solicitação do RSC-TAE.',
+    'Memorial Descritivo apresentado à comissão institucional competente como parte do processo de solicitação do RSC-TAE.',
     { size: 10, align: 'center', maxWidth: 360, lineHeight: 14 },
   );
 
-  const totalPontos = lancamentos.reduce((sum, entry) => sum + entry.pontos_calculados, 0);
+  const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
   const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
   const incisoSummary = buildIncisoSummary(lancamentos, itensRSC);
   const documentosUsados = uniqById(
@@ -777,7 +780,7 @@ export async function generateMemorialDescritivo(
       const item = itensRSC.find((candidate) => candidate.id === itemId);
       if (!item) return;
 
-      const subtotal = itemLancamentos.reduce((sum, entry) => sum + entry.pontos_calculados, 0);
+      const subtotal = sumPointValues(itemLancamentos.map((entry) => entry.pontos_calculados));
       writer.gap(4);
       writer.text(`Item ${index + 1}: ${item.descricao}`, { bold: true, size: 10 });
       writer.text(`Diretriz/Inciso: Inciso ${item.inciso} - ${INCISO_DESC[item.inciso] ?? item.inciso}`, {
@@ -839,7 +842,7 @@ export async function generateMemorialDescritivo(
   }
 
   writer.gap(18);
-  writer.text(`${servidor.lotacao || 'Vitória - ES'}, ${todayLabel()}.`, { size: 9 });
+  writer.text(`${servidor.lotacao || institutionConfig.locationFallback}, ${todayLabel()}.`, { size: 9 });
   writer.gap(26);
   writer.text('___________________________________', { align: 'center' });
   writer.gap(2);
@@ -872,7 +875,7 @@ export async function generateComprovacoesIndice(
   );
   writer.gap(4);
   writer.text(
-    'Referências do GeDoc e autodeclarações sem arquivo físico aparecem registradas na capa do respectivo item.',
+    'Referências de links institucionais e autodeclarações sem arquivo físico aparecem registradas na capa do respectivo item.',
     { size: 9, color: COLORS.muted },
   );
 
@@ -909,7 +912,7 @@ export async function generateComprovacaoResumoItem(
   });
   await writer.init();
 
-  const subtotal = grupo.lancamentos.reduce((sum, entry) => sum + entry.pontos_calculados, 0);
+  const subtotal = sumPointValues(grupo.lancamentos.map((entry) => entry.pontos_calculados));
   const physicalDocs = grupo.documentos.filter(
     (docItem) => docItem.caminho_storage && !docItem.nome_arquivo.endsWith('.ref') && !docItem.autodeclaracao,
   );
@@ -947,12 +950,12 @@ export async function generateComprovacaoResumoItem(
 
   writer.section('3. Composição do Dossiê');
   writer.keyValue('Arquivos físicos anexados', `${physicalDocs.length}`);
-  writer.keyValue('Referências GeDoc', `${gedocDocs.length}`);
+  writer.keyValue('Referências de links institucionais', `${gedocDocs.length}`);
   writer.keyValue('Autodeclarações', `${autodeclaracoes.length}`);
 
   if (gedocDocs.length) {
     writer.gap(4);
-    writer.text('Referências de GeDoc:', { bold: true, size: 9 });
+    writer.text('Referências de links institucionais:', { bold: true, size: 9 });
     gedocDocs.forEach((docItem) => {
       writer.text(docItem.nome_arquivo, { size: 8.5, bold: true, indent: 8 });
       docItem.gedoc_links?.forEach((link) => {
@@ -990,7 +993,7 @@ export async function generateRelatorioPontuacao(
   });
   await writer.init();
 
-  const totalPontos = lancamentos.reduce((sum, entry) => sum + entry.pontos_calculados, 0);
+  const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
   const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
 
   writer.section('1. Identificação do Servidor');

@@ -1,28 +1,8 @@
+import { institutionConfig } from '../config/institution';
+
 export type Inciso = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI';
 
-export const CAMPI_IFES = [
-  'Reitoria',
-  'Campus Alegre',
-  'Campus Aracruz',
-  'Campus Barra de São Francisco',
-  'Campus Cachoeiro de Itapemirim',
-  'Campus Cariacica',
-  'Campus Centro-Serrano',
-  'Campus Colatina',
-  'Campus Guarapari',
-  'Campus Ibatiba',
-  'Campus Itapina',
-  'Campus Linhares',
-  'Campus Montanha',
-  'Campus Nova Venécia',
-  'Campus Piúma',
-  'Campus Santa Teresa',
-  'Campus São Mateus',
-  'Campus Serra',
-  'Campus Viana',
-  'Campus Vila Velha',
-  'Campus Vitória',
-] as const;
+export const INSTITUTION_UNITS = institutionConfig.units as readonly string[];
 
 export const RSC_LEVELS = [
   {
@@ -30,42 +10,48 @@ export const RSC_LEVELS = [
     label: 'RSC-TAE I',
     equivalencia: 'Ensino Fundamental',
     pontosMinimos: 10,
-    itensMinimos: 2,
+    itensMinimos: 1,
+    incisosObrigatorios: null,
   },
   {
     id: 'RSC-II',
     label: 'RSC-TAE II',
     equivalencia: 'Ensino Médio',
     pontosMinimos: 20,
-    itensMinimos: 3,
+    itensMinimos: 2,
+    incisosObrigatorios: null,
   },
   {
     id: 'RSC-III',
     label: 'RSC-TAE III',
     equivalencia: 'Graduação',
     pontosMinimos: 25,
-    itensMinimos: 4,
+    itensMinimos: 2,
+    incisosObrigatorios: null,
   },
   {
     id: 'RSC-IV',
     label: 'RSC-TAE IV',
     equivalencia: 'Especialização',
     pontosMinimos: 30,
-    itensMinimos: 5,
+    itensMinimos: 3,
+    incisosObrigatorios: [['II', 'IV', 'V', 'VI']] as Inciso[][],
   },
   {
     id: 'RSC-V',
     label: 'RSC-TAE V',
     equivalencia: 'Mestrado',
     pontosMinimos: 52,
-    itensMinimos: 8,
+    itensMinimos: 5,
+    incisosObrigatorios: [['IV', 'V', 'VI']] as Inciso[][],
   },
   {
     id: 'RSC-VI',
     label: 'RSC-TAE VI',
     equivalencia: 'Doutorado',
     pontosMinimos: 75,
-    itensMinimos: 12,
+    itensMinimos: 7,
+    incisosObrigatorios: [['VI']] as Inciso[][],
   },
 ] as const;
 
@@ -74,11 +60,15 @@ export interface Servidor {
   siape: string;
   nome_completo: string;
   email_institucional: string;
+  instituicao?: string;
   lotacao: string;
   escolaridade_atual: string;
+  nivel_classificacao?: 'A' | 'B' | 'C' | 'D' | 'E';
   cargo?: string;
   data_ingresso?: string;
 }
+
+export type ModoCalculo = 'manual' | 'auto_ano_fracao' | 'auto_mes';
 
 export interface ItemRSC {
   id: string;
@@ -88,6 +78,7 @@ export interface ItemRSC {
   unidade_medida: string;
   pontos_por_unidade: number;
   quantidade_automatica: boolean;
+  modo_calculo: ModoCalculo;
   regra_aceite: string;
   documentos_comprobatorios: string;
   limite_pontos?: number;
@@ -104,6 +95,9 @@ export interface Documento {
   data_upload: string;
   gedoc_links?: string[];
   autodeclaracao?: boolean;
+  convertido_para_pdf?: boolean;
+  arquivo_origem_nome?: string;
+  arquivo_origem_mime?: string;
 }
 
 export interface Lancamento {
@@ -125,6 +119,8 @@ export interface ProcessoRSC {
   pontos_total_submissao?: number;
   itens_distintos_submissao?: number;
   submitted_at?: string;
+  saldo_concessao_anterior?: number;
+  numero_processo_anterior?: string;
 }
 
 export { rolItensRSC as mockItensRSC } from './rolItens';

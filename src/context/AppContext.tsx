@@ -7,6 +7,7 @@ import {
   ProcessoRSC,
   mockItensRSC,
 } from '../data/mock';
+import { buildInstitutionReferenceFileName } from '../config/institution';
 import { persistDocumentFile, persistDocumentBlob, deleteDocumentsByServidorId } from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
 
@@ -115,7 +116,13 @@ interface AppContextType {
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
   addDocumento: (doc: Omit<Documento, 'id' | 'data_upload'>) => Documento;
-  addDocumentoFromFile: (params: { servidorId: string; file: File }) => Promise<Documento>;
+  addDocumentoFromFile: (params: {
+    servidorId: string;
+    file: File;
+    sourceName?: string;
+    sourceMimeType?: string;
+    convertedToPdf?: boolean;
+  }) => Promise<Documento>;
   addDocumentoFromGedocLinks: (params: { servidorId: string; links: string[] }) => Promise<Documento>;
   setWizardRecommendedIds: (ids: string[]) => void;
 }
@@ -332,7 +339,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return newDoc;
   };
 
-  const addDocumentoFromFile = async ({ servidorId, file }: { servidorId: string; file: File }) => {
+  const addDocumentoFromFile = async ({
+    servidorId,
+    file,
+    sourceName,
+    sourceMimeType,
+    convertedToPdf,
+  }: {
+    servidorId: string;
+    file: File;
+    sourceName?: string;
+    sourceMimeType?: string;
+    convertedToPdf?: boolean;
+  }) => {
     const docId = `doc-${Date.now()}`;
     const persistedFile = await persistDocumentFile({ docId, servidorId, file });
 
@@ -345,6 +364,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       mime_type: persistedFile.mimeType,
       tamanho_bytes: persistedFile.tamanhoBytes,
       data_upload: new Date().toISOString(),
+      convertido_para_pdf: convertedToPdf || undefined,
+      arquivo_origem_nome: sourceName,
+      arquivo_origem_mime: sourceMimeType,
     };
 
     setDocumentos((current) => [...current, newDoc]);
@@ -359,8 +381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     links: string[];
   }): Promise<Documento> => {
     const docId = `doc-${Date.now()}`;
-    const nomeArquivo =
-      links.length === 1 ? `gedoc-referencia.ref` : `gedoc-referencias-${links.length}.ref`;
+    const nomeArquivo = buildInstitutionReferenceFileName(links.length);
 
     const newDoc: Documento = {
       id: docId,

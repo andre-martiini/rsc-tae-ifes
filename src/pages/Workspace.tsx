@@ -7,16 +7,17 @@ import { Inciso } from '../data/mock';
 import ItemDetailPanel from '../components/ItemDetailPanel';
 import ItemListItem from '../components/ItemListItem';
 import { Button } from '../components/ui/button';
+import { formatPointValue, sumPointValues } from '../lib/points';
 import { getEligibleRscLevel, isItemJuridicallyFragile } from '../lib/rsc';
 import AppHeader from '../components/AppHeader';
 
 const incisosInfo: { id: Inciso; title: string; desc: string }[] = [
-  { id: 'I', title: 'Inciso I', desc: 'Comissões e GTs' },
-  { id: 'II', title: 'Inciso II', desc: 'Projetos institucionais' },
-  { id: 'III', title: 'Inciso III', desc: 'Premiação' },
-  { id: 'IV', title: 'Inciso IV', desc: 'Responsabilidades técnicas' },
-  { id: 'V', title: 'Inciso V', desc: 'Direção e assessoramento' },
-  { id: 'VI', title: 'Inciso VI', desc: 'Publicações e produção' },
+  { id: 'I',   title: 'Inciso I',   desc: 'Comissões, GTs e representações' },
+  { id: 'II',  title: 'Inciso II',  desc: 'Projetos, ensino e extensão' },
+  { id: 'III', title: 'Inciso III', desc: 'Premiações e reconhecimentos' },
+  { id: 'IV',  title: 'Inciso IV',  desc: 'Responsabilidades técnico-adm.' },
+  { id: 'V',   title: 'Inciso V',   desc: 'Direção e assessoramento' },
+  { id: 'VI',  title: 'Inciso VI',  desc: 'Produção e difusão do conhecimento' },
 ];
 
 export default function Workspace() {
@@ -61,16 +62,18 @@ export default function Workspace() {
     incisosInfo.forEach((inciso) => {
       const itemsOfInciso = itensRSC.filter((item) => item.inciso === inciso.id).map((item) => item.id);
 
-      pointsMap[inciso.id] = lancamentosDoServidor
-        .filter((lancamento) => itemsOfInciso.includes(lancamento.item_rsc_id))
-        .reduce((acc, current) => acc + current.pontos_calculados, 0);
+      pointsMap[inciso.id] = sumPointValues(
+        lancamentosDoServidor
+          .filter((lancamento) => itemsOfInciso.includes(lancamento.item_rsc_id))
+          .map((lancamento) => lancamento.pontos_calculados),
+      );
     });
 
     return pointsMap;
   }, [itensRSC, lancamentosDoServidor]);
 
   const totalPontos = useMemo(
-    () => lancamentosDoServidor.reduce((acc, l) => acc + l.pontos_calculados, 0),
+    () => sumPointValues(lancamentosDoServidor.map((entry) => entry.pontos_calculados)),
     [lancamentosDoServidor],
   );
 
@@ -95,9 +98,11 @@ export default function Workspace() {
   );
 
   const getItemPoints = (itemId: string) =>
-    lancamentosDoServidor
-      .filter((lancamento) => lancamento.item_rsc_id === itemId)
-      .reduce((acc, current) => acc + current.pontos_calculados, 0);
+    sumPointValues(
+      lancamentosDoServidor
+        .filter((lancamento) => lancamento.item_rsc_id === itemId)
+        .map((lancamento) => lancamento.pontos_calculados),
+    );
 
   const getItemHasLancamentos = (itemId: string) =>
     lancamentosDoServidor.some((lancamento) => lancamento.item_rsc_id === itemId);
@@ -119,7 +124,7 @@ export default function Workspace() {
                 <span className="font-semibold text-gray-900">Status:</span> {processo.status}
               </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Total:</span> {totalPontos.toFixed(2)} pts
+                <span className="font-semibold text-gray-900">Total:</span> {formatPointValue(totalPontos)} pts
               </div>
               <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
                 <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
@@ -227,7 +232,7 @@ export default function Workspace() {
                         >
                           {inciso.id}
                         </span>
-                        {pontos > 0 && <span className="mt-2 text-[10px] font-bold text-gray-500">{pontos} pts</span>}
+                        {pontos > 0 && <span className="mt-2 text-[10px] font-bold text-gray-500">{formatPointValue(pontos)} pts</span>}
                       </>
                     ) : (
                       <span
