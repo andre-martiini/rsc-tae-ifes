@@ -57,6 +57,10 @@ async function computeSha256(arrayBuffer: ArrayBuffer) {
   return bytesToHex(new Uint8Array(digest));
 }
 
+export async function computeDocumentHash(file: Blob) {
+  return computeSha256(await file.arrayBuffer());
+}
+
 export async function persistDocumentFile(params: {
   docId: string;
   servidorId: string;

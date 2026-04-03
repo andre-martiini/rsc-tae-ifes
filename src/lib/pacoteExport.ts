@@ -1,12 +1,13 @@
 import JSZip from 'jszip';
 import { PDFDocument } from 'pdf-lib';
-import type { Documento, ItemRSC, Lancamento, Servidor } from '../data/mock';
+import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { getDocumentBlob } from './documentStorage';
+import { sumPointValues } from './points';
 import {
   generateComprovacaoResumoItem,
   generateComprovacoesIndice,
   generateMemorialDescritivo,
-  generateRequerimento,
+  generateRequerimentoFormal,
   type ComprovacaoItemResumo,
   type NivelRsc,
 } from './pdfGenerator';
@@ -109,14 +110,23 @@ export async function exportPacoteRSC(params: {
   lancamentos: Lancamento[];
   itensRSC: ItemRSC[];
   documentos: Documento[];
+  processo: ProcessoRSC;
 }): Promise<void> {
-  const { servidor, nivelElegivel, lancamentos, itensRSC, documentos } = params;
+  const { servidor, nivelElegivel, lancamentos, itensRSC, documentos, processo } = params;
 
   const zip = new JSZip();
   const groups = buildComprovacaoGroups(lancamentos, itensRSC, documentos);
+  const totalPontos = sumPointValues(lancamentos.map((lancamento) => lancamento.pontos_calculados));
+  const itensDistintos = new Set(lancamentos.map((lancamento) => lancamento.item_rsc_id)).size;
 
-  const requerimentoBytes = await generateRequerimento(servidor, nivelElegivel);
-  zip.file('01_Requerimento.pdf', requerimentoBytes);
+  const requerimentoBytes = await generateRequerimentoFormal(
+    servidor,
+    nivelElegivel,
+    processo,
+    totalPontos,
+    itensDistintos,
+  );
+  zip.file('00_Requerimento_RSC_PCCTAE.pdf', requerimentoBytes);
 
   const memorialBytes = await generateMemorialDescritivo(
     servidor,
@@ -124,8 +134,9 @@ export async function exportPacoteRSC(params: {
     lancamentos,
     itensRSC,
     documentos,
+    processo,
   );
-  zip.file('02_Memorial_Descritivo.pdf', memorialBytes);
+  zip.file('01_Memorial_RSC_PCCTAE.pdf', memorialBytes);
 
   const comprovacoesFolder = zip.folder('03_Comprovacoes');
   if (comprovacoesFolder) {

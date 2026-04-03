@@ -65,7 +65,14 @@ export interface Servidor {
   escolaridade_atual: string;
   nivel_classificacao?: 'A' | 'B' | 'C' | 'D' | 'E';
   cargo?: string;
+  /** Data de ingresso em Instituição Federal de Ensino (ISO date string) */
   data_ingresso?: string;
+  /** Data de ingresso na IFE atual — exibida no campo oficial do ANEXO IV */
+  data_ingresso_ife?: string;
+  /** Função ou encargo comissionado, se houver */
+  funcao_encargo?: string;
+  /** Telefone de contato do servidor */
+  telefone?: string;
 }
 
 export type ModoCalculo = 'manual' | 'auto_ano_fracao' | 'auto_mes';
@@ -79,8 +86,6 @@ export interface ItemRSC {
   pontos_por_unidade: number;
   quantidade_automatica: boolean;
   modo_calculo: ModoCalculo;
-  regra_aceite: string;
-  documentos_comprobatorios: string;
   limite_pontos?: number;
 }
 
@@ -109,6 +114,8 @@ export interface Lancamento {
   data_fim: string;
   quantidade_informada: number;
   justificativa_alteracao?: string;
+  declaracao_nao_duplicidade?: boolean;
+  declaracao_nao_ordinaria?: boolean;
   pontos_calculados: number;
   status_auditoria: 'Pendente' | 'Aprovado' | 'Rejeitado';
 }
@@ -121,6 +128,7 @@ export interface ProcessoRSC {
   submitted_at?: string;
   saldo_concessao_anterior?: number;
   numero_processo_anterior?: string;
+  data_ultima_concessao?: string;
 }
 
 export { rolItensRSC as mockItensRSC } from './rolItens';

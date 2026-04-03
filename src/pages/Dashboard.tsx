@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,7 +7,7 @@ import { RSC_LEVELS } from '../data/mock';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
-import { getEligibleRscLevel } from '../lib/rsc';
+import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
 import { exportSession } from '../lib/sessionExport';
 import { importSession } from '../lib/sessionImport';
 import AppHeader from '../components/AppHeader';
@@ -85,15 +85,21 @@ export default function Dashboard() {
   const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
 
+  const violations = nivelElegivel ? validateLevelConstraints(nivelElegivel.id, lancamentosDoServidor, itensRSC) : [];
+  const possuiRestricaoIncisos = !!(nivelElegivel?.incisosObrigatorios && nivelElegivel.incisosObrigatorios.length > 0);
+
   const metasAtingidas =
     !!nivelElegivel &&
     totalPontos >= nivelElegivel.pontosMinimos &&
-    itensDistintos >= nivelElegivel.itensMinimos;
+    itensDistintos >= nivelElegivel.itensMinimos &&
+    violations.length === 0;
 
   const isProfileComplete =
     !!servidor.email_institucional?.trim() &&
     !!servidor.lotacao?.trim() &&
-    !!servidor.cargo?.trim();
+    !!servidor.cargo?.trim() &&
+    !!servidor.nivel_classificacao &&
+    !!servidor.data_ingresso_ife;
 
   const nivelPleiteavel = nivelElegivel
     ? RSC_LEVELS.map((nivel, index) => ({
@@ -103,7 +109,7 @@ export default function Dashboard() {
       itensPct: Math.min(100, Math.round((itensDistintos / nivel.itensMinimos) * 100)),
       pontosFaltantes: Math.max(0, nivel.pontosMinimos - totalPontos),
       itensFaltantes: Math.max(0, nivel.itensMinimos - itensDistintos),
-      atingido: totalPontos >= nivel.pontosMinimos && itensDistintos >= nivel.itensMinimos,
+      atingido: totalPontos >= nivel.pontosMinimos && itensDistintos >= nivel.itensMinimos && validateLevelConstraints(nivel.id, lancamentosDoServidor, itensRSC).length === 0,
     })).find((nivel) => nivel.id === nivelElegivel.id) ?? null
     : null;
 
@@ -301,7 +307,7 @@ export default function Dashboard() {
                 <div>
                   <p className="font-semibold text-gray-900">Perfil incompleto</p>
                   <p className="text-sm text-gray-600">
-                    Alguns campos são necessários para gerar o pacote RSC (memorial descritivo e requerimento).
+                    Alguns campos são necessários para gerar o pacote RSC completo (requerimento, memorial e comprovações).
                   </p>
                 </div>
               </div>
@@ -417,7 +423,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <div className="mt-5 grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <div className={`mt-5 grid grid-cols-1 gap-6 ${possuiRestricaoIncisos ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
                 <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
                   <div className="flex items-center gap-2">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
@@ -493,6 +499,50 @@ export default function Dashboard() {
                     ></div>
                   </div>
                 </div>
+
+                {possuiRestricaoIncisos && (
+                  <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Específicos</p>
+                      <div className="group relative flex items-center">
+                        <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
+                        <div className="pointer-events-none absolute right-0 lg:left-0 lg:right-auto top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                          <p className="mb-2 text-[11px] font-bold text-white">Sobre Critérios Específicos</p>
+                          <p className="text-[11px] leading-relaxed text-gray-300">
+                            Avançar para os níveis mais altos da carreira exige comprovação de atividades focadas em ensino, pesquisa, inovação ou alta gestão. Você deve ter obrigatoriamente <span className="font-semibold text-white">pelo menos um item válido nestes incisos</span> indicados na lei.
+                          </p>
+                          <div className="absolute bottom-full right-4 lg:left-4 lg:right-auto border-4 border-transparent border-b-gray-900"></div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex h-full flex-col gap-3 justify-start pt-1">
+                      {nivelPleiteavel.incisosObrigatorios?.map((grupo, idx) => {
+                        const isGroupMissing = violations.some(v => v.type === 'missing_inciso' && v.requiredIncisos === grupo);
+                        const formatGroupText = (g: readonly string[]) => g.length === 1 ? `Inciso ${g[0]}` : `Incisos ${g.slice(0, -1).join(', ')} ou ${g[g.length - 1]}`;
+                        
+                        return (
+                          <div key={idx} className="flex flex-col gap-3">
+                            <p className="text-[14px] font-semibold leading-tight text-gray-900">
+                              Ter 1 item aprovado em:<br/>
+                              <span className="font-black text-violet-700">{formatGroupText(grupo)}</span>
+                            </p>
+                            {isGroupMissing ? (
+                              <div className="self-start rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
+                                Pendente
+                              </div>
+                            ) : (
+                              <div className="self-start flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                                <CheckCircle2 className="h-4 w-4" />
+                                Alcançado
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
