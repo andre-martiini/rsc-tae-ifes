@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import InstituicaoCombobox from '../components/InstituicaoCombobox';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
   Calendar,
   ChevronRight,
+  Loader2,
   PlusCircle,
   Trash2,
+  Upload,
   UserCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,8 +37,27 @@ interface ConflictState {
 }
 
 export default function LandingScreen() {
-  const { sessions, createSession, loadSession, deleteSession } = useAppContext();
   const navigate = useNavigate();
+  const [isImporting, setIsImporting] = useState(false);
+  const importInputRef = React.useRef<HTMLInputElement>(null);
+  const { sessions, createSession, loadSession, deleteSession, importSessionAsNew } = useAppContext();
+
+  const handleImportSession = async (file: File) => {
+    setIsImporting(true);
+    try {
+      const { importSession } = await import('../lib/sessionImport');
+      const restored = await importSession(file);
+      importSessionAsNew(restored);
+      toast.success('Progresso restaurado com sucesso!');
+      navigate('/dashboard');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Arquivo inválido.';
+      toast.error(`Erro ao restaurar: ${message}`);
+    } finally {
+      setIsImporting(false);
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   const [showForm, setShowForm] = useState(false);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
@@ -46,26 +66,22 @@ export default function LandingScreen() {
   const [form, setForm] = useState({
     siape: '',
     nome_completo: '',
-    email_institucional: '',
-    instituicao: '',
-    lotacao: '',
-    cargo: '',
     escolaridade_atual: '',
   });
 
   const set =
     (field: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+      (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+        setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const buildPerfil = (): Servidor => ({
     id: `srv-${Date.now()}`,
     siape: form.siape.trim(),
     nome_completo: form.nome_completo.trim(),
-    email_institucional: form.email_institucional.trim(),
-    instituicao: form.instituicao.trim(),
-    lotacao: form.lotacao.trim(),
-    cargo: form.cargo.trim(),
+    email_institucional: '',
+    instituicao: '',
+    lotacao: '',
+    cargo: '',
     escolaridade_atual: form.escolaridade_atual,
   });
 
@@ -75,13 +91,9 @@ export default function LandingScreen() {
     if (
       !form.siape.trim() ||
       !form.nome_completo.trim() ||
-      !form.email_institucional.trim() ||
-      !form.instituicao.trim() ||
-      !form.lotacao.trim() ||
-      !form.cargo.trim() ||
       !form.escolaridade_atual
     ) {
-      toast.error('Preencha todos os campos obrigatórios.');
+      toast.error('Preencha os campos obrigatórios (SIAPE, Nome e Escolaridade).');
       return;
     }
 
@@ -180,6 +192,7 @@ export default function LandingScreen() {
         </div>
 
         {showForm ? (
+          // ... form remains here
           <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <div className="mb-6 flex items-center gap-3">
               <button
@@ -242,55 +255,6 @@ export default function LandingScreen() {
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="email_institucional">
-                  E-mail Institucional <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="email_institucional"
-                  type="email"
-                  placeholder={institutionConfig.emailPlaceholder}
-                  value={form.email_institucional}
-                  onChange={set('email_institucional')}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="instituicao">
-                    Instituição <span className="text-red-500">*</span>
-                  </Label>
-                  <InstituicaoCombobox
-                    value={form.instituicao}
-                    onChange={(v) => setForm((prev) => ({ ...prev, instituicao: v }))}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="cargo">
-                    Cargo <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="cargo"
-                    placeholder="Ex.: Assistente em Administração"
-                    value={form.cargo}
-                    onChange={set('cargo')}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="lotacao">
-                  Unidade de Lotação <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="lotacao"
-                  placeholder="Ex.: Campus Vitória, Reitoria, Pró-Reitoria de Ensino..."
-                  value={form.lotacao}
-                  onChange={set('lotacao')}
-                />
-              </div>
-
               <div className="pt-2">
                 <Button type="submit" className="w-full bg-primary text-white hover:bg-primary/90">
                   <PlusCircle className="mr-2 h-4 w-4" />
@@ -300,22 +264,49 @@ export default function LandingScreen() {
             </form>
           </div>
         ) : (
-          <button
-            type="button"
-            onClick={() => setShowForm(true)}
-            className="mb-4 flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-primary/40 bg-primary/5 px-5 py-4 text-left transition-all hover:border-primary/60 hover:bg-primary/10"
-          >
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-primary/10 p-2 text-primary">
-                <PlusCircle className="h-5 w-5" />
+          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-5 py-6 text-left transition-all hover:border-primary/60 hover:bg-primary/10"
+            >
+              <div className="space-y-3">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <PlusCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Nova Sessão</p>
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Começar do zero</p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-bold text-gray-900">Nova Sessão</p>
-                <p className="text-xs text-gray-500">Iniciar um novo processo RSC</p>
+              <ChevronRight className="h-5 w-5 text-primary/60" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => importInputRef.current?.click()}
+              disabled={isImporting}
+              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-gray-200 bg-white px-5 py-6 text-left transition-all hover:border-primary/40 hover:bg-gray-50 disabled:opacity-50"
+            >
+              <div className="space-y-3">
+                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-500">
+                  {isImporting ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
+                </div>
+                <div>
+                  <p className="text-sm font-black text-gray-900">Restaurar Sessão</p>
+                  <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Carregar backup .zip</p>
+                </div>
               </div>
-            </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-primary/60" />
-          </button>
+              <ChevronRight className="h-5 w-5 text-gray-300" />
+            </button>
+            <input
+              type="file"
+              ref={importInputRef}
+              onChange={(e) => e.target.files?.[0] && handleImportSession(e.target.files[0])}
+              accept=".zip"
+              className="hidden"
+            />
+          </div>
         )}
 
         {sessions.length > 0 && (

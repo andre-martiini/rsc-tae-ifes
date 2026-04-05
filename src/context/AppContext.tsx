@@ -127,6 +127,7 @@ interface AppContextType {
   setPerfil: (data: Servidor) => void;
   updateProcesso: (updates: Partial<ProcessoRSC>) => void;
   restoreSession: (session: RestoredSession) => void;
+  importSessionAsNew: (session: RestoredSession) => void;
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
   addDocumento: (doc: Omit<Documento, 'id' | 'data_upload'>) => Documento;
@@ -226,11 +227,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return prev.map((s) =>
           s.id === activeSessionId
             ? {
-                ...s,
-                siape: servidor.siape,
-                nome_completo: servidor.nome_completo,
-                updated_at: new Date().toISOString(),
-              }
+              ...s,
+              siape: servidor.siape,
+              nome_completo: servidor.nome_completo,
+              updated_at: new Date().toISOString(),
+            }
             : s,
         );
       });
@@ -343,6 +344,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLancamentos(session.lancamentos);
     setProcesso(session.processo ?? INITIAL_PROCESSO);
     setWizardRecommendedIds(session.wizardIds);
+  };
+
+  const importSessionAsNew = (restored: RestoredSession) => {
+    if (!restored.perfil) return;
+    const id = restored.perfil.id;
+    const now = new Date().toISOString();
+    const summary: SessionSummary = {
+      id,
+      siape: restored.perfil.siape,
+      nome_completo: restored.perfil.nome_completo,
+      created_at: now,
+      updated_at: now,
+    };
+
+    const keys = sessionKeys(id);
+    window.localStorage.setItem(keys.perfil, JSON.stringify(restored.perfil));
+    window.localStorage.setItem(keys.documentos, JSON.stringify(restored.documentos));
+    window.localStorage.setItem(keys.lancamentos, JSON.stringify(restored.lancamentos));
+    window.localStorage.setItem(keys.processo, JSON.stringify(restored.processo ?? INITIAL_PROCESSO));
+    window.localStorage.setItem(keys.wizardIds, JSON.stringify(restored.wizardIds));
+    window.localStorage.setItem(GLOBAL_KEYS.active, id);
+
+    setSessions((prev) => {
+      if (prev.some((s) => s.id === id)) {
+        return prev.map((s) => (s.id === id ? summary : s));
+      }
+      return [...prev, summary];
+    });
+
+    setActiveSessionId(id);
+    setServidor(restored.perfil);
+    setDocumentos(restored.documentos);
+    setLancamentos(restored.lancamentos);
+    setProcesso(restored.processo ?? INITIAL_PROCESSO);
+    setWizardRecommendedIds(restored.wizardIds);
   };
 
   // ── Document & lançamento actions ────────────────────────────────────────────
@@ -481,6 +517,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setPerfil,
         updateProcesso,
         restoreSession,
+        importSessionAsNew,
         addLancamento,
         removeLancamento,
         addDocumento,

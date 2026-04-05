@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle, Info } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
-import AppHeader from '../components/AppHeader';
+import MainLayout from '../components/MainLayout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -12,6 +13,7 @@ import { useAppContext } from '../context/AppContext';
 import { exportPacoteRSC } from '../lib/pacoteExport';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getEligibleRscLevel, getEligibleRscLevels, validateLevelConstraints } from '../lib/rsc';
+import { cn } from '../lib/utils';
 
 export default function Consolidation() {
   const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso } = useAppContext();
@@ -41,6 +43,8 @@ export default function Consolidation() {
   );
 
   const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
+  const [declaracaoNaoDuplicidade, setDeclaracaoNaoDuplicidade] = useState(false);
+  const [declaracaoExcedeAtribuicoes, setDeclaracaoExcedeAtribuicoes] = useState(false);
   const niveisPleiteaveis = useMemo(
     () => getEligibleRscLevels(servidor.escolaridade_atual),
     [servidor.escolaridade_atual],
@@ -183,7 +187,7 @@ export default function Consolidation() {
         detail: lancamentosOk
           ? `${lancamentosDoServidor.length} lançamento(s) registrado(s).`
           : 'Nenhum lançamento registrado ainda.',
-        action: lancamentosOk ? undefined : { label: 'Lançar documentos', href: '/workspace' },
+        action: lancamentosOk ? undefined : { label: 'Lançar documentos', href: '/itens' },
       },
       {
         ok: pontosOk,
@@ -210,8 +214,8 @@ export default function Consolidation() {
           incisoViolations.length === 0
             ? 'Lançamentos presentes nos incisos exigidos para o nível.'
             : incisoViolations
-                .map((v) => `Falta item dos Incisos ${[...v.requiredIncisos].join('/')}`)
-                .join(' · '),
+              .map((v) => `Falta item dos Incisos ${[...v.requiredIncisos].join('/')}`)
+              .join(' · '),
       },
       {
         ok: intersticioOk,
@@ -229,8 +233,22 @@ export default function Consolidation() {
           ? 'Declaração de veracidade registrada nesta preparação do dossiê.'
           : 'Falta concordar com a Autodeclaração Geral atestando a veracidade das informações.',
       },
+      {
+        ok: declaracaoNaoDuplicidade,
+        label: 'Não-duplicidade de itens',
+        detail: declaracaoNaoDuplicidade
+          ? 'Confirmação de não-duplicidade registrada.'
+          : 'Falta confirmar que itens/fatos não estão sendo duplicados no sistema.',
+      },
+      {
+        ok: declaracaoExcedeAtribuicoes,
+        label: 'Atividade Extraordinária',
+        detail: declaracaoExcedeAtribuicoes
+          ? 'Confirmação de atividade extraordinária registrada.'
+          : 'Falta confirmar que atividades excedem as atribuições ordinárias.',
+      },
     ];
-  }, [autodeclaracaoGeral, dataUltimaConcessao, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos]);
 
   const pendencias = useMemo(() => {
     const issues: string[] = [];
@@ -246,8 +264,12 @@ export default function Consolidation() {
       issues.push('A data informada da última concessão ainda não completa o interstício de 3 anos.');
     if (!autodeclaracaoGeral)
       issues.push('Você precisa concordar com a Autodeclaração de veracidade das informações.');
+    if (!declaracaoNaoDuplicidade)
+      issues.push('Você precisa confirmar a declaração de não-duplicidade de itens.');
+    if (!declaracaoExcedeAtribuicoes)
+      issues.push('Você precisa confirmar a declaração de atividade extraordinária.');
     return issues;
-  }, [autodeclaracaoGeral, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
 
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
@@ -294,78 +316,62 @@ export default function Consolidation() {
     }
   };
 
+  const [activeTab, setActiveTab] = useState<'requerimento' | 'memorial'>('requerimento');
+
   return (
-    <div className="min-h-screen bg-gray-100 print:bg-white">
-      {/* App header — hidden on print */}
-      <div className="print:hidden">
-        <AppHeader
-          activeView="consolidate"
-          onNavigateDashboard={() => navigate('/dashboard')}
-          onNavigateHome={() => navigate('/')}
-          onNavigateCatalog={() => navigate('/itens')}
-          onNavigateWorkspace={() => navigate('/workspace')}
-          onNavigateConsolidate={() => undefined}
-          onNavigateProfile={() => navigate('/perfil')}
-          secondaryContent={
-            <>
-              <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Total:</span> {formatPointValue(totalPontos)} pts
-              </div>
-              <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
-              </div>
-              {metasAtingidas && (
-                <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Metas atingidas
-                </div>
-              )}
-              <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-                <span className="font-semibold text-gray-900">Nível pleiteado:</span>{' '}
-                {nivelPleiteado ? nivelPleiteado.label : 'Não definido'}
-              </div>
-            </>
-          }
-        />
-      </div>
-
+    <MainLayout activeView="consolidate">
       <main className="mx-auto max-w-4xl px-4 py-8 print:p-0 print:max-w-none">
-
         {/* Pre-flight checklist — hidden on print */}
-        <div className="mb-4 print:hidden">
-          <div className={`rounded-xl border bg-white shadow-sm ${canGenerate ? 'border-emerald-200' : 'border-amber-200'}`}>
-            <div className={`flex items-center gap-2 rounded-t-xl px-5 py-3 ${canGenerate ? 'bg-emerald-50' : 'bg-amber-50'}`}>
-              {canGenerate ? (
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-amber-600" />
-              )}
-              <p className={`text-sm font-bold ${canGenerate ? 'text-emerald-800' : 'text-amber-800'}`}>
-                {canGenerate ? 'Tudo pronto para gerar o pacote RSC' : 'Pendências antes de gerar o pacote RSC'}
-              </p>
-              <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-bold ${canGenerate ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                {checks.filter((c) => c.ok).length}/{checks.length}
+        <div className="mb-6 print:hidden">
+          <div className={cn(
+            "rounded-2xl border bg-white shadow-sm overflow-hidden",
+            canGenerate ? "border-emerald-100" : "border-amber-100"
+          )}>
+            <div className={cn(
+              "flex items-center gap-3 px-6 py-4",
+              canGenerate ? "bg-emerald-50/50" : "bg-amber-50/50"
+            )}>
+              <div className={cn(
+                "rounded-full p-1.5",
+                canGenerate ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+              )}>
+                {canGenerate ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              </div>
+              <div className="flex-1">
+                <p className={cn("text-sm font-black tracking-tight", canGenerate ? "text-emerald-900" : "text-amber-900")}>
+                  {canGenerate ? 'Tudo pronto para gerar o pacote RSC' : 'Pendências identificadas no dossiê'}
+                </p>
+                <p className={cn("text-xs font-medium opacity-70", canGenerate ? "text-emerald-700" : "text-amber-700")}>
+                  Certifique-se de que todos os itens estão verdes antes de exportar o arquivo final.
+                </p>
+              </div>
+              <span className={cn(
+                "rounded-full px-2.5 py-1 text-[10px] font-black tabular-nums",
+                canGenerate ? "bg-emerald-600 text-white" : "bg-amber-600 text-white"
+              )}>
+                {checks.filter((c) => c.ok).length}/{checks.length} REQUISITOS
               </span>
             </div>
-            <ul className="divide-y divide-gray-100 px-5">
+            <ul className="divide-y divide-gray-100 px-6 py-2">
               {checks.map((check) => (
-                <li key={check.label} className="flex items-center gap-3 py-2.5">
-                  {check.ok ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                  ) : (
-                    <XCircle className="h-4 w-4 shrink-0 text-amber-500" />
-                  )}
+                <li key={check.label} className="flex items-center gap-4 py-3">
+                  <div className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors",
+                    check.ok ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-400"
+                  )}>
+                    {check.ok ? <CheckCircle2 className="h-3 w-3" /> : <div className="h-1.5 w-1.5 rounded-full bg-current" />}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <span className={`text-sm font-semibold ${check.ok ? 'text-gray-700' : 'text-gray-900'}`}>
+                    <span className={cn("text-[13px] font-bold leading-none", check.ok ? "text-gray-700" : "text-gray-900")}>
                       {check.label}
                     </span>
-                    <span className="ml-2 text-xs text-gray-500">{check.detail}</span>
+                    <p className="mt-0.5 text-[11px] text-gray-500 leading-tight">{check.detail}</p>
                   </div>
                   {check.action && (
                     <button
                       type="button"
                       onClick={() => navigate(check.action!.href)}
-                      className="shrink-0 rounded-lg border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-700 transition-colors hover:bg-amber-50"
+                      className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
                     >
                       {check.action.label}
                     </button>
@@ -376,25 +382,25 @@ export default function Consolidation() {
           </div>
         </div>
 
-        <div className="mb-4 print:hidden">
-          <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <p className="text-sm font-bold text-gray-900">Dados do Requerimento</p>
+        <div className="mb-6 print:hidden">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-6">
+              <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Contexto do Processo</h3>
               <p className="text-sm text-gray-500">
-                Esses dados entram no requerimento e no memorial exportados pelo sistema.
+                Informações complementares que serão injetadas nos documentos oficiais.
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="nivel-pleiteado">Nível pleiteado</Label>
+                <Label htmlFor="nivel-pleiteado" className="text-xs font-bold uppercase tracking-widest text-gray-400">Nível pleiteado no Requerimento</Label>
                 <select
                   id="nivel-pleiteado"
                   value={nivelPleiteadoId}
                   onChange={(e) => setNivelPleiteadoId(e.target.value)}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="flex h-11 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium transition-all focus:border-primary/50 focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/5"
                 >
-                  <option value="">Selecione...</option>
+                  <option value="">Selecione o nível...</option>
                   {niveisPleiteaveis.map((nivel) => (
                     <option key={nivel.id} value={nivel.id}>
                       {nivel.label} ({nivel.equivalencia})
@@ -404,7 +410,7 @@ export default function Consolidation() {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="saldo-anterior">Saldo de pontos da concessão anterior</Label>
+                <Label htmlFor="saldo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Saldo Concessão Anterior (pts)</Label>
                 <Input
                   id="saldo-anterior"
                   type="number"
@@ -413,346 +419,404 @@ export default function Consolidation() {
                   placeholder="Ex.: 4.5"
                   value={saldoConcessaoAnterior}
                   onChange={(e) => setSaldoConcessaoAnterior(e.target.value)}
+                  className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="processo-anterior">Número do processo anterior</Label>
+                <Label htmlFor="processo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Processo Anterior (Número)</Label>
                 <Input
                   id="processo-anterior"
                   placeholder="Ex.: 23000.000000/2024-00"
                   value={numeroProcessoAnterior}
                   onChange={(e) => setNumeroProcessoAnterior(e.target.value)}
+                  className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="ultima-concessao">Data da última concessão</Label>
+                <Label htmlFor="ultima-concessao" className="text-xs font-bold uppercase tracking-widest text-gray-400">Data da Última Concessão</Label>
                 <Input
                   id="ultima-concessao"
                   type="date"
                   value={dataUltimaConcessao}
                   onChange={(e) => setDataUltimaConcessao(e.target.value)}
+                  className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
                 />
               </div>
             </div>
 
             {possuiDadosConcessaoAnterior && (
-              <p className={`mt-4 text-xs ${intersticioOk ? 'text-gray-500' : 'text-amber-700'}`}>
-                {intersticioOk
-                  ? 'Os dados de concessão anterior serão incluídos no pacote exportado.'
-                  : 'Revise a data da última concessão: o sistema identificou que o interstício de 3 anos ainda não foi cumprido.'}
-              </p>
+              <div className={cn(
+                "mt-6 flex items-center gap-2 rounded-xl border px-4 py-3 transition-all",
+                intersticioOk ? "border-emerald-100 bg-emerald-50/30 text-emerald-700" : "border-amber-100 bg-amber-50/30 text-amber-700"
+              )}>
+                <Info className="h-4 w-4 shrink-0" />
+                <p className="text-[11px] font-bold">
+                  {intersticioOk
+                    ? 'Interstício válido: os dados da concessão anterior serão incluídos no dossiê.'
+                    : 'Atenção: A data informada indica que o interstício de 3 anos ainda não foi cumprido.'}
+                </p>
+              </div>
             )}
           </div>
         </div>
 
-        <div className="mb-4 print:hidden">
-          <div className="rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
-            <p className="mb-2 text-sm font-bold text-amber-900">Autodeclaração / Veracidade das Informações</p>
-            <p className="mb-4 text-sm text-amber-800">
-              Para prosseguir e gerar o pacote RSC definitivo, você precisa declarar
-              oficialmente que todas as informações registradas conferem com a realidade.
+        <div className="mb-6 print:hidden">
+          <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-6 shadow-sm">
+            <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Autodeclaração Legal</h3>
+            <p className="mb-6 text-sm text-gray-500">
+              Essas declarações são obrigatórias para a validade jurídica do processo.
             </p>
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-white p-4 transition-colors hover:bg-amber-50/50">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 shrink-0 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
-                checked={autodeclaracaoGeral}
-                onChange={(e) => setAutodeclaracaoGeral(e.target.checked)}
-              />
-              <span className="text-sm leading-relaxed text-gray-800">
-                Declaro, para todos os fins de direito, sob as penas da lei, que realizei todas as atividades descritas nos itens consolidados, que a documentação comprobatória correspondente fornecida no pacote é autêntica e que as informações prestadas de modo geral no sistema são absolutamente verdadeiras.
-              </span>
-            </label>
+            <div className="grid gap-4">
+              <label className="flex cursor-pointer items-start gap-4 rounded-xl border border-white bg-white/60 p-4 transition-all hover:bg-white hover:shadow-md">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                  checked={autodeclaracaoGeral}
+                  onChange={(e) => setAutodeclaracaoGeral(e.target.checked)}
+                />
+                <div className="space-y-1">
+                  <p className="text-[13px] font-bold text-gray-900">Veracidade das Informações</p>
+                  <p className="text-[11px] leading-relaxed text-gray-600">
+                    Declaro que todas as atividades descritas ocorreram de fato e que os documentos fornecidos são autênticos sob as penas da lei.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-4 rounded-xl border border-white bg-white/60 p-4 transition-all hover:bg-white hover:shadow-md">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                  checked={declaracaoNaoDuplicidade}
+                  onChange={(e) => setDeclaracaoNaoDuplicidade(e.target.checked)}
+                />
+                <div className="space-y-1">
+                  <p className="text-[13px] font-bold text-gray-900">Não-Duplicidade de Itens</p>
+                  <p className="text-[11px] leading-relaxed text-gray-600">
+                    Confirmo que nenhum fato ou documento foi aproveitado simultaneamente em mais de um item deste ou de outro processo de RSC.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-4 rounded-xl border border-white bg-white/60 p-4 transition-all hover:bg-white hover:shadow-md">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
+                  checked={declaracaoExcedeAtribuicoes}
+                  onChange={(e) => setDeclaracaoExcedeAtribuicoes(e.target.checked)}
+                />
+                <div className="space-y-1">
+                  <p className="text-[13px] font-bold text-gray-900">Atividades Extraordinárias</p>
+                  <p className="text-[11px] leading-relaxed text-gray-600">
+                    Atividades informadas excedem a rotina acadêmica/administrativa ordinária do cargo ocupado.
+                  </p>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 
-        {/* Action toolbar — hidden on print */}
-        <div className="mb-4 flex items-center justify-between print:hidden">
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">Consolidação do Processo</h1>
-            <p className="text-sm text-gray-500">Revise a ficha antes do envio definitivo.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExport} className="border-gray-300 text-gray-700 text-sm">
-              <Download className="mr-2 h-4 w-4" />
-              Exportar ficha
-            </Button>
-            <Button
-              onClick={handleGenerate}
-              disabled={!canGenerate || isGenerating}
-              className="bg-primary text-white hover:bg-primary/90 disabled:opacity-60 text-sm"
-            >
-              {isGenerating ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              {isGenerating ? 'Gerando...' : 'Gerar Pacote RSC'}
-            </Button>
-          </div>
-        </div>
-
-        {/* ── Document / Ficha ── */}
-        <div className="rounded-xl border border-gray-200 bg-white shadow-sm print:rounded-none print:border-0 print:shadow-none">
-
-          {/* Document header */}
-          <div className="flex items-stretch border-b-2 border-gray-800 print:border-gray-900">
-            {/* Logo block */}
-            <div className="flex shrink-0 flex-col items-center justify-center border-r border-gray-300 px-4 py-3">
-              <AppLogo className="h-9 w-9 object-contain" />
-            </div>
-            {/* Title block */}
-            <div className="flex flex-col justify-center px-5 py-3 flex-1">
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-gray-500">
-                {institutionConfig.networkName}
-              </p>
-              <h1 className="text-sm font-black text-gray-900 leading-tight">
-                Ficha de Consolidação — RSC-TAE
-              </h1>
-              <p className="text-[10px] text-gray-400">
-                Reconhecimento de Saberes e Competências — Técnico-Administrativos em Educação
-              </p>
-            </div>
-            {/* Date / status block */}
-            <div className="flex shrink-0 flex-col items-end justify-center border-l border-gray-200 px-5 py-3 text-right">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-gray-400">Data</p>
-              <p className="text-xs font-bold text-gray-900">{today}</p>
-              <span className="mt-1.5 rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
-                {processo.status}
-              </span>
-            </div>
-          </div>
-
-          {/* ── Section 1: Identificação ── */}
-          <div className="border-b border-gray-200">
-            <div className="bg-gray-50 px-5 py-1">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">1. Identificação do Servidor</p>
-            </div>
-            <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100 sm:grid-cols-4">
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Nome</p>
-                <p className="mt-0.5 truncate text-xs font-semibold text-gray-900">{servidor.nome_completo}</p>
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">SIAPE</p>
-                <p className="mt-0.5 text-xs font-semibold text-gray-900">{servidor.siape}</p>
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Lotação</p>
-                <p className="mt-0.5 truncate text-xs font-semibold text-gray-900">{servidor.lotacao}</p>
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Escolaridade atual</p>
-                <p className="mt-0.5 text-xs font-semibold text-gray-900">{servidor.escolaridade_atual}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Section 2: Dados do Pedido ── */}
-          <div className="border-b border-gray-200">
-            <div className="bg-gray-50 px-5 py-1">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">2. Dados do Pedido</p>
-            </div>
-            <div className="grid grid-cols-2 gap-0 divide-x divide-gray-100 sm:grid-cols-4">
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Nível pleiteado</p>
-                <p className="mt-0.5 text-xs font-bold text-gray-900">
-                  {nivelPleiteado ? nivelPleiteado.label : 'Não definido'}
-                </p>
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Equivalência</p>
-                <p className="mt-0.5 text-xs font-semibold text-gray-900">
-                  {nivelPleiteado ? nivelPleiteado.equivalencia : '—'}
-                </p>
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Pontuação total</p>
-                <p className="mt-0.5 text-base font-black text-gray-900">{formatPointValue(totalPontos)} <span className="text-[10px] font-normal text-gray-500">pts</span></p>
-                {nivelPleiteado && (
-                  <p className="text-[9px] text-gray-400">mín. {nivelPleiteado.pontosMinimos} pts</p>
+        {/* ── Document Viewer ── */}
+        <div className="space-y-4">
+          <div className="flex items-end justify-between px-1 print:hidden">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setActiveTab('requerimento')}
+                className={cn(
+                  "relative h-11 px-6 text-xs font-black uppercase tracking-widest transition-all",
+                  activeTab === 'requerimento' ? "text-primary" : "text-gray-400 hover:text-gray-600"
                 )}
-              </div>
-              <div className="px-4 py-2">
-                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Itens distintos</p>
-                <p className="mt-0.5 text-base font-black text-gray-900">{itensDistintos} <span className="text-[10px] font-normal text-gray-500">iten{itensDistintos !== 1 ? 's' : ''}</span></p>
-                {nivelPleiteado && (
-                  <p className="text-[9px] text-gray-400">mín. {nivelPleiteado.itensMinimos} itens</p>
+              >
+                1. Requerimento
+                {activeTab === 'requerimento' && (
+                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                 )}
-              </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('memorial')}
+                className={cn(
+                  "relative h-11 px-6 text-xs font-black uppercase tracking-widest transition-all",
+                  activeTab === 'memorial' ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                2. Memorial Descritivo
+                {activeTab === 'memorial' && (
+                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                )}
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                onClick={handleGenerate}
+                disabled={!canGenerate || isGenerating}
+                className="h-10 rounded-xl bg-gray-900 px-6 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-gray-200 transition-all hover:bg-primary hover:shadow-primary/20 disabled:opacity-50"
+              >
+                {isGenerating ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="mr-2 h-4 w-4" />
+                )}
+                Gerar Pacote PDF
+              </Button>
             </div>
           </div>
 
-          {/* ── Section 3: Pendências ── */}
-          {pendencias.length > 0 && (
-            <div className="border-b border-gray-200">
-              <div className="bg-gray-50 px-5 py-1">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">3. Pendências para envio</p>
-              </div>
-              <div className="px-5 py-2 space-y-1">
-                {pendencias.map((p) => (
-                  <div key={p} className="flex items-start gap-2 text-xs text-gray-700">
-                    <AlertCircle className="mt-0.5 h-3 w-3 shrink-0 text-gray-400" />
-                    {p}
+          <div className="min-h-[1000px] rounded-3xl border border-gray-200 bg-white p-10 shadow-2xl print:border-none print:shadow-none sm:p-16">
+            <AnimatePresence mode="wait">
+              {activeTab === 'requerimento' ? (
+                <motion.div
+                  key="requerimento"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-10 text-gray-900"
+                >
+                  {/* Header */}
+                  <div className="flex flex-col items-center text-center border-b-2 border-gray-900 pb-8">
+                    <AppLogo className="mb-4 h-16 w-16" />
+                    <h2 className="text-base font-bold uppercase tracking-tight">{institutionConfig.networkName}</h2>
+                    <h1 className="text-xl font-black uppercase mt-1">Requerimento de Concessão de RSC-PCCTAE</h1>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* Ready-to-send banner */}
-          {pendencias.length === 0 && (
-            <div className="border-b border-gray-200 bg-gray-50 px-5 py-2">
-              <div className="flex items-center gap-2 text-xs font-semibold text-gray-700">
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
-                Todas as exigências foram atendidas — processo pronto para envio.
-              </div>
-            </div>
-          )}
+                  {/* 1. Identificação */}
+                  <section className="space-y-4">
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">1. Identificação do Servidor</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-[13px]">
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Nome:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.nome_completo}</p></div>
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">SIAPE:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.siape}</p></div>
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Cargo:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.cargo}</p></div>
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Data de ingresso em IFE:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.data_ingresso_ife ? new Date(servidor.data_ingresso_ife).toLocaleDateString('pt-BR') : '—'}</p></div>
 
-          {/* ── Section 4: Itens consolidados ── */}
-          <div className="border-b border-gray-200">
-            <div className="bg-gray-50 px-5 py-1">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">
-                {pendencias.length > 0 ? '4' : '3'}. Itens Consolidados
-              </p>
-            </div>
-
-            {resumoByInciso.length > 0 ? (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 text-left">
-                    <th className="w-10 px-4 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Nº</th>
-                    <th className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Descrição</th>
-                    <th className="w-12 px-3 py-1.5 text-center text-[9px] font-semibold uppercase tracking-wide text-gray-400">Docs</th>
-                    <th className="w-20 px-4 py-1.5 text-right text-[9px] font-semibold uppercase tracking-wide text-gray-400">Pontos</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resumoByInciso.map(([inciso, items]) => {
-                    const incisoSubtotal = sumPointValues(items.map((i) => i.pontos));
-                    return (
-                      <React.Fragment key={inciso}>
-                        <tr className="border-t border-gray-100 bg-gray-50/80">
-                          <td colSpan={4} className="px-4 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-500">
-                            Inciso {inciso}
-                          </td>
-                        </tr>
-                        {items.map((item) => (
-                          <tr
-                            key={item.itemId}
-                            onClick={() => navigate(`/workspace?item=${item.itemId}`)}
-                            className="cursor-pointer transition-colors hover:bg-primary/5 print:cursor-default print:hover:bg-transparent"
-                          >
-                            <td className="px-4 py-1.5">
-                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-                                {item.numero}
-                              </span>
-                            </td>
-                            <td className="px-3 py-1.5 text-xs text-gray-800">{item.descricao}</td>
-                            <td className="px-3 py-1.5 text-center text-[10px] text-gray-500">{item.docCount}</td>
-                            <td className="px-4 py-1.5 text-right text-xs font-black text-gray-900 tabular-nums">
-                              {formatPointValue(item.pontos)}
-                              <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
-                            </td>
-                          </tr>
-                        ))}
-                        <tr className="border-t border-gray-100/60 bg-gray-50/40">
-                          <td colSpan={3} className="px-4 py-1 text-right text-[9px] font-semibold text-gray-400">
-                            Subtotal Inciso {inciso}
-                          </td>
-                          <td className="px-4 py-1 text-right text-[10px] font-bold text-gray-600 tabular-nums">
-                            {formatPointValue(incisoSubtotal)}
-                            <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
-                          </td>
-                        </tr>
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-gray-200 bg-gray-50">
-                    <td colSpan={3} className="px-4 py-1.5 text-[9px] font-bold uppercase tracking-wide text-gray-600">
-                      Total
-                    </td>
-                    <td className="px-4 py-1.5 text-right text-xs font-black text-gray-900 tabular-nums">
-                      {formatPointValue(totalPontos)}
-                      <span className="ml-1 text-[9px] font-normal text-gray-400">pts</span>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            ) : (
-              <div className="px-5 py-5 text-center text-xs text-gray-400">
-                Nenhum item consolidado até o momento.
-              </div>
-            )}
-          </div>
-
-          {/* ── Section 5: Documentos vinculados ── */}
-          <div>
-            <div className="bg-gray-50 px-5 py-1">
-              <p className="text-[9px] font-bold uppercase tracking-widest text-gray-500">
-                {pendencias.length > 0 ? '5' : '4'}. Documentos Comprobatórios
-              </p>
-            </div>
-
-            {documentosUtilizados.length > 0 ? (
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 text-left">
-                    <th className="px-4 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400">Arquivo</th>
-                    <th className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 w-32">Hash (SHA-256)</th>
-                    <th className="px-4 py-1.5 text-[9px] font-semibold uppercase tracking-wide text-gray-400 text-right w-36">Data de upload</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {documentosUtilizados.map((doc) => (
-                    <tr key={doc.id}>
-                      <td className="px-4 py-1.5">
-                        <div className="flex items-start gap-1.5">
-                          <FileText className="mt-0.5 h-3 w-3 shrink-0 text-gray-300" />
-                          <span className="text-xs font-medium text-gray-800 break-all">{doc.nome_arquivo}</span>
+                      <div className="md:col-span-2">
+                        <span className="font-bold uppercase text-[10px] text-gray-500 block mb-1">Nível de Classificação:</span>
+                        <div className="flex gap-4">
+                          {['A', 'B', 'C', 'D', 'E'].map(lvl => (
+                            <div key={lvl} className="flex items-center gap-1.5">
+                              <div className={cn("w-4 h-4 border border-gray-900 flex items-center justify-center text-[10px] font-black", servidor.nivel_classificacao === lvl && "bg-gray-900 text-white")}>
+                                {servidor.nivel_classificacao === lvl ? 'X' : ''}
+                              </div>
+                              <span className="font-bold">{lvl}</span>
+                            </div>
+                          ))}
                         </div>
-                        {doc.gedoc_links && doc.gedoc_links.length > 0 && (
-                          <p className="mt-0.5 pl-4.5 text-[9px] text-gray-400">
-                            {doc.gedoc_links.length} link(s) de referência registrado(s)
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-3 py-1.5">
-                        <span className="font-mono text-[9px] text-gray-400">
-                          {doc.hash_arquivo ? doc.hash_arquivo.slice(0, 16) + '…' : '—'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-1.5 text-right text-[10px] text-gray-500">
-                        {new Date(doc.data_upload).toLocaleString('pt-BR')}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="px-5 py-5 text-center text-xs text-gray-400">
-                Nenhum documento vinculado ainda.
-              </div>
-            )}
+                      </div>
+
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Lotação:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.lotacao}</p></div>
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Função/Encargo (se houver):</span> <p className="border-b border-gray-300 min-h-[20px]">{processo.funcao_encargo || '—'}</p></div>
+                      <div className="md:col-span-2"><span className="font-bold uppercase text-[10px] text-gray-500 block">Telefone/E-mail:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.email_institucional}</p></div>
+                    </div>
+                  </section>
+
+                  {/* 2. Informações do Requerimento */}
+                  <section className="space-y-4">
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">2. Informações do Requerimento</h3>
+                    <div className="space-y-6 text-[13px]">
+                      <div>
+                        <span className="font-bold uppercase text-[10px] text-gray-500 block mb-2">Nível de RSC pretendido:</span>
+                        <div className="grid grid-cols-3 gap-4 sm:flex sm:gap-6">
+                          {[1, 2, 3, 4, 5, 6].map(num => {
+                            const levelId = `RSC-${['I', 'II', 'III', 'IV', 'V', 'VI'][num - 1]}`;
+                            return (
+                              <div key={num} className="flex items-center gap-1.5">
+                                <div className={cn("w-4 h-4 border border-gray-900 flex items-center justify-center text-[10px] font-black", nivelPleiteadoId === levelId && "bg-gray-900 text-white")}>
+                                  {nivelPleiteadoId === levelId ? 'X' : ''}
+                                </div>
+                                <span className="font-bold whitespace-nowrap">{levelId}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 border-t border-gray-100 pt-4">
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
+                          <span className="text-gray-600">Pontuação mínima necessária:</span>
+                          <span className="font-bold">{nivelPleiteado?.pontosMinimos ?? '—'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
+                          <span className="text-gray-600">Pontuação total apresentada:</span>
+                          <span className="font-bold">{formatPointValue(totalPontos)}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
+                          <span className="text-gray-600">Quantidade de critérios específicos utilizados:</span>
+                          <span className="font-bold">{itensDistintos}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
+                          <span className="text-gray-600">Pontuação total excedente (banco de pontos):</span>
+                          <span className="font-bold">{nivelPleiteado ? formatPointValue(Math.max(0, totalPontos - nivelPleiteado.pontosMinimos)) : '—'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
+                          <span className="text-gray-600">Saldo de pontuação de concessão anterior:</span>
+                          <span className="font-bold">{saldoConcessaoAnterior || '0'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
+                          <span className="text-gray-600">Número do processo relativo à concessão anterior do RSC-PCCTAE:</span>
+                          <span className="font-bold">{numeroProcessoAnterior || '—'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* 3. Declaração */}
+                  <section className="space-y-4">
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">3. Declaração de Conformidade Legal</h3>
+                    <div className="text-[12px] leading-relaxed space-y-4">
+                      <p>Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:</p>
+                      <ul className="list-disc pl-5 space-y-1">
+                        <li>Todos os fatos apresentados ocorreram no exercício da carreira;</li>
+                        <li>Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;</li>
+                        <li>Toda a documentação anexada é autêntica e comprova integralmente as atividades apresentadas;</li>
+                        <li>Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.</li>
+                      </ul>
+                    </div>
+                  </section>
+
+                  {/* Signatures */}
+                  <div className="pt-8 space-y-8">
+                    <div className="flex flex-col items-start translate-y-4">
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Assinatura:</span>
+                      <div className="mt-8 h-px w-full max-w-md bg-gray-900" />
+                      <span className="mt-1 text-[11px] font-bold uppercase">{servidor.nome_completo}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Data:</span>
+                      <span className="ml-2 font-bold px-4 border-b border-gray-900">{new Date().toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="memorial"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-12 text-gray-900"
+                >
+                  <div className="text-center space-y-2 border-b-2 border-gray-900 pb-8">
+                    <h1 className="text-lg font-black uppercase tracking-tight decoration-2">Memorial e Descrição das Atividades por Requisito Legal</h1>
+                    <p className="max-w-3xl mx-auto text-[11px] leading-relaxed text-gray-500 italic pt-4">
+                      Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das
+                      contribuições institucionais e conforme os requisitos do art. 4º do Decreto (incisos I a VI), vinculando cada
+                      atividade ao número correspondente aos critérios específicos.
+                    </p>
+                  </div>
+
+                  <div className="space-y-12">
+                    {resumoByInciso.map(([inciso, items], index) => {
+                      const incisoSubtotal = sumPointValues(items.map((i) => i.pontos));
+                      const isLast = index === resumoByInciso.length - 1;
+
+                      return (
+                        <div key={inciso} className="space-y-2">
+                          <h2 className="bg-gray-100 px-4 py-1.5 text-[11px] font-black uppercase ring-1 ring-gray-900/10">
+                            Critério {inciso} - {
+                              inciso === 'I' ? 'Participação em grupos, comissões, comitês, núcleos ou representações' :
+                                inciso === 'II' ? 'Orientação, tutoria ou mentoria' :
+                                  inciso === 'III' ? 'Participação em bancas, exames ou avaliações' :
+                                    inciso === 'IV' ? 'Ministração de cursos, oficinas ou palestras' :
+                                      inciso === 'V' ? 'Participação em projetos de pesquisa, extensão ou inovação' :
+                                        'Produção, prospecção e difusão de conhecimento'
+                            }
+                          </h2>
+
+                          <table className="w-full table-fixed border-collapse border border-gray-900 text-[10px]">
+                            <thead>
+                              <tr className="bg-gray-50 text-center">
+                                <th className="border border-gray-900 px-2 py-2 w-[5%] font-black italic uppercase">Nº</th>
+                                <th className="border border-gray-900 px-2 py-2 text-left w-[38%] font-black italic uppercase">Critério específico</th>
+                                <th className="border border-gray-900 px-2 py-2 w-[12%] font-black italic uppercase">Unidade Medida</th>
+                                <th className="border border-gray-900 px-2 py-2 w-[10%] font-black italic uppercase leading-tight">Pontuação (Base)</th>
+                                <th className="border border-gray-900 px-2 py-2 w-[10%] font-black italic uppercase leading-tight">Pontuação Obtida</th>
+                                <th className="border border-gray-900 px-2 py-2 w-[25%] font-black italic uppercase leading-tight">Documentos Comprobatórios</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {items.map((item) => {
+                                const itemLancamentos = lancamentosDoServidor.filter(l => l.item_rsc_id === item.itemId);
+                                const basePoints = item.docCount > 0 ? (item.pontos / item.docCount) : item.pontos;
+                                return (
+                                  <tr key={item.itemId}>
+                                    <td className="border border-gray-900 px-2 py-2 text-center font-bold text-sm">{item.numero}</td>
+                                    <td className="border border-gray-900 px-2 py-2 leading-tight">{item.descricao}</td>
+                                    <td className="border border-gray-900 px-2 py-2 text-center">{item.docCount} unid.</td>
+                                    <td className="border border-gray-900 px-2 py-2 text-center">{formatPointValue(basePoints)}</td>
+                                    <td className="border border-gray-900 px-2 py-2 text-center font-black bg-gray-50/50">{formatPointValue(item.pontos)}</td>
+                                    <td className="border border-gray-900 px-2 py-2 align-top">
+                                      <div className="flex flex-col gap-1.5">
+                                        {itemLancamentos.map((l, i) => (
+                                          <span key={i} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
+                                            [DOC {i + 1}] {documentos.find(d => d.id === l.documento_id)?.nome_arquivo}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              <tr className="bg-gray-100 font-black">
+                                <td colSpan={4} className="border border-gray-900 px-4 py-2 text-right uppercase italic tracking-widest">Subtotal CRITÉRIO {inciso}</td>
+                                <td className="border border-gray-900 px-2 py-2 text-center text-sm bg-gray-200 ring-2 ring-inset ring-gray-900/5">{formatPointValue(incisoSubtotal)}</td>
+                                <td className="border border-gray-900 px-2 py-2"></td>
+                              </tr>
+                            </tbody>
+                          </table>
+
+                          {isLast && (
+                            <div className="mt-8 border-t-2 border-gray-900 pt-4">
+                              <table className="w-full border-collapse border border-gray-900 text-xs font-black">
+                                <tbody>
+                                  <tr className="bg-gray-200/50">
+                                    <td className="border border-gray-900 px-6 py-4 text-right uppercase italic tracking-widest leading-relaxed">
+                                      (Critério I + Critério II + Critério III + Critério IV + Critério V + Critério VI)
+                                      <br />
+                                      <span className="text-base font-black">TOTAL ACUMULADO</span>
+                                    </td>
+                                    <td className="border border-gray-900 px-4 py-4 text-center text-xl w-40 bg-gray-900 text-white tabular-nums">
+                                      {formatPointValue(totalPontos)}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* 6. Conclusão */}
+                  <section className="space-y-6 pt-12 border-t-2 border-gray-900 mt-16">
+                    <h3 className="bg-gray-100 px-4 py-1.5 text-xs font-black uppercase ring-1 ring-gray-900/10 w-fit">6. Conclusão do Servidor</h3>
+                    <div className="text-[14px] leading-relaxed">
+                      <p>
+                        À vista das informações apresentadas, totalizo <strong>{formatPointValue(totalPontos)}</strong> pontos e atendo aos critérios legais
+                        e regulamentares para o nível <strong>{nivelPleiteado?.label || '—'}</strong> do RSC‑PCCTAE. Solicito a análise pela
+                        CRSC-PCCTAE.
+                      </p>
+                    </div>
+
+                    <div className="pt-12 space-y-12">
+                      <div className="flex flex-col items-start translate-y-4">
+                        <span className="text-[10px] font-bold uppercase text-gray-400">Assinatura:</span>
+                        <div className="mt-8 h-px w-full max-w-md bg-gray-900" />
+                        <span className="mt-1 text-[11px] font-bold uppercase">{servidor.nome_completo}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase text-gray-400">Data:</span>
+                        <span className="ml-2 font-bold px-4 border-b border-gray-900">{new Date().toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    </div>
+                  </section>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
-          {/* Document footer */}
-          <div className="border-t-2 border-gray-200 px-5 py-3 print:border-gray-400">
-            <div className="flex items-center justify-between text-[9px] text-gray-400">
-              <span>{institutionConfig.shortName} · Ficha gerada em {today}</span>
-              <span className="font-mono">
-                {servidor.siape} · {nivelPleiteado?.label ?? '—'}
-              </span>
-            </div>
-          </div>
         </div>
-
       </main>
-    </div>
+    </MainLayout>
   );
 }
+
