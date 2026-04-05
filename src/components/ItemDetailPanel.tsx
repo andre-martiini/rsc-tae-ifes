@@ -47,8 +47,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [quantidade, setQuantidade] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmFragile, setConfirmFragile] = useState(false);
-  const [confirmNaoDuplicidade, setConfirmNaoDuplicidade] = useState(false);
-  const [confirmNaoOrdinaria, setConfirmNaoOrdinaria] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
@@ -84,8 +82,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setOngoing(false);
     setQuantidade('');
     setConfirmFragile(!isFragile);
-    setConfirmNaoDuplicidade(false);
-    setConfirmNaoOrdinaria(false);
+    setQuantidade('');
+    setConfirmFragile(!isFragile);
     resetUpload();
   }, [isFragile, resetUpload]);
 
@@ -196,8 +194,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     if (!quantidade.trim() || Number.isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) return void toast.error('Informe uma quantidade maior que zero.');
     if (item.modo_calculo !== 'manual' && (!dataInicio || !effectiveEndDate)) return void toast.error('Este item exige datas de início e fim.');
     if (isFragile && !confirmFragile) return void toast.error('Confirme que revisou o enquadramento sensível deste item.');
-    if (!confirmNaoDuplicidade) return void toast.error('Confirme que este fato não está sendo utilizado em outro item do RSC.');
-    if (!confirmNaoOrdinaria) return void toast.error('Confirme que a atividade excede as atribuições ordinárias do cargo.');
     if (docMode === 'reference' && referenceLinks.length === 0) return void toast.error(`Adicione ao menos um ${institutionConfig.documentLinks.label}.`);
     if (docMode === 'upload' && !file) return void toast.error('Anexe um documento comprobatório.');
     try {
@@ -391,27 +387,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
             {isFragile && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" /><div><p className="font-semibold">Item com enquadramento sensível</p><label className="mt-2 flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={confirmFragile} onChange={(e) => setConfirmFragile(e.target.checked)} />Confirmo que revisei o enquadramento deste item.</label></div></div></div>}
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800">
-              <p className="font-semibold text-gray-900">Declarações para a pré-análise</p>
-              <div className="mt-3 space-y-3">
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={confirmNaoDuplicidade}
-                    onChange={(e) => setConfirmNaoDuplicidade(e.target.checked)}
-                  />
-                  <span>Confirmo que este fato ou documento não está sendo aproveitado simultaneamente em outro item do RSC.</span>
-                </label>
-                <label className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={confirmNaoOrdinaria}
-                    onChange={(e) => setConfirmNaoOrdinaria(e.target.checked)}
-                  />
-                  <span>Confirmo que a atividade informada excede a rotina ordinária do meu cargo e ainda dependerá de análise posterior da comissão.</span>
-                </label>
-              </div>
-            </div>
+
 
             <div className="flex justify-end border-t border-gray-100 pt-4">
               <Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">

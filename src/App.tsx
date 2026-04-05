@@ -12,8 +12,8 @@ import LandingScreen from './pages/LandingScreen';
 import ProfileSetup from './pages/ProfileSetup';
 import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
-import Workspace from './pages/Workspace';
 import Consolidation from './pages/Consolidation';
+import Legislation from './pages/Legislation';
 
 // Protects routes that require an active session
 function RequireSession({ children }: { children: React.ReactNode }) {
@@ -52,19 +52,20 @@ export default function App() {
               </RequireSession>
             }
           />
-          <Route
-            path="/workspace"
-            element={
-              <RequireSession>
-                <Workspace />
-              </RequireSession>
-            }
-          />
+
           <Route
             path="/consolidar"
             element={
               <RequireSession>
                 <Consolidation />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="/legislacao"
+            element={
+              <RequireSession>
+                <Legislation />
               </RequireSession>
             }
           />

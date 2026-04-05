@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2, Bot } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2, Bot, ScrollText, UserCircle, ExternalLink } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { cn } from '../lib/utils';
 import { toast } from 'sonner';
 import { useAppContext } from '../context/AppContext';
 import { RSC_LEVELS } from '../data/mock';
@@ -10,7 +12,7 @@ import { addPointValues, formatPointValue, sumPointValues } from '../lib/points'
 import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
 import { exportSession } from '../lib/sessionExport';
 import { importSession } from '../lib/sessionImport';
-import AppHeader from '../components/AppHeader';
+import MainLayout from '../components/MainLayout';
 import WizardModal from '../components/WizardModal';
 
 const levelAccentClasses = [
@@ -85,21 +87,32 @@ export default function Dashboard() {
   const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
 
-  const violations = nivelElegivel ? validateLevelConstraints(nivelElegivel.id, lancamentosDoServidor, itensRSC) : [];
+  const profileFields = [
+    { key: 'siape', label: 'SIAPE' },
+    { key: 'nome_completo', label: 'Nome' },
+    { key: 'email_institucional', label: 'E-mail' },
+    { key: 'instituicao', label: 'Instituição' },
+    { key: 'lotacao', label: 'Lotação' },
+    { key: 'cargo', label: 'Cargo' },
+    { key: 'nivel_classificacao', label: 'Classe' },
+    { key: 'data_ingresso_ife', label: 'Ingresso' },
+    { key: 'escolaridade_atual', label: 'Formação' },
+  ];
+  const missingProfileFields = profileFields.filter(f => !servidor[f.key as keyof typeof servidor]);
+  const isProfileComplete = missingProfileFields.length === 0;
+
+  const violations = nivelElegivel
+    ? validateLevelConstraints(nivelElegivel.id, lancamentosDoServidor, itensRSC)
+    : [];
+
   const possuiRestricaoIncisos = !!(nivelElegivel?.incisosObrigatorios && nivelElegivel.incisosObrigatorios.length > 0);
 
   const metasAtingidas =
     !!nivelElegivel &&
     totalPontos >= nivelElegivel.pontosMinimos &&
     itensDistintos >= nivelElegivel.itensMinimos &&
-    violations.length === 0;
-
-  const isProfileComplete =
-    !!servidor.email_institucional?.trim() &&
-    !!servidor.lotacao?.trim() &&
-    !!servidor.cargo?.trim() &&
-    !!servidor.nivel_classificacao &&
-    !!servidor.data_ingresso_ife;
+    violations.length === 0 &&
+    isProfileComplete;
 
   const nivelPleiteavel = nivelElegivel
     ? RSC_LEVELS.map((nivel, index) => ({
@@ -147,130 +160,63 @@ export default function Dashboard() {
   }, [itensRSC, lancamentosDoServidor]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {wizardOpen && (
-        <WizardModal
-          onClose={() => setWizardOpen(false)}
-          onConfirm={(ids) => {
-            setWizardRecommendedIds(ids);
-            setWizardOpen(false);
-          }}
-          initialIds={wizardRecommendedIds}
-        />
-      )}
-      <AppHeader
-        activeView="dashboard"
-        onNavigateHome={() => navigate('/')}
-        onNavigateDashboard={() => undefined}
-        onNavigateCatalog={() => navigate('/itens')}
-        onNavigateWorkspace={() => navigate('/workspace')}
-        onNavigateConsolidate={() => navigate('/consolidar')}
-        onNavigateProfile={() => navigate('/perfil')}
-        secondaryContent={
-          <>
-            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Status:</span> {processo.status}
+    <MainLayout
+      activeView="dashboard"
+      secondaryContent={
+        <div className="flex items-center gap-2">
+          {metasAtingidas && (
+            <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
+              <CheckCircle2 className="h-3 w-3" />
+              Metas atingidas
             </div>
-            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Total:</span> {formatPointValue(totalPontos)} pts
-            </div>
-            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Itens:</span> {itensDistintos}
-            </div>
-            {metasAtingidas && (
-              <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
-                <CheckCircle2 className="h-3 w-3" />
-                Metas atingidas
-              </div>
-            )}
-            <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-              <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
-              {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
-            </div>
-            {/* Auto-save indicator */}
-            <div className="group relative ml-1 flex items-center">
-              <div className="flex cursor-default items-center gap-1 rounded-full border border-gray-200 bg-white px-2 py-1">
-                <div className="relative">
-                  <HardDrive className="h-3 w-3 text-gray-400" />
-                  <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                </div>
-                <span className="text-[10px] font-medium text-gray-500">Auto</span>
-              </div>
-              <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                <p className="mb-1 text-[11px] font-bold text-white">Salvamento automático</p>
-                <p className="text-[11px] leading-relaxed text-gray-300">
-                  Seus dados são gravados automaticamente neste navegador (localStorage + IndexedDB) a cada alteração. Funcionam offline, sem servidores.
-                </p>
-                <p className="mt-1.5 text-[11px] leading-relaxed text-amber-300">
-                  ⚠ Limpar o cache ou histórico do navegador apaga esses dados. Use o botão "Salvar progresso" para fazer backup externo.
-                </p>
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900" />
-              </div>
+          )}
+          <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
+            <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
+            {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
+          </div>
+
+          <div className="ml-1 flex items-center gap-1.5 border-l border-gray-200 pl-2.5">
+            {/* Salvar progresso + info */}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                disabled={isExporting}
+                onClick={handleExportSession}
+                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
+              >
+                {isExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                Salvar
+              </button>
             </div>
 
-            <div className="ml-1 flex items-center gap-1.5 border-l border-gray-200 pl-2.5">
-              {/* Salvar progresso + info */}
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  disabled={isExporting}
-                  onClick={handleExportSession}
-                  className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-                >
-                  {isExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                  Salvar progresso
-                </button>
-                <div className="group relative flex items-center">
-                  <Info className="h-3 w-3 cursor-help text-gray-300 hover:text-gray-500" />
-                  <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-60 -translate-x-1/2 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                    <p className="mb-1 text-[11px] font-bold text-white">Salvar progresso</p>
-                    <p className="text-[11px] leading-relaxed text-gray-300">
-                      Exporta um arquivo <span className="font-mono font-semibold text-white">.zip</span> com todos os seus dados (perfil, lançamentos e documentos). Guarde-o em local seguro — ele permite recuperar o progresso em qualquer computador ou navegador.
-                    </p>
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-gray-900" />
-                  </div>
-                </div>
-              </div>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".zip"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleImportSession(f);
+              }}
+            />
 
-              <input
-                ref={importInputRef}
-                type="file"
-                accept=".zip"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) void handleImportSession(f);
-                }}
-              />
-
-              {/* Restaurar + info */}
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  disabled={isImporting}
-                  onClick={() => importInputRef.current?.click()}
-                  className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-                >
-                  {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                  Restaurar
-                </button>
-                <div className="group relative flex items-center">
-                  <Info className="h-3 w-3 cursor-help text-gray-300 hover:text-gray-500" />
-                  <div className="pointer-events-none absolute top-full right-0 z-50 mt-2 w-60 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                    <p className="mb-1 text-[11px] font-bold text-white">Restaurar backup</p>
-                    <p className="text-[11px] leading-relaxed text-gray-300">
-                      Carrega um arquivo <span className="font-mono font-semibold text-white">.zip</span> exportado anteriormente. Os dados da sessão atual serão substituídos pelo conteúdo do backup.
-                    </p>
-                    <div className="absolute bottom-full right-3 border-4 border-transparent border-b-gray-900" />
-                  </div>
-                </div>
-              </div>
+            {/* Restaurar + info */}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                disabled={isImporting}
+                onClick={() => importInputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
+              >
+                {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                Restaurar
+              </button>
             </div>
-          </>
-        }
-      />
-
-      <main className="mx-auto max-w-7xl space-y-6 p-6">
+          </div>
+        </div>
+      }
+    >
+      <div className="mx-auto max-w-7xl space-y-6 p-6">
         <Card className="border-gray-200 bg-white shadow-sm">
           <CardContent className="p-6">
             <div className="flex flex-col justify-between gap-4 md:flex-row">
@@ -296,257 +242,317 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Profile completeness banner */}
-        {!isProfileComplete && (
-          <Card className="border-amber-200 bg-amber-50/60 shadow-sm">
-            <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-amber-100 p-2.5 text-amber-600 shrink-0">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-900">Perfil incompleto</p>
-                  <p className="text-sm text-gray-600">
-                    Alguns campos são necessários para gerar o pacote RSC completo (requerimento, memorial e comprovações).
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => navigate('/perfil')}
-                className="shrink-0 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-700"
-              >
-                Completar perfil
-              </button>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Wizard CTA */}
-        <Card className={`border shadow-sm ${wizardRecommendedIds.length > 0 ? 'border-violet-200 bg-violet-50/40' : 'border-gray-200 bg-white'}`}>
-          <CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <div className={`rounded-xl p-2.5 ${wizardRecommendedIds.length > 0 ? 'bg-violet-100 text-violet-700' : 'bg-gray-100 text-gray-500'}`}>
-                <Wand2 className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="font-semibold text-gray-900">
-                  {wizardRecommendedIds.length > 0
-                    ? `${wizardRecommendedIds.length} itens recomendados pelo Wizard`
-                    : 'Precisa de ajuda para começar?'}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {wizardRecommendedIds.length > 0
-                    ? 'Veja os itens destacados na página de Itens. Você pode refazer o mapeamento a qualquer momento.'
-                    : 'Responda algumas perguntas sobre seu histórico e o sistema indicará os itens mais aderentes ao seu perfil.'}
-                </p>
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-              <a
-                href="https://notebooklm.google.com/notebook/c34b5dca-ec61-4d1f-a467-efd551f6b0b5"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
-                title="Abrir Assistente Virtual em nova guia"
-              >
-                <Bot className="h-4 w-4 text-emerald-600" />
-                Assistente Virtual
-              </a>
-              {wizardRecommendedIds.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => navigate('/itens')}
-                  className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-50"
-                >
-                  Ver itens
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setWizardOpen(true)}
-                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700"
-              >
-                {wizardRecommendedIds.length > 0 ? 'Refazer mapeamento' : 'Iniciar Wizard'}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
+
+
 
         {nivelPleiteavel && (
-          <Card className="border-primary/30 bg-white shadow-sm shadow-primary/10">
-            <CardContent className="p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-xl font-bold text-gray-900">{nivelPleiteavel.label}</h3>
-                    {nivelPleiteavel.atingido ? (
-                      <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${nivelPleiteavel.accent.chip}`}>
-                        Pronto para envio
-                      </span>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {/* Card 1: Pontuação (Gauge) */}
+            <Card className="flex flex-col border-none bg-white shadow-sm transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-1 flex-col items-center p-6 text-center">
+                <div className="mb-4 flex w-full items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900">Pontuação</h3>
+                  <div className="group relative flex items-center">
+                    <Info className="h-4 w-4 cursor-help text-gray-300 hover:text-gray-500" />
+                    <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                      <p className="mb-1 text-[11px] font-bold text-white">Sobre a Pontuação</p>
+                      <p className="text-[11px] leading-relaxed text-gray-300">Total somado de todos os seus lançamentos válidos. Para o {nivelPleiteavel.label}, o mínimo é {nivelPleiteavel.pontosMinimos} pts.</p>
+                      <div className="absolute bottom-full right-1 border-4 border-transparent border-b-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative mb-2 flex flex-col items-center">
+                  <svg className="h-32 w-48" viewBox="0 0 100 60">
+                    <path
+                      d="M 15 50 A 35 35 0 0 1 85 50"
+                      fill="none"
+                      stroke="#F3F4F6"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                    />
+                    <motion.path
+                      d="M 15 50 A 35 35 0 0 1 85 50"
+                      fill="none"
+                      stroke="url(#gradient-pts)"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: nivelPleiteavel.pontosPct / 100 }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                    />
+                    <defs>
+                      <linearGradient id="gradient-pts" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#10b981" />
+                        <stop offset="100%" stopColor="#059669" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
+                    <span className="text-3xl font-black text-gray-900">{formatPointValue(totalPontos)}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{nivelPleiteavel.pontosMinimos} pts</span>
+                  </div>
+                </div>
+
+                <div className="mt-auto w-full">
+                  {nivelPleiteavel.pontosFaltantes > 0 ? (
+                    <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-200">
+                      Faltam {formatPointValue(nivelPleiteavel.pontosFaltantes)} pontos
+                    </div>
+                  ) : (
+                    <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                      Requisito atingido
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card 2: Itens Distintos (Gauge) */}
+            <Card className="flex flex-col border-none bg-white shadow-sm transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-1 flex-col items-center p-6 text-center">
+                <div className="mb-4 flex w-full items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900">Itens Distintos</h3>
+                  <div className="group relative flex items-center">
+                    <Info className="h-4 w-4 cursor-help text-gray-300 hover:text-gray-500" />
+                    <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                      <p className="mb-1 text-[11px] font-bold text-white">Sobre Itens Distintos</p>
+                      <p className="text-[11px] leading-relaxed text-gray-300">Quantidade de itens diferentes do catálogo em que você pontuou. Exigência mínima: {nivelPleiteavel.itensMinimos} itens.</p>
+                      <div className="absolute bottom-full right-1 border-4 border-transparent border-b-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="relative mb-2 flex flex-col items-center">
+                  <svg className="h-32 w-48" viewBox="0 0 100 60">
+                    <path
+                      d="M 15 50 A 35 35 0 0 1 85 50"
+                      fill="none"
+                      stroke="#F3F4F6"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                    />
+                    <motion.path
+                      d="M 15 50 A 35 35 0 0 1 85 50"
+                      fill="none"
+                      stroke="url(#gradient-items)"
+                      strokeWidth="10"
+                      strokeLinecap="round"
+                      initial={{ pathLength: 0 }}
+                      animate={{ pathLength: nivelPleiteavel.itensPct / 100 }}
+                      transition={{ duration: 1, ease: "easeOut" }}
+                    />
+                    <defs>
+                      <linearGradient id="gradient-items" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#3b82f6" />
+                        <stop offset="100%" stopColor="#2563eb" />
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-end pb-2">
+                    <span className="text-3xl font-black text-gray-900">{itensDistintos}</span>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{nivelPleiteavel.itensMinimos} itens</span>
+                  </div>
+                </div>
+
+                <div className="mt-auto w-full">
+                  {nivelPleiteavel.itensFaltantes > 0 ? (
+                    <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 ring-1 ring-inset ring-blue-200">
+                      Faltam {nivelPleiteavel.itensFaltantes} itens
+                    </div>
+                  ) : (
+                    <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                      Requisito atingido
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card 3: Itens Específicos (Incisos) */}
+            <Card className="flex flex-col border-none bg-white shadow-sm transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-1 flex-col items-center p-6 text-center">
+                <div className="mb-4 flex w-full items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900">Específicos</h3>
+                  <div className="group relative flex items-center">
+                    <Info className="h-4 w-4 cursor-help text-gray-300 hover:text-gray-500" />
+                    <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                      <p className="mb-1 text-[11px] font-bold text-white">Requisitos de Inciso</p>
+                      <p className="text-[11px] leading-relaxed text-gray-300">Alguns níveis exigem atividades em grupos específicos (ensino, pesquisa, etc). Você deve ter ao menos 1 item nesses grupos.</p>
+                      <div className="absolute bottom-full right-1 border-4 border-transparent border-b-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mb-auto mt-2 flex flex-col items-center space-y-3">
+                  <div className={cn(
+                    "flex h-16 w-16 items-center justify-center rounded-2xl transition-colors",
+                    violations.length === 0 ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-400"
+                  )}>
+                    <ScrollText className="h-8 w-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-gray-900">Regras de Inciso</p>
+                    {violations.length === 0 ? (
+                      <p className="text-[11px] font-medium text-emerald-600">Todos os critérios atendidos</p>
                     ) : (
-                      <div className="group relative flex items-center">
-                        <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
-                        <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                          <p className="mb-2 text-[11px] font-bold text-white">Como funciona a equivalência RSC</p>
-                          <p className="mb-3 text-[11px] leading-relaxed text-gray-300">
-                            Sua formação atual (<span className="font-semibold text-white">{servidor.escolaridade_atual}</span>) te credencia ao{' '}
-                            <span className="font-semibold text-white">{nivelPleiteavel.label}</span>, com equivalência funcional a{' '}
-                            <span className="font-semibold text-white">{nivelPleiteavel.equivalencia}</span>. Isso significa que, ao cumprir os requisitos de pontuação e itens, sua carreira terá progressão equivalente à dessa titulação acadêmica.
+                      <p className="text-[11px] font-medium text-gray-500 line-clamp-2 px-2">
+                        Pendente: {violations.map(v => `Inciso ${[...v.requiredIncisos].join('/')}`).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 w-full">
+                  {violations.length === 0 ? (
+                    <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                      Regras atendidas
+                    </div>
+                  ) : (
+                    <div className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-500 ring-1 ring-inset ring-gray-200">
+                      Pendente
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card 4: Perfil Completo */}
+            <Card className="flex flex-col border-none bg-white shadow-sm transition-shadow hover:shadow-md">
+              <CardContent className="flex flex-1 flex-col items-center p-6 text-center">
+                <div className="mb-4 flex w-full items-center justify-between">
+                  <h3 className="text-sm font-bold text-gray-900">Seu Perfil</h3>
+                  <button onClick={() => navigate('/perfil')} className="group flex items-center gap-1 text-[10px] font-bold text-primary hover:text-primary/70">
+                    EDITAR <ChevronRight className="h-2.5 w-2.5 transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                </div>
+
+                <div className="mb-auto mt-2 flex flex-col items-center space-y-3">
+                  <div className={cn(
+                    "flex h-16 w-16 items-center justify-center rounded-2xl transition-colors",
+                    isProfileComplete ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+                  )}>
+                    <UserCircle className="h-8 w-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-gray-900">Dados do Servidor</p>
+                    {isProfileComplete ? (
+                      <p className="text-[11px] font-medium text-emerald-600">Cadastro 100% preenchido</p>
+                    ) : (
+                      <div className="group relative">
+                        <p className="cursor-help text-[11px] font-medium text-amber-600">
+                          Faltam {missingProfileFields.length} campos obrigatórios
+                        </p>
+                        <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-48 -translate-x-1/2 rounded-xl bg-gray-900 px-3 py-2.5 text-left opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                          <p className="mb-1.5 text-[10px] font-bold text-white uppercase tracking-wider">Campos pendentes:</p>
+                          <p className="text-[10px] leading-relaxed text-gray-400">
+                            {missingProfileFields.map(f => f.label).join(', ')}
                           </p>
-                          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-500">Tabela de equivalências</p>
-                          <ul className="mb-3 space-y-1.5">
-                            {[
-                              { formacao: 'Ensino Fundamental', rsc: 'RSC-I / RSC-II' },
-                              { formacao: 'Ensino Médio / Técnico', rsc: 'RSC-III' },
-                              { formacao: 'Graduação', rsc: 'RSC-IV' },
-                              { formacao: 'Especialização', rsc: 'RSC-V' },
-                              { formacao: 'Mestrado', rsc: 'RSC-VI' },
-                            ].map(({ formacao, rsc }) => (
-                              <li key={rsc} className="flex items-center justify-between gap-2 text-[11px]">
-                                <span className="text-gray-400">{formacao}</span>
-                                <span className="font-semibold text-white">→ {rsc}</span>
-                              </li>
-                            ))}
-                          </ul>
-                          <p className="text-[10px] leading-relaxed text-gray-500">
-                            O nível é determinado pela maior titulação concluída. Ao obter nova titulação, é possível solicitar um novo RSC para avançar ao próximo nível.
-                          </p>
-                          <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900" />
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
                         </div>
                       </div>
                     )}
                   </div>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Equivalência pretendida: {nivelPleiteavel.equivalencia}
-                  </p>
-                </div>
-              </div>
-
-              <div className={`mt-5 grid grid-cols-1 gap-6 ${possuiRestricaoIncisos ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
-                <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Pontuação</p>
-                    <div className="group relative flex items-center">
-                      <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
-                      <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                        <p className="mb-2 text-[11px] font-bold text-white">Sobre a Pontuação</p>
-                        <p className="text-[11px] leading-relaxed text-gray-300">
-                          A pontuação é obtida a partir das suas atividades cadastradas. Cada nível de RSC exige que você alcance uma <span className="font-semibold text-white">pontuação mínima predefinida</span> somando os pontos de todos os lançamentos válidos.
-                        </p>
-                        <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-end justify-between gap-4">
-                    <p className="text-3xl font-black text-gray-900">
-                      {formatPointValue(totalPontos)}
-                      <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.pontosMinimos} pts</span>
-                    </p>
-                    {nivelPleiteavel.pontosFaltantes > 0 ? (
-                      <p className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                        Faltam {formatPointValue(nivelPleiteavel.pontosFaltantes)} pontos
-                      </p>
-                    ) : (
-                      <p className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Alcançado
-                      </p>
-                    )}
-                  </div>
-                  <div className="h-3 w-full rounded-full bg-gray-200">
-                    <div
-                      className={`h-3 rounded-full transition-all ${nivelPleiteavel.accent.bar}`}
-                      style={{ width: `${nivelPleiteavel.pontosPct}%` }}
-                    ></div>
-                  </div>
                 </div>
 
-                <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Itens distintos</p>
-                    <div className="group relative flex items-center">
-                      <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
-                      <div className="pointer-events-none absolute left-0 top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                        <p className="mb-2 text-[11px] font-bold text-white">Sobre os Itens Distintos</p>
-                        <p className="text-[11px] leading-relaxed text-gray-300">
-                          Além da pontuação total, o RSC exige que você comprove a diversidade das suas atividades. Por isso, é necessário pontuar em um número mínimo de <span className="font-semibold text-white">itens diferentes</span>. Lançamentos múltiplos no mesmo item não aumentam essa contagem.
-                        </p>
-                        <div className="absolute bottom-full left-4 border-4 border-transparent border-b-gray-900"></div>
-                      </div>
+                <div className="mt-6 w-full">
+                  {isProfileComplete ? (
+                    <div className="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 ring-1 ring-inset ring-emerald-200">
+                      Completo
                     </div>
-                  </div>
-                  <div className="flex items-end justify-between gap-4">
-                    <p className="text-3xl font-black text-gray-900">
-                      {itensDistintos}
-                      <span className="text-lg font-bold text-gray-500"> / {nivelPleiteavel.itensMinimos} itens</span>
-                    </p>
-                    {nivelPleiteavel.itensFaltantes > 0 ? (
-                      <p className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                        Faltam {nivelPleiteavel.itensFaltantes} itens
-                      </p>
-                    ) : (
-                      <p className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                        <CheckCircle2 className="h-4 w-4" />
-                        Alcançado
-                      </p>
-                    )}
-                  </div>
-                  <div className="h-3 w-full rounded-full bg-gray-200">
-                    <div
-                      className={`h-3 rounded-full transition-all ${nivelPleiteavel.accent.bar}`}
-                      style={{ width: `${nivelPleiteavel.itensPct}%` }}
-                    ></div>
-                  </div>
+                  ) : (
+                    <div className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-200">
+                      Incompleto
+                    </div>
+                  )}
                 </div>
-
-                {possuiRestricaoIncisos && (
-                  <div className="space-y-3 rounded-2xl bg-gray-50/80 p-4">
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Específicos</p>
-                      <div className="group relative flex items-center">
-                        <Info className="h-4 w-4 cursor-help text-gray-400 hover:text-gray-600" />
-                        <div className="pointer-events-none absolute right-0 lg:left-0 lg:right-auto top-full z-50 mt-2 w-80 rounded-xl bg-gray-900 px-4 py-3.5 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                          <p className="mb-2 text-[11px] font-bold text-white">Sobre Critérios Específicos</p>
-                          <p className="text-[11px] leading-relaxed text-gray-300">
-                            Avançar para os níveis mais altos da carreira exige comprovação de atividades focadas em ensino, pesquisa, inovação ou alta gestão. Você deve ter obrigatoriamente <span className="font-semibold text-white">pelo menos um item válido nestes incisos</span> indicados na lei.
-                          </p>
-                          <div className="absolute bottom-full right-4 lg:left-4 lg:right-auto border-4 border-transparent border-b-gray-900"></div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex h-full flex-col gap-3 justify-start pt-1">
-                      {nivelPleiteavel.incisosObrigatorios?.map((grupo, idx) => {
-                        const isGroupMissing = violations.some(v => v.type === 'missing_inciso' && v.requiredIncisos === grupo);
-                        const formatGroupText = (g: readonly string[]) => g.length === 1 ? `Inciso ${g[0]}` : `Incisos ${g.slice(0, -1).join(', ')} ou ${g[g.length - 1]}`;
-                        
-                        return (
-                          <div key={idx} className="flex flex-col gap-3">
-                            <p className="text-[14px] font-semibold leading-tight text-gray-900">
-                              Ter 1 item aprovado em:<br/>
-                              <span className="font-black text-violet-700">{formatGroupText(grupo)}</span>
-                            </p>
-                            {isGroupMissing ? (
-                              <div className="self-start rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700">
-                                Pendente
-                              </div>
-                            ) : (
-                              <div className="self-start flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                                <CheckCircle2 className="h-4 w-4" />
-                                Alcançado
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         )}
+
+        {/* Ferramentas de Apoio */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 px-1">
+            <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Ferramentas de Apoio</h2>
+            <div className="h-px flex-1 bg-gray-100" />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {/* Card 1: Wizard */}
+            <Card className={cn(
+              "overflow-hidden border-none shadow-sm transition-all hover:shadow-md",
+              wizardRecommendedIds.length > 0 ? "bg-violet-50/50 ring-1 ring-inset ring-violet-100" : "bg-white"
+            )}>
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className={cn(
+                    "rounded-2xl p-3.5",
+                    wizardRecommendedIds.length > 0 ? "bg-violet-100 text-violet-600" : "bg-gray-100 text-gray-400"
+                  )}>
+                    <Wand2 className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-gray-900">Mapeamento Objetivado (Wizard)</h3>
+                      {wizardRecommendedIds.length > 0 && (
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-700">Mapeado</span>
+                      )}
+                    </div>
+                    <p className="text-[13px] leading-relaxed text-gray-500">
+                      Responda a perguntas objetivas sobre sua trajetória para filtrar automaticamente quais itens do catálogo você possui para pontuação.
+                    </p>
+                    <div className="flex gap-3 pt-3">
+                      <button
+                        onClick={() => setWizardOpen(true)}
+                        className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700 hover:shadow-lg hover:shadow-violet-200"
+                      >
+                        {wizardRecommendedIds.length > 0 ? 'Refazer Mapeamento' : 'Iniciar Wizard'}
+                      </button>
+                      {wizardRecommendedIds.length > 0 && (
+                        <button
+                          onClick={() => navigate('/itens')}
+                          className="flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-5 py-2 text-xs font-bold text-violet-700 transition-all hover:bg-violet-50"
+                        >
+                          Ver Sugestões
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card 2: NotebookLM */}
+            <Card className="overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="rounded-2xl bg-emerald-50 p-3.5 text-emerald-600">
+                    <Bot className="h-6 w-6" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <h3 className="font-bold text-gray-900">NotebookLM de Apoio</h3>
+                    <p className="text-[13px] leading-relaxed text-gray-500">
+                      Utilize nossa IA para validar se seus documentos coincidem com a legislação e instruções vigentes, ou para sanar dúvidas gerais sobre o processo RSC-TAE.
+                    </p>
+                    <div className="pt-3">
+                      <a
+                        href="https://notebooklm.google.com/notebook/c34b5dca-ec61-4d1f-a467-efd551f6b0b5"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200"
+                      >
+                        Abrir NotebookLM
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
         {resumoItensLancados.length > 0 && (
           <Card className="border-gray-200 bg-white shadow-sm">
@@ -589,7 +595,7 @@ export default function Dashboard() {
                     <button
                       key={item.itemId}
                       type="button"
-                      onClick={() => navigate(`/workspace?item=${item.itemId}`)}
+                      onClick={() => navigate(`/itens?item=${item.itemId}`)}
                       className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-white hover:shadow-sm"
                     >
                       <div className="min-w-0">
@@ -625,7 +631,7 @@ export default function Dashboard() {
                       {resumoItensLancados.map((item, index) => (
                         <tr
                           key={item.itemId}
-                          onClick={() => navigate(`/workspace?item=${item.itemId}`)}
+                          onClick={() => navigate(`/itens?item=${item.itemId}`)}
                           className={`cursor-pointer transition-colors hover:bg-primary/5 ${index !== resumoItensLancados.length - 1 ? 'border-b border-gray-100' : ''}`}
                         >
                           <td className="px-3 py-2.5">
@@ -649,7 +655,17 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
-      </main>
-    </div>
+      </div>
+      {wizardOpen && (
+        <WizardModal
+          onClose={() => setWizardOpen(false)}
+          onConfirm={(ids) => {
+            setWizardRecommendedIds(ids);
+            setWizardOpen(false);
+          }}
+          initialIds={wizardRecommendedIds}
+        />
+      )}
+    </MainLayout>
   );
 }

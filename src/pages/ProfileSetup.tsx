@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Save, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import AppHeader from '../components/AppHeader';
+import MainLayout from '../components/MainLayout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -47,8 +47,8 @@ export default function ProfileSetup() {
 
   const set =
     (field: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+      (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+        setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,17 +89,7 @@ export default function ProfileSetup() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <AppHeader
-        activeView="profile"
-        onNavigateHome={() => navigate('/')}
-        onNavigateDashboard={() => navigate('/dashboard')}
-        onNavigateCatalog={() => navigate('/itens')}
-        onNavigateWorkspace={() => navigate('/workspace')}
-        onNavigateConsolidate={() => navigate('/consolidar')}
-        onNavigateProfile={() => undefined}
-      />
-
+    <MainLayout activeView="profile">
       <main className="mx-auto max-w-xl px-4 py-10">
         <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
           <div className="mb-6 flex items-center gap-3">
@@ -278,6 +268,6 @@ export default function ProfileSetup() {
           Seus dados são armazenados exclusivamente neste navegador. Nenhuma informação é enviada a servidores externos.
         </p>
       </main>
-    </div>
+    </MainLayout>
   );
 }

@@ -1,95 +1,60 @@
 import React from 'react';
-import { LogOut } from 'lucide-react';
-import { institutionConfig } from '../config/institution';
-import AppLogo from './AppLogo';
-import { Button } from './ui/button';
+import { CheckCircle2, ChevronRight, HardDrive, Info, Loader2 } from 'lucide-react';
+import { formatPointValue } from '../lib/points';
+import { useAppContext } from '../context/AppContext';
 
 interface AppHeaderProps {
-  activeView: 'dashboard' | 'catalog' | 'workspace' | 'consolidate' | 'profile';
-  onNavigateHome: () => void;
-  onNavigateDashboard: () => void;
-  onNavigateCatalog: () => void;
-  onNavigateWorkspace: () => void;
-  onNavigateConsolidate: () => void;
-  onNavigateProfile: () => void;
-  primaryAction?: React.ReactNode;
   secondaryContent?: React.ReactNode;
 }
 
-const NAV_ITEMS = [
-  { key: 'dashboard', label: 'Dashboard' },
-  { key: 'profile', label: 'Perfil' },
-  { key: 'catalog', label: 'Itens' },
-  { key: 'workspace', label: 'Lançar documentos' },
-  { key: 'consolidate', label: 'Consolidar' },
-] as const;
-
 export default function AppHeader({
-  activeView,
-  onNavigateHome,
-  onNavigateDashboard,
-  onNavigateCatalog,
-  onNavigateWorkspace,
-  onNavigateConsolidate,
-  onNavigateProfile,
-  primaryAction,
   secondaryContent,
 }: AppHeaderProps) {
-  const handlers: Record<typeof NAV_ITEMS[number]['key'], () => void> = {
-    dashboard: onNavigateDashboard,
-    catalog: onNavigateCatalog,
-    workspace: onNavigateWorkspace,
-    consolidate: onNavigateConsolidate,
-    profile: onNavigateProfile,
-  };
+  const { processo, lancamentos, servidor } = useAppContext();
+
+  const totalPontos = lancamentos.reduce((acc, l) => acc + (l.pontos_calculados || 0), 0);
+  const itensDistintos = new Set(lancamentos.map(l => l.item_rsc_id)).size;
 
   return (
-    <header className="border-b border-gray-200 bg-white">
-      <div className="px-6 py-4">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <button
-              type="button"
-              onClick={onNavigateHome}
-              title="Trocar sessão"
-              className="group flex shrink-0 items-center gap-2 rounded-lg p-1 transition-colors hover:bg-gray-100"
-            >
-              <AppLogo className="h-10 w-10 object-contain" />
-              <LogOut className="h-3.5 w-3.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100" />
-            </button>
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold text-gray-900">{institutionConfig.appName}</h1>
-              <p className="truncate text-sm text-gray-500">{institutionConfig.appSubtitle}</p>
-            </div>
+    <header className="border-b border-gray-100 bg-white/80 backdrop-blur-md">
+      <div className="flex h-16 items-center justify-between px-8">
+        <div className="flex items-center gap-4 divide-x divide-gray-100">
+          {/* Breadcrumb or View Indicator (Placeholder for future) */}
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-gray-400">
+            <span>RSC</span>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-gray-900">Processo Ativo</span>
           </div>
 
-          <div className="flex shrink-0 items-center justify-center gap-2">
-            {NAV_ITEMS.map(({ key, label }) => (
-              <Button
-                key={key}
-                onClick={handlers[key]}
-                variant={activeView === key ? 'default' : 'outline'}
-                className={
-                  activeView === key
-                    ? 'h-9 rounded-lg bg-primary px-4 text-sm font-semibold text-white hover:bg-primary/90'
-                    : 'h-9 rounded-lg border-gray-200 px-4 text-sm font-semibold text-gray-700'
-                }
-              >
-                {label}
-              </Button>
-            ))}
-            {primaryAction}
+          <div className="flex items-center gap-4 pl-4 overflow-hidden">
+            <div className="flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 shadow-sm">
+              <span className="text-emerald-900">Total:</span> {formatPointValue(totalPontos)} pts
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700 shadow-sm">
+              <span className="text-blue-900">Itens:</span> {itensDistintos}
+            </div>
+            <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-bold text-gray-600">
+              <span className="text-gray-400">Status:</span> {processo.status}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex shrink-0 items-center gap-3">
+          {secondaryContent}
+
+          <div className="group relative flex items-center h-8 px-2.5 rounded-full border border-gray-100 bg-gray-50 text-gray-400">
+            <HardDrive className="h-3.5 w-3.5" />
+            <span className="ml-1.5 text-[10px] font-bold">AUTO-SAVE</span>
+            <div className="pointer-events-none absolute top-full right-0 z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+              <p className="mb-1 text-[11px] font-bold text-white">Salvamento local de segurança</p>
+              <p className="text-[11px] leading-relaxed text-gray-300">
+                Seus dados são gravados no cache do navegador. Para levar seu progresso para outro computador, exporte um backup no Dashboard.
+              </p>
+              <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900" />
+            </div>
           </div>
         </div>
       </div>
-
-      {secondaryContent && (
-        <div className="border-t border-gray-100 bg-gray-50/70 px-6 py-1.5">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-end gap-2">
-            {secondaryContent}
-          </div>
-        </div>
-      )}
     </header>
   );
 }

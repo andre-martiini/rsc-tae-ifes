@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Wand2, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
 import { Button } from './ui/button';
+import { cn } from '../lib/utils';
 
 const SPARKLE_ANGLES = Array.from({ length: 10 }, (_, i) => (i / 10) * 2 * Math.PI);
 
@@ -126,9 +127,11 @@ interface WizardModalProps {
 
 export default function WizardModal({ onClose, onConfirm, initialIds = [] }: WizardModalProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set(initialIds));
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const [confirmed, setConfirmed] = useState(false);
+  const [activeEixo, setActiveEixo] = useState(1);
   const confirmedCount = checked.size;
+
+  const currentEixo = EIXOS.find(e => e.numero === activeEixo) || EIXOS[0];
 
   const toggle = (id: string) => {
     setChecked((prev) => {
@@ -137,18 +140,6 @@ export default function WizardModal({ onClose, onConfirm, initialIds = [] }: Wiz
         next.delete(id);
       } else {
         next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const toggleEixo = (numero: number) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(numero)) {
-        next.delete(numero);
-      } else {
-        next.add(numero);
       }
       return next;
     });
@@ -192,192 +183,224 @@ export default function WizardModal({ onClose, onConfirm, initialIds = [] }: Wiz
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 pt-8 pb-12"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm pt-8 pb-12"
       onClick={handleBackdropClick}
     >
-      <div className="w-full max-w-2xl rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden">
+      <div className="w-full max-w-4xl rounded-3xl border border-gray-200 bg-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] overflow-hidden">
         <AnimatePresence mode="wait">
-        {confirmed ? (
-          /* ── Success screen ── */
-          <motion.div
-            key="success"
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
-            className="flex flex-col items-center gap-6 px-8 py-16 text-center"
-          >
-            {/* Animated checkmark with sparkles */}
-            <div className="relative flex items-center justify-center">
-              {/* ping ring */}
-              <motion.div
-                className="absolute h-28 w-28 rounded-full bg-violet-200"
-                initial={{ scale: 0.6, opacity: 0.7 }}
-                animate={{ scale: 1.6, opacity: 0 }}
-                transition={{ duration: 1, ease: 'easeOut', repeat: 1 }}
-              />
-              {/* sparkle dots */}
-              {SPARKLE_ANGLES.map((angle, i) => (
-                <motion.div
-                  key={i}
-                  className="absolute h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: i % 2 === 0 ? '#7c3aed' : '#a78bfa' }}
-                  initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                  animate={{
-                    x: Math.cos(angle) * 72,
-                    y: Math.sin(angle) * 72,
-                    opacity: 0,
-                    scale: 0.4,
-                  }}
-                  transition={{ duration: 0.75, delay: 0.15 + i * 0.03, ease: 'easeOut' }}
-                />
-              ))}
-              {/* icon circle */}
-              <motion.div
-                className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg shadow-violet-300"
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 320, damping: 18, delay: 0.05 }}
-              >
-                <CheckCircle2 className="h-10 w-10" />
-              </motion.div>
-            </div>
-
+          {confirmed ? (
+            /* ── Success screen ── */
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.3 }}
+              key="success"
+              initial={{ opacity: 0, scale: 0.92 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              className="flex flex-col items-center gap-6 px-8 py-20 text-center"
             >
-              <h3 className="text-2xl font-bold text-gray-900">Mapeamento concluído!</h3>
-              <p className="mt-2 text-gray-500">
-                <span className="font-bold text-violet-700">{confirmedCount} ite{confirmedCount !== 1 ? 'ns' : 'm'}</span>{' '}
-                destacado{confirmedCount !== 1 ? 's' : ''} no seu perfil.
-                <br />
-                Veja as recomendações na página de Itens.
-              </p>
-            </motion.div>
-          </motion.div>
-        ) : (
-          /* ── Normal form ── */
-          <motion.div key="form" initial={false}>
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 p-6">
-          <div>
-            <div className="mb-1 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
-              <Wand2 className="h-3.5 w-3.5" />
-              Wizard de Mapeamento
-            </div>
-            <h2 className="text-xl font-bold text-gray-900">Quais atividades você já realizou?</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Marque tudo que se aplica ao seu histórico. O sistema irá destacar os itens aderentes ao seu perfil na página de Itens.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Eixos */}
-        <div className="divide-y divide-gray-100">
-          {EIXOS.map((eixo) => {
-            const isCollapsed = collapsed.has(eixo.numero);
-            const countChecked = eixo.itens.filter((item) => checked.has(item.id)).length;
-
-            return (
-              <div key={eixo.numero} className="px-6 py-4">
-                {/* Eixo header */}
-                <button
-                  type="button"
-                  onClick={() => toggleEixo(eixo.numero)}
-                  className="flex w-full items-start justify-between gap-3 text-left"
+              <div className="relative flex items-center justify-center">
+                <motion.div
+                  className="absolute h-28 w-28 rounded-full bg-violet-200"
+                  initial={{ scale: 0.6, opacity: 0.7 }}
+                  animate={{ scale: 1.6, opacity: 0 }}
+                  transition={{ duration: 1, ease: 'easeOut', repeat: 1 }}
+                />
+                {SPARKLE_ANGLES.map((angle, i) => (
+                  <motion.div
+                    key={i}
+                    className="absolute h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: i % 2 === 0 ? '#7c3aed' : '#a78bfa' }}
+                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                    animate={{
+                      x: Math.cos(angle) * 72,
+                      y: Math.sin(angle) * 72,
+                      opacity: 0,
+                      scale: 0.4,
+                    }}
+                    transition={{ duration: 0.75, delay: 0.15 + i * 0.03, ease: 'easeOut' }}
+                  />
+                ))}
+                <motion.div
+                  className="relative z-10 flex h-20 w-20 items-center justify-center rounded-full bg-violet-600 text-white shadow-lg shadow-violet-300"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 320, damping: 18, delay: 0.05 }}
                 >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="shrink-0 rounded-lg bg-violet-100 px-2 py-0.5 text-[11px] font-bold text-violet-700">
-                        Eixo {eixo.numero}
-                      </span>
-                      <span className="font-semibold text-gray-900">{eixo.titulo}</span>
-                      {countChecked > 0 && (
-                        <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
-                          {countChecked} marcado{countChecked !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                    </div>
-                    <p className="mt-1 text-[13px] text-gray-500">{eixo.pergunta}</p>
-                  </div>
-                  <div className="shrink-0 text-gray-400">
-                    {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-                  </div>
-                </button>
+                  <CheckCircle2 className="h-10 w-10" />
+                </motion.div>
+              </div>
 
-                {/* Checkboxes */}
-                {!isCollapsed && (
-                  <div className="mt-3 space-y-1.5">
-                    {/* Select/deselect all */}
-                    <div className="flex gap-3 pb-1">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.3 }}
+              >
+                <h3 className="text-3xl font-black text-gray-900 tracking-tight">Mapeamento concluído!</h3>
+                <p className="mt-3 text-lg text-gray-500 leading-relaxed max-w-md">
+                  <span className="font-black text-violet-700 underline decoration-violet-200 underline-offset-4">{confirmedCount} ite{confirmedCount !== 1 ? 'ns' : 'm'}</span>{' '}
+                  destacado{confirmedCount !== 1 ? 's' : ''} no seu catálogo.
+                  <br />
+                  As recomendações já estão disponíveis.
+                </p>
+              </motion.div>
+            </motion.div>
+          ) : (
+            /* ── Normal form ── */
+            <motion.div key="form" initial={false} className="flex flex-col h-full">
+              {/* Header */}
+              <div className="flex flex-col gap-4 border-b border-gray-100 p-8 pb-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-2">
+                    <div className="inline-flex items-center gap-2 self-start rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-700">
+                      <Wand2 className="h-3 w-3" />
+                      Inteligência de Mapeamento
+                    </div>
+                    <h2 className="text-3xl font-black tracking-tight text-gray-900">Quais atividades você já realizou?</h2>
+                    <p className="text-sm text-gray-500 max-w-2xl">
+                      Selecione as experiências que se aplicam ao seu histórico. Filtramos o catálogo automaticamente para destacar os itens onde você possui provas e pontos potenciais.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="shrink-0 rounded-2xl bg-gray-50 p-3 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  >
+                    <X className="h-6 w-6" />
+                  </button>
+                </div>
+
+                {/* Axis Navigation */}
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {EIXOS.map((eixo) => {
+                    const isActive = activeEixo === eixo.numero;
+                    const countInEixo = eixo.itens.filter(i => checked.has(i.id)).length;
+                    return (
+                      <button
+                        key={eixo.numero}
+                        onClick={() => setActiveEixo(eixo.numero)}
+                        className={cn(
+                          "relative flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all",
+                          isActive
+                            ? "bg-violet-600 text-white shadow-lg shadow-violet-200"
+                            : "bg-gray-50 text-gray-500 hover:bg-gray-100"
+                        )}
+                      >
+                        <span>Eixo {eixo.numero}</span>
+                        {countInEixo > 0 && (
+                          <span className={cn(
+                            "flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-black leading-none",
+                            isActive ? "bg-white text-violet-700" : "bg-violet-100 text-violet-700"
+                          )}>
+                            {countInEixo}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Questions area (Filtered by Active Axis) */}
+              <div className="min-h-[400px] bg-gray-50/30 p-8">
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeEixo}
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -10 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex flex-col gap-2">
+                      <h3 className="text-xl font-bold text-gray-900">{currentEixo.titulo}</h3>
+                      <p className="text-sm font-medium text-gray-500 italic">"{currentEixo.pergunta}"</p>
+                    </div>
+
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => (allInEixo(eixo) ? deselectAll(eixo) : selectAll(eixo))}
-                        className="text-[11px] font-semibold text-violet-600 hover:text-violet-800 underline"
+                        onClick={() => (allInEixo(currentEixo) ? deselectAll(currentEixo) : selectAll(currentEixo))}
+                        className="text-xs font-bold text-violet-600 hover:underline"
                       >
-                        {allInEixo(eixo) ? 'Desmarcar todos' : someInEixo(eixo) ? 'Marcar todos' : 'Marcar todos'}
+                        {allInEixo(currentEixo) ? 'Desmarcar todos deste eixo' : 'Marcar todos deste eixo'}
                       </button>
                     </div>
 
-                    {eixo.itens.map((item) => {
-                      const isChecked = checked.has(item.id);
-                      return (
-                        <label
-                          key={item.id}
-                          className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
-                            isChecked
-                              ? 'border-violet-200 bg-violet-50'
-                              : 'border-gray-100 bg-gray-50 hover:border-gray-200 hover:bg-white'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => toggle(item.id)}
-                            className="mt-0.5 h-4 w-4 shrink-0 accent-violet-600"
-                          />
-                          <span className={`text-[13px] leading-snug ${isChecked ? 'font-medium text-violet-900' : 'text-gray-700'}`}>
-                            {item.label}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
+                    <div className="grid grid-cols-1 gap-3">
+                      {currentEixo.itens.map((item) => {
+                        const isChecked = checked.has(item.id);
+                        return (
+                          <label
+                            key={item.id}
+                            className={cn(
+                              "group relative flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition-all duration-200",
+                              isChecked
+                                ? "border-violet-200 bg-white shadow-sm ring-1 ring-violet-100"
+                                : "border-gray-100 bg-white hover:border-gray-200 hover:shadow-md"
+                            )}
+                          >
+                            <div className={cn(
+                              "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-all",
+                              isChecked ? "bg-violet-600 border-violet-600" : "bg-white border-gray-200 group-hover:border-violet-400"
+                            )}>
+                              {isChecked && <CheckCircle2 className="h-3 w-3 text-white" />}
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggle(item.id)}
+                                className="sr-only"
+                              />
+                            </div>
+                            <span className={cn(
+                              "text-sm leading-relaxed transition-colors",
+                              isChecked ? "font-bold text-gray-900" : "text-gray-600 font-medium"
+                            )}>
+                              {item.label}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
               </div>
-            );
-          })}
-        </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between gap-4 border-t border-gray-100 p-6">
-          <p className="text-sm text-gray-500">
-            <span className="font-semibold text-gray-900">{checked.size}</span> ite{checked.size !== 1 ? 'ns' : 'm'} selecionado{checked.size !== 1 ? 's' : ''}
-          </p>
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={onClose} className="border-gray-200 text-gray-700">
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleConfirm}
-              disabled={checked.size === 0}
-              className="bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50"
-            >
-              <Wand2 className="mr-2 h-4 w-4" />
-              Aplicar recomendações ({checked.size})
-            </Button>
-          </div>
-        </div>
-          </motion.div>
-        )}
+              {/* Footer */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-gray-100 bg-white p-8">
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-bold text-gray-900">
+                    {checked.size} ite{checked.size !== 1 ? 'ns' : 'm'} marcado{checked.size !== 1 ? 's' : ''} no total
+                  </p>
+                  <div className="flex items-center gap-1">
+                    {EIXOS.map(e => (
+                      <div
+                        key={e.numero}
+                        className={cn(
+                          "h-1.5 rounded-full transition-all",
+                          e.numero === activeEixo ? "w-8 bg-violet-600" : "w-3 bg-gray-100",
+                          e.itens.some(i => checked.has(i.id)) && e.numero !== activeEixo ? "bg-violet-200" : ""
+                        )}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="flex gap-4 w-full sm:w-auto">
+                  <Button
+                    variant="outline"
+                    onClick={onClose}
+                    className="flex-1 sm:flex-none border-gray-200 text-gray-700 h-12 px-8 rounded-xl font-bold"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={handleConfirm}
+                    disabled={checked.size === 0}
+                    className="flex-1 sm:flex-none bg-violet-600 text-white hover:bg-violet-700 h-12 px-8 rounded-xl font-bold shadow-lg shadow-violet-200 disabled:opacity-50"
+                  >
+                    Salvar Mapeamento
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </div>
