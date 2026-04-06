@@ -50,7 +50,7 @@ async function convertImageToPdf(file: File): Promise<File> {
 
   const pdfBytes = await pdf.save();
   const baseName = sanitizeBaseName(file.name);
-  return new File([pdfBytes], `${baseName}.pdf`, { type: 'application/pdf' });
+  return new File([pdfBytes as any], `${baseName}.pdf`, { type: 'application/pdf' });
 }
 
 function splitTextInLines(text: string): string[] {
@@ -151,39 +151,50 @@ async function convertTextToPdf(file: File): Promise<File> {
 
   const pdfBytes = await pdf.save();
   const baseName = sanitizeBaseName(file.name);
-  return new File([pdfBytes], `${baseName}.pdf`, { type: 'application/pdf' });
+  return new File([pdfBytes as any], `${baseName}.pdf`, { type: 'application/pdf' });
 }
+
+import { extractTextFromPdf } from './pdfTranscription';
+
+import { extractTextFromImage } from './ocr';
 
 export async function normalizeUploadToPdf(file: File): Promise<{
   file: File;
   converted: boolean;
   originalName: string;
   originalMimeType: string;
+  transcription?: string;
 }> {
   if (isPdf(file)) {
+    const transcription = await extractTextFromPdf(file).catch(() => undefined);
     return {
       file,
       converted: false,
       originalName: file.name,
       originalMimeType: file.type || 'application/pdf',
+      transcription,
     };
   }
 
   if (isImage(file)) {
+    const transcription = await extractTextFromImage(file).catch(() => undefined);
     return {
       file: await convertImageToPdf(file),
       converted: true,
       originalName: file.name,
       originalMimeType: file.type,
+      transcription,
     };
   }
 
   if (isText(file)) {
+    const transcription = await file.text();
     return {
       file: await convertTextToPdf(file),
       converted: true,
       originalName: file.name,
       originalMimeType: file.type || 'text/plain',
+      transcription,
     };
   }
 
