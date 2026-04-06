@@ -41,9 +41,10 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     }
   }, [dataInicio, dataFim, isUnlocked, item.quantidade_automatica]);
 
+
   const handleSave = () => {
     if (!servidor) return;
-    
+
     if (!dataInicio || !dataFim) {
       toast.error('Preencha as datas de início e fim.');
       return;
@@ -83,7 +84,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     });
 
     toast.success(`Lançamento salvo! Você acumulou +${pontosCalculados} pontos no Inciso ${item.inciso}`);
-    
+
     // Reset form
     setDataInicio('');
     setDataFim('');
@@ -96,7 +97,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
 
   return (
     <Card className="mb-4 overflow-hidden border-gray-200">
-      <div 
+      <div
         className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
         onClick={onToggle}
       >
@@ -128,18 +129,18 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor={`inicio-${item.id}`}>Data de Início</Label>
-                      <Input 
-                        id={`inicio-${item.id}`} 
-                        type="date" 
+                      <Input
+                        id={`inicio-${item.id}`}
+                        type="date"
                         value={dataInicio}
                         onChange={(e) => setDataInicio(e.target.value)}
                       />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`fim-${item.id}`}>Data de Fim</Label>
-                      <Input 
-                        id={`fim-${item.id}`} 
-                        type="date" 
+                      <Input
+                        id={`fim-${item.id}`}
+                        type="date"
                         value={dataFim}
                         onChange={(e) => setDataFim(e.target.value)}
                       />
@@ -149,9 +150,9 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label htmlFor={`qtd-${item.id}`}>Quantidade Calculada ({item.unidade_medida}s)</Label>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="h-6 px-2 text-xs text-gray-500 hover:text-gray-900"
                         onClick={() => setIsUnlocked(!isUnlocked)}
                       >
@@ -159,9 +160,9 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                         {isUnlocked ? 'Bloquear' : 'Desbloquear'}
                       </Button>
                     </div>
-                    <Input 
-                      id={`qtd-${item.id}`} 
-                      type="number" 
+                    <Input
+                      id={`qtd-${item.id}`}
+                      type="number"
                       value={quantidade}
                       onChange={(e) => setQuantidade(Number(e.target.value))}
                       disabled={!isUnlocked}
@@ -172,8 +173,8 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                   {isUnlocked && (
                     <div className="space-y-2">
                       <Label htmlFor={`just-${item.id}`} className="text-amber-700">Justificativa (Obrigatória)</Label>
-                      <Input 
-                        id={`just-${item.id}`} 
+                      <Input
+                        id={`just-${item.id}`}
                         placeholder="Motivo da alteração manual..."
                         value={justificativa}
                         onChange={(e) => setJustificativa(e.target.value)}
@@ -184,11 +185,16 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                 </div>
 
                 <div className="space-y-4">
-                  <Label>Comprovação Documental</Label>
-                  
+                  <div className="flex items-center justify-between">
+                    <Label>Comprovação Documental</Label>
+                    <div className="flex gap-2">
+                      {/* Mini toggle logic if we want, but let's just show both or a simple input */}
+                    </div>
+                  </div>
+
                   <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 transition-colors relative">
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       accept=".pdf"
                       onChange={(e) => setFile(e.target.files?.[0] || null)}

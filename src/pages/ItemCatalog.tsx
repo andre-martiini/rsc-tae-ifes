@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, LayoutGrid, List, Search, ShieldAlert, Sparkles, Wand2, X } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronRight, LayoutGrid, List, Search, ShieldAlert, Sparkles, Wand2, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppHeader from '../components/AppHeader';
 import { Card, CardContent } from '../components/ui/card';
@@ -11,6 +11,7 @@ import MainLayout from '../components/MainLayout';
 import { useAppContext } from '../context/AppContext';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getEligibleRscLevel, isItemJuridicallyFragile } from '../lib/rsc';
+import { cn } from '../lib/utils';
 import type { Inciso } from '../data/mock';
 
 function normalizeSearch(value: string) {
@@ -181,7 +182,7 @@ export default function ItemCatalog() {
     >
       <div className="flex h-full flex-1 overflow-hidden">
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl space-y-6 p-6">
+          <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
             <Card className="border-gray-200 bg-white shadow-sm">
               <CardContent className="space-y-5 p-5">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -296,7 +297,7 @@ export default function ItemCatalog() {
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                <div className="flex flex-col gap-2 text-xs text-gray-500 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
                       {filteredItems.length} itens encontrados
@@ -305,7 +306,7 @@ export default function ItemCatalog() {
                       {lancamentosByItemId.size} itens já lançados
                     </span>
                   </div>
-                  <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+                  <div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 self-start sm:self-auto">
                     <button
                       type="button"
                       onClick={() => setViewMode('cards')}
@@ -331,6 +332,7 @@ export default function ItemCatalog() {
               <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {filteredItems.map((item) => {
                   const pontosLancados = lancamentosByItemId.get(item.id) ?? 0;
+                  const hasLancamentos = pontosLancados > 0;
                   const isFragile = isItemJuridicallyFragile(item);
                   const itemStatus = getItemStatus(pontosLancados, item.limite_pontos);
 
@@ -341,11 +343,19 @@ export default function ItemCatalog() {
                       onClick={() => setSelectedItemId(item.id)}
                       className="group text-left"
                     >
-                      <Card className="h-full border-gray-200 bg-white transition-all duration-200 group-hover:-translate-y-0.5 group-hover:border-primary/30 group-hover:shadow-md">
+                      <Card className={cn(
+                        'h-full transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md',
+                        hasLancamentos
+                          ? 'border-emerald-200 bg-emerald-50/30 shadow-[0_8px_24px_rgba(16,185,129,0.08)] group-hover:border-emerald-300'
+                          : 'border-gray-200 bg-white group-hover:border-primary/30',
+                      )}>
                         <CardContent className="space-y-4 p-5">
                           <div className="flex items-start justify-between gap-3">
                             <div className="flex items-start gap-3">
-                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-sm font-black text-primary">
+                              <div className={cn(
+                                'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black',
+                                hasLancamentos ? 'bg-emerald-100 text-emerald-700' : 'bg-primary/10 text-primary',
+                              )}>
                                 {item.numero}
                               </div>
                               <div>
@@ -373,20 +383,28 @@ export default function ItemCatalog() {
                                       Recomendado
                                     </span>
                                   )}
+                                  {hasLancamentos && (
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+                                      {formatPointValue(pontosLancados)} pts lançados
+                                    </span>
+                                  )}
                                 </div>
                                 <h3 className="text-base font-bold leading-snug text-gray-900">{item.descricao}</h3>
                               </div>
                             </div>
 
-                            <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-gray-300 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-primary" />
+                            <ArrowRight className={cn(
+                              'mt-1 h-4 w-4 shrink-0 transition-transform duration-200 group-hover:translate-x-1',
+                              hasLancamentos ? 'text-emerald-300 group-hover:text-emerald-600' : 'text-gray-300 group-hover:text-primary',
+                            )} />
                           </div>
 
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                            <div className={cn('rounded-xl border p-3', hasLancamentos ? 'border-emerald-100 bg-white' : 'border-gray-100 bg-gray-50')}>
                               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Unidade</p>
                               <p className="mt-1 text-sm font-medium text-gray-800">{item.unidade_medida}</p>
                             </div>
-                            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                            <div className={cn('rounded-xl border p-3', hasLancamentos ? 'border-emerald-200 bg-emerald-50/70' : 'border-gray-100 bg-gray-50')}>
                               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Situação</p>
                               <p className={`mt-1 text-sm font-medium ${itemStatus === 'completo'
                                 ? 'text-emerald-700'
@@ -411,8 +429,8 @@ export default function ItemCatalog() {
                 })}
               </section>
             ) : (
-              <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+                <table className="min-w-[820px] w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 bg-gray-50">
                       <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">Item</th>
@@ -427,6 +445,7 @@ export default function ItemCatalog() {
                   <tbody>
                     {filteredItems.map((item, index) => {
                       const pontosLancados = lancamentosByItemId.get(item.id) ?? 0;
+                      const hasLancamentos = pontosLancados > 0;
                       const isFragile = isItemJuridicallyFragile(item);
                       const itemStatus = getItemStatus(pontosLancados, item.limite_pontos);
 
@@ -434,10 +453,17 @@ export default function ItemCatalog() {
                         <tr
                           key={item.id}
                           onClick={() => setSelectedItemId(item.id)}
-                          className={`cursor-pointer transition-colors hover:bg-primary/5 ${index !== filteredItems.length - 1 ? 'border-b border-gray-100' : ''}`}
+                          className={cn(
+                            'cursor-pointer transition-colors',
+                            hasLancamentos ? 'bg-emerald-50/40 hover:bg-emerald-50' : 'hover:bg-primary/5',
+                            index !== filteredItems.length - 1 ? (hasLancamentos ? 'border-b border-emerald-100' : 'border-b border-gray-100') : '',
+                          )}
                         >
                           <td className="px-4 py-3">
-                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-xs font-black text-primary">
+                            <span className={cn(
+                              'flex h-8 w-8 items-center justify-center rounded-lg text-xs font-black',
+                              hasLancamentos ? 'bg-emerald-100 text-emerald-700' : 'bg-primary/10 text-primary',
+                            )}>
                               {item.numero}
                             </span>
                           </td>
@@ -522,11 +548,20 @@ export default function ItemCatalog() {
               className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl border-l border-gray-200 bg-white shadow-2xl lg:relative lg:z-auto lg:h-full lg:min-w-[600px]"
             >
               <div className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:px-6">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="shrink-0 text-[9px] font-black uppercase tracking-[0.22em] text-gray-400">
                       Detalhes do Item
                     </span>
+                    <div className="hidden flex-wrap items-center gap-1.5 text-[11px] font-semibold text-gray-500 sm:flex">
+                      <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-600">
+                        Inciso {selectedItem.inciso}
+                      </span>
+                      <ChevronRight className="h-3.5 w-3.5 text-gray-300" />
+                      <span className="rounded-full border border-gray-200 bg-white px-3 py-1 text-gray-600">
+                        Item {selectedItem.numero}
+                      </span>
+                    </div>
                   </div>
                   <Button
                     variant="ghost"

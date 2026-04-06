@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Calculator,
   CheckCircle2,
+  Download,
   Eye,
   EyeOff,
   FileText,
@@ -24,6 +25,7 @@ import { getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
 import { isItemJuridicallyFragile } from '../lib/rsc';
 import { cn } from '../lib/utils';
+import { downloadFileFromUrl } from '../lib/urlDownloader';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -39,6 +41,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [referenceInput, setReferenceInput] = useState('');
   const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
   const [dataInicio, setDataInicio] = useState('');
@@ -77,6 +80,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setDocMode('upload');
     setReferenceInput('');
     setReferenceLinks([]);
+    setIsDownloading(false);
     setDataInicio('');
     setDataFim('');
     setOngoing(false);
@@ -139,6 +143,70 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     }
   };
 
+  const handleConsolidateLinks = async () => {
+    if (referenceLinks.length === 0) return;
+
+    try {
+      setIsDownloading(true);
+      setUploadFeedback(`Processando ${referenceLinks.length} link(s)...`);
+
+      const downloadedFiles: File[] = [];
+      let successCount = 0;
+
+      for (const link of referenceLinks) {
+        setUploadFeedback(`Baixando link ${successCount + 1}/${referenceLinks.length}...`);
+        try {
+          const file = await downloadFileFromUrl(link);
+          downloadedFiles.push(file);
+          successCount++;
+        } catch (err) {
+          console.error(`Falha ao baixar link: ${link}`, err);
+          // We can choose to continue or abort. Let's show a toast.
+          toast.error(`Falha ao baixar: ${link}`);
+        }
+      }
+
+      if (downloadedFiles.length === 0) {
+        throw new Error('Nenhum dos links pôde ser baixado.');
+      }
+
+      setUploadFeedback(`Mesclando ${downloadedFiles.length} documento(s)...`);
+
+      const merged = await PDFDocument.create();
+      for (const entry of downloadedFiles) {
+        // Simple normalization if not PDF, but expected to be PDF
+        const buff = await entry.arrayBuffer();
+        const src = await PDFDocument.load(buff, { ignoreEncryption: true });
+        const pages = await merged.copyPages(src, src.getPageIndices());
+        pages.forEach((p) => merged.addPage(p));
+      }
+
+      const mergedPdfBytes = await merged.save();
+      const mergedFile = new File(
+        [mergedPdfBytes as unknown as BlobPart],
+        `documentos-anexados-${downloadedFiles.length}.pdf`,
+        { type: 'application/pdf' }
+      );
+
+      setFile(mergedFile);
+      setUploadMeta({
+        converted: true,
+        originalName: `${downloadedFiles.length} link(s) consolidados`,
+        originalMimeType: 'application/pdf',
+      });
+
+      setDocMode('upload'); // Switch to upload mode after consolidation
+      toast.success('Links baixados e consolidados em um único PDF!');
+      setUploadFeedback(null);
+    } catch (error) {
+      setUploadFeedback(null);
+      const message = error instanceof Error ? error.message : 'Erro ao processar os links.';
+      toast.error(`Falha ao converter links: ${message}. Verifique se as URLs estão corretas ou baixe os arquivos manualmente e anexe-os abaixo.`, { duration: 10000 });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   useEffect(() => {
     const handlePaste = (event: ClipboardEvent) => {
       if (docMode !== 'upload' || isSubmitted) return;
@@ -195,7 +263,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     if (item.modo_calculo !== 'manual' && (!dataInicio || !effectiveEndDate)) return void toast.error('Este item exige datas de início e fim.');
     if (isFragile && !confirmFragile) return void toast.error('Confirme que revisou o enquadramento sensível deste item.');
     if (docMode === 'reference' && referenceLinks.length === 0) return void toast.error(`Adicione ao menos um ${institutionConfig.documentLinks.label}.`);
-    if (docMode === 'upload' && !file) return void toast.error('Anexe um documento comprobatório.');
+    if ((docMode === 'upload') && !file) return void toast.error('Anexe ou baixe um documento comprobatório.');
     try {
       setSaving(true);
       let documentoId: string | undefined = undefined;
@@ -248,27 +316,25 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
   return (
     <div className="flex h-full flex-col bg-white">
-      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-8 py-6">
-        <div className="mb-2 flex items-center gap-3">
-          <span className="rounded-md border border-primary/20 bg-primary/10 px-2 py-1 font-mono text-xs text-primary">Item {item.numero}</span>
-          <span className="text-sm text-gray-400">• Inciso {item.inciso}</span>
+      <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-4 py-4 sm:px-6">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           {isFragile && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">Enquadramento sensível</span>}
         </div>
-        <h2 className="max-w-4xl text-3xl font-bold text-gray-900">{item.descricao}</h2>
-        <div className="mt-4 flex flex-wrap gap-4 text-sm">
-          <div className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 text-gray-500"><strong className="text-gray-900">{formatPointValue(item.pontos_por_unidade)} pts</strong> por {item.unidade_medida}</div>
-          <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-emerald-700"><strong className="text-emerald-900">{formatPointValue(itemPontos)} pts</strong> já contabilizados neste item</div>
+        <h2 className="max-w-4xl text-lg font-bold leading-snug text-gray-900 lg:text-[1.55rem]">{item.descricao}</h2>
+        <div className="mt-3 flex flex-wrap gap-3 text-xs sm:text-sm">
+          <div className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-gray-500"><strong className="text-gray-900">{formatPointValue(item.pontos_por_unidade)} pts</strong> por {item.unidade_medida}</div>
+          <div className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 text-emerald-700"><strong className="text-emerald-900">{formatPointValue(itemPontos)} pts</strong> já contabilizados neste item</div>
         </div>
       </div>
 
-      <div className="border-b border-gray-100 bg-gray-50/60 px-8 py-3">
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setTab('form')} className={cn('rounded-full px-4 py-2 text-sm font-semibold', tab === 'form' ? 'bg-primary text-white' : 'border border-gray-200 bg-white text-gray-600')}>Formulário</button>
-          <button type="button" onClick={() => setTab('history')} className={cn('rounded-full px-4 py-2 text-sm font-semibold', tab === 'history' ? 'bg-primary text-white' : 'border border-gray-200 bg-white text-gray-600')}>Lançamentos ({itemLancamentos.length})</button>
+      <div className="border-b border-gray-100 bg-gray-50/60 px-4 py-2.5 sm:px-6">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => setTab('form')} className={cn('rounded-full px-4 py-1.5 text-sm font-semibold', tab === 'form' ? 'bg-primary text-white' : 'border border-gray-200 bg-white text-gray-600')}>Formulário</button>
+          <button type="button" onClick={() => setTab('history')} className={cn('rounded-full px-4 py-1.5 text-sm font-semibold', tab === 'history' ? 'bg-primary text-white' : 'border border-gray-200 bg-white text-gray-600')}>Lançamentos ({itemLancamentos.length})</button>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         {tab === 'form' ? (
           <div className={cn('space-y-5', isSubmitted && 'pointer-events-none opacity-60')}>
             <div className="flex flex-wrap gap-2">
@@ -301,89 +367,106 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
             </div>
 
             {/* ── Document + Fields side-by-side ── */}
-            <div className="grid gap-5 lg:grid-cols-2">
-
-              {/* Left: Document section */}
-              <section className="space-y-3">
-                {docMode === 'reference' ? (
-                  <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                    <p className="mb-3 text-xs text-gray-500">{institutionConfig.documentLinks.helperText}</p>
-                    <div className="flex gap-2">
-                      <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
-                      <button type="button" onClick={addReference} className="flex h-9 w-9 items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary"><Plus className="h-4 w-4" /></button>
-                    </div>
-                    {referenceLinks.length > 0 && <ul className="mt-3 space-y-1.5">{referenceLinks.map((link, index) => <li key={link} className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900"><FileText className="h-3.5 w-3.5 shrink-0" /><span className="flex-1 truncate font-mono">{link}</span><button type="button" onClick={() => setReferenceLinks((prev) => prev.filter((_, i) => i !== index))}><X className="h-3.5 w-3.5" /></button></li>)}</ul>}
+            <section className="space-y-4">
+              {docMode === 'reference' ? (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <p className="mb-3 text-xs text-gray-500">{institutionConfig.documentLinks.helperText}</p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
+                    <button type="button" onClick={addReference} className="flex h-9 w-full items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary sm:w-9"><Plus className="h-4 w-4" /></button>
                   </div>
+                  {referenceLinks.length > 0 && (
+                    <>
+                      <ul className="mt-3 space-y-1.5">{referenceLinks.map((link, index) => <li key={link} className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900"><FileText className="h-3.5 w-3.5 shrink-0" /><span className="flex-1 truncate font-mono">{link}</span><button type="button" onClick={() => setReferenceLinks((prev) => prev.filter((_, i) => i !== index))}><X className="h-3.5 w-3.5" /></button></li>)}</ul>
+
+                      <div className="mt-4 border-t border-gray-200 pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full gap-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          onClick={() => void handleConsolidateLinks()}
+                          disabled={isDownloading}
+                        >
+                          {isDownloading ? (
+                            <>Processando...</>
+                          ) : (
+                            <>
+                              <Download className="h-4 w-4" />
+                              Adicionar Arquivos
+                            </>
+                          )}
+                        </Button>
+                        {uploadFeedback && <p className="mt-2 text-center text-[10px] text-gray-500">{uploadFeedback}</p>}
+                      </div>
+                    </>
+                  )}
+                </div>
                 ) : (
                   <div>
-                    <div className={`relative flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed text-center transition-all ${file ? 'border-emerald-400 bg-emerald-50' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-300 bg-white'}`} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); void mergeAndAcceptFiles(e.dataTransfer.files); }}>
+                    <div className={`relative rounded-xl border p-4 transition-all ${file ? 'border-emerald-300 bg-emerald-50/60' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); void mergeAndAcceptFiles(e.dataTransfer.files); }}>
                       <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                      {file && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-3 top-3 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
-                      <div className="mb-2 rounded-full bg-white/80 p-2"><UploadCloud className="h-5 w-5 text-gray-400" /></div>
-                      <p className="max-w-[90%] truncate px-4 text-sm font-semibold text-gray-700" title={file?.name}>{file ? file.name : dragActive ? 'Solte os arquivos aqui' : 'Clique, arraste ou cole um arquivo'}</p>
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{file ? 'Arquivo pronto' : 'PDF, JPG, PNG, TXT, MD ou JSON'}</p>
+                      {file && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
+                      <p className="mb-3 pr-10 text-xs text-gray-500">
+                        Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.
+                      </p>
+                      <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
+                        <div className="mr-2 rounded-full bg-white/80 p-1"><UploadCloud className="h-4 w-4 text-gray-400" /></div>
+                        <p className="flex-1 truncate" title={file?.name}>{file ? file.name : dragActive ? 'Solte os arquivos aqui' : 'Clique para selecionar um arquivo'}</p>
+                        <p className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-400">{file ? 'Pronto' : 'Anexar'}</p>
+                      </div>
                     </div>
                     {uploadFeedback && <p className={`mt-2 text-xs ${file ? 'text-emerald-700' : 'text-gray-500'}`}>{uploadFeedback}</p>}
                   </div>
                 )}
-              </section>
+            </section>
 
-              {/* Right: Period + Quantity fields */}
-              <section className="space-y-4">
-                {showDateFields && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="data-inicio" className="text-xs">Data de início <span className="text-red-500">*</span></Label>
-                      <Input id="data-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-9 text-sm" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="data-fim" className="text-xs">Data de fim <span className="text-red-500">*</span></Label>
-                      <Input id="data-fim" type="date" value={effectiveEndDate} onChange={(e) => setDataFim(e.target.value)} disabled={ongoing} className="h-9 text-sm" />
-                      <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-                        <input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} className="h-3 w-3" />
-                        Ainda em vigor
-                      </label>
-                    </div>
+            <section className="space-y-4">
+              {showDateFields && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="data-inicio" className="text-xs">Data de início <span className="text-red-500">*</span></Label>
+                    <Input id="data-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-11 text-sm" />
                   </div>
-                )}
 
-                {/* Quantity with unit badge */}
-                <div className="space-y-1.5">
-                  <div className="flex items-baseline gap-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="data-fim" className="text-xs">Data de fim <span className="text-red-500">*</span></Label>
+                    <Input id="data-fim" type="date" value={effectiveEndDate} onChange={(e) => setDataFim(e.target.value)} disabled={ongoing} className="h-11 text-sm" />
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
+                      <input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} className="h-3 w-3" />
+                      Ainda em vigor
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div className={cn('grid gap-4', showDateFields ? 'md:grid-cols-12 md:items-start' : 'md:grid-cols-1')}>
+                <div className={cn(showDateFields ? 'md:col-span-6' : 'md:col-span-1')}>
+                  <div className="space-y-1.5">
                     <Label htmlFor="quantidade" className="text-xs">Quantidade</Label>
-                    <span className="rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                      {item.unidade_medida}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="quantidade"
-                      type="number"
-                      min="0"
-                      step={allowsDecimals ? '0.01' : '1'}
-                      value={quantidade}
-                      onChange={(e) => setQuantidade(e.target.value)}
-                      className="h-11 max-w-[180px] text-center text-xl font-bold"
-                      placeholder="0"
-                    />
-                    <span className="text-sm font-medium text-gray-400">{item.unidade_medida}</span>
-                    {item.quantidade_automatica && (
-                      <Button type="button" variant="outline" size="sm" onClick={calculateQuantityFromDates}>
-                        <Calculator className="mr-1.5 h-3.5 w-3.5" />Calcular
-                      </Button>
-                    )}
+                    <div className="space-y-2">
+                      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                        <Input
+                          id="quantidade"
+                          type="number"
+                          min="0"
+                          step={allowsDecimals ? '0.01' : '1'}
+                          value={quantidade}
+                          onChange={(e) => setQuantidade(e.target.value)}
+                          className="h-12 w-full text-center text-2xl font-bold sm:w-[200px] sm:shrink-0"
+                          placeholder="0"
+                        />
+                        {item.quantidade_automatica && (
+                          <Button type="button" variant="outline" size="sm" onClick={calculateQuantityFromDates} className="h-12 rounded-md border-green-300 bg-green-50/60 px-3 text-green-700 hover:border-green-400 hover:bg-green-100/70 hover:text-green-800">
+                            <Calculator className="mr-1.5 h-3.5 w-3.5" />Calcular
+                          </Button>
+                        )}
+                      </div>
+                      <span className="text-sm font-medium text-gray-400">{item.unidade_medida}</span>
+                    </div>
                   </div>
                 </div>
-
-                {/* Points preview */}
-                <div className="rounded-lg border border-blue-200 bg-blue-50/50 px-4 py-3 text-sm text-blue-800">
-                  <span className="font-semibold">{formatPointValue(item.pontos_por_unidade)} pts</span>
-                  <span className="text-blue-600"> por {item.unidade_medida} → </span>
-                  <span className="font-bold">{formatPointValue(pointsPreview)} pts</span>
-                  <span className="text-blue-600"> neste lançamento</span>
-                </div>
-              </section>
-            </div>
+              </div>
+            </section>
 
             {isFragile && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" /><div><p className="font-semibold">Item com enquadramento sensível</p><label className="mt-2 flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={confirmFragile} onChange={(e) => setConfirmFragile(e.target.checked)} />Confirmo que revisei o enquadramento deste item.</label></div></div></div>}
 
@@ -403,9 +486,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
               const isOpen = !!(doc && openDocs.has(doc.id));
               return (
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${new Date(lancamento.data_inicio).toLocaleDateString('pt-BR')} a ${new Date(lancamento.data_fim).toLocaleDateString('pt-BR')}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}</div></div>
-                    <div className="flex items-start gap-2"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => remove(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
+                    <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => remove(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">{lancamento.status_auditoria}</p>
@@ -415,7 +498,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     </div>
                   </div>
                   {doc?.gedoc_links && <ul className="mt-3 space-y-1 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-[11px] text-emerald-900">{doc.gedoc_links.map((link) => <li key={link} className="truncate font-mono">{link}</li>)}</ul>}
-                  {doc && isOpen && blobUrls[doc.id] && <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white"><iframe src={blobUrls[doc.id]} title={doc.nome_arquivo} className="h-[520px] w-full" /></div>}
+                  {doc && isOpen && blobUrls[doc.id] && <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white"><iframe src={blobUrls[doc.id]} title={doc.nome_arquivo} className="h-[420px] w-full sm:h-[520px]" /></div>}
                 </div>
               );
             })}

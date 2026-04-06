@@ -163,7 +163,8 @@ export default function Dashboard() {
     <MainLayout
       activeView="dashboard"
       secondaryContent={
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col gap-2 lg:w-auto lg:items-end">
+          <div className="flex w-full flex-wrap items-center justify-center gap-2 lg:w-auto lg:justify-end">
           {metasAtingidas && (
             <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
               <CheckCircle2 className="h-3 w-3" />
@@ -175,7 +176,9 @@ export default function Dashboard() {
             {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
           </div>
 
-          <div className="ml-1 flex items-center gap-1.5 border-l border-gray-200 pl-2.5">
+          </div>
+
+          <div className="flex w-full flex-wrap items-center justify-center gap-1.5 lg:w-auto lg:justify-end">
             {/* Salvar progresso + info */}
             <div className="flex items-center gap-0.5">
               <button
@@ -212,13 +215,26 @@ export default function Dashboard() {
                 Restaurar
               </button>
             </div>
+
+            <div className="group relative flex items-center rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1 text-gray-400">
+              <HardDrive className="h-3.5 w-3.5" />
+              <span className="ml-1.5 text-[10px] font-bold">AUTO-SAVE</span>
+              <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                <p className="mb-1 text-[11px] font-bold text-white">Salvamento local de seguranÃƒÂ§a</p>
+                <p className="text-[11px] leading-relaxed text-gray-300">
+                  Seus dados sÃƒÂ£o gravados no cache do navegador. Para levar seu progresso para outro computador, exporte um backup no Dashboard.
+                </p>
+                <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900" />
+              </div>
+            </div>
           </div>
         </div>
       }
+      hideAutoSave
     >
-      <div className="mx-auto max-w-7xl space-y-6 p-6">
+      <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
         <Card className="border-gray-200 bg-white shadow-sm">
-          <CardContent className="p-6">
+          <CardContent className="p-5 sm:p-6">
             <div className="flex flex-col justify-between gap-4 md:flex-row">
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">{servidor.nome_completo}</h2>
@@ -503,7 +519,7 @@ export default function Dashboard() {
                     <p className="text-[13px] leading-relaxed text-gray-500">
                       Responda a perguntas objetivas sobre sua trajetória para filtrar automaticamente quais itens do catálogo você possui para pontuação.
                     </p>
-                    <div className="flex gap-3 pt-3">
+                    <div className="flex flex-col gap-3 pt-3 sm:flex-row">
                       <button
                         onClick={() => setWizardOpen(true)}
                         className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700 hover:shadow-lg hover:shadow-violet-200"
@@ -557,14 +573,14 @@ export default function Dashboard() {
         {resumoItensLancados.length > 0 && (
           <Card className="border-gray-200 bg-white shadow-sm">
             <CardContent className="p-5">
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">Itens já lançados</h3>
                   <p className="text-xs text-gray-500">
                     Resumo rápido dos itens já marcados e da pontuação acumulada em cada um.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 self-start sm:self-auto">
                   <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
                     {resumoItensLancados.length} itens
                   </span>
@@ -617,8 +633,8 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : (
-                <div className="mt-4 overflow-hidden rounded-xl border border-gray-200">
-                  <table className="w-full text-sm">
+                <div className="mt-4 overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="min-w-[640px] w-full text-sm">
                     <thead>
                       <tr className="border-b border-gray-200 bg-gray-50">
                         <th className="px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-gray-500">Item</th>

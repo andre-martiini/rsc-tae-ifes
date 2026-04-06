@@ -627,7 +627,7 @@ export async function generateRequerimentoFormal(
   const writer = new Writer({
     doc,
     title: 'Requerimento - RSC-PCCTAE',
-    subtitle: 'Documento preparatório para instrução do pedido',
+    subtitle: 'Modelo para Reconhecimento de Saberes e Competências',
     footerRight: `${servidor.siape} · Requerimento`,
   });
   await writer.init();
@@ -640,62 +640,43 @@ export async function generateRequerimentoFormal(
 
   const nivelCheckboxes = ['I', 'II', 'III', 'IV', 'V', 'VI']
     .map((roman) => `( ${roman === nivelRoman ? 'X' : ' '} ) RSC-${roman}`)
+    .join('  ');
+
+  const nivelClass = servidor.nivel_classificacao ?? 'C';
+  const nivelClassStr = ['A', 'B', 'C', 'D', 'E']
+    .map((l) => `${l} ( ${nivelClass === l ? 'X' : ' '} )`)
     .join('   ');
 
   writer.section('1. Identificação do Servidor');
-  writer.keyValue('Nome', sanitize(servidor.nome_completo));
-  writer.keyValue('SIAPE', sanitize(servidor.siape));
-  writer.keyValue('Cargo', sanitize(servidor.cargo ?? '-'));
-  writer.keyValue('Instituição', sanitize(servidor.instituicao ?? '-'));
-  writer.keyValue('Lotação', sanitize(servidor.lotacao ?? '-'));
-  writer.keyValue('Nível de Classificação', sanitize(servidor.nivel_classificacao ?? '-'));
-  writer.keyValue(
-    'Data de ingresso em Instituição Federal de Ensino',
-    sanitize(
-      servidor.data_ingresso_ife
-        ? formatDate(servidor.data_ingresso_ife)
-        : servidor.data_ingresso
-          ? formatDate(servidor.data_ingresso)
-          : '-',
-    ),
-  );
-  writer.keyValue(
-    'Telefone / E-mail',
-    sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'),
-  );
+  writer.keyValue('Nome:', sanitize(servidor.nome_completo));
+  writer.keyValue('SIAPE:', sanitize(servidor.siape));
+  writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
+  writer.keyValue('Data de ingresso em IFE:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
+  writer.keyValue('Nível de Classificação:', nivelClassStr);
+  writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
+  writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
 
-  writer.section('2. Dados do Requerimento');
-  writer.keyValue('Nível pleiteado', nivelCheckboxes || '-');
-  writer.keyValue('Equivalência pretendida', sanitize(nivelPleiteado?.equivalencia ?? '-'));
-  writer.keyValue(
-    'Pontuação total apresentada',
-    `${formatNumber(totalPontos)} pts`,
-  );
-  writer.keyValue('Itens distintos utilizados', `${itensDistintos}`);
-  writer.keyValue(
-    'Saldo de pontuação de concessão anterior',
-    processo.saldo_concessao_anterior !== undefined
-      ? `${formatNumber(processo.saldo_concessao_anterior)} pts`
-      : '-',
-  );
-  writer.keyValue(
-    'Número do processo anterior',
-    sanitize(processo.numero_processo_anterior ?? '-'),
-  );
-  writer.keyValue(
-    'Data da última concessão',
-    processo.data_ultima_concessao ? formatDate(processo.data_ultima_concessao) : '-',
-  );
+  const excedente = nivelPleiteado ? Math.max(0, totalPontos - nivelPleiteado.pontosMinimos) : 0;
 
-  writer.section('3. Declaração do Servidor');
-  writer.text(
-    'Declaro, para os fins do pedido de Reconhecimento de Saberes e Competências, que os fatos apresentados ocorreram no exercício da carreira, que não foram utilizados em concessões anteriores e que a documentação anexada é autêntica.',
-    { size: 9 },
-  );
-  writer.gap(14);
-  writer.text('Assinatura: ___________________________________________________', {
-    size: 9,
-  });
+  writer.section('2. Informações do Requerimento');
+  writer.keyValue('Nível RSC pretendido:', nivelCheckboxes);
+  writer.keyValue('Pontuação mínima:', nivelPleiteado ? `${nivelPleiteado.pontosMinimos}` : '-');
+  writer.keyValue('Pontuação total:', `${formatNumber(totalPontos)} pts`);
+  writer.keyValue('Qtd. critérios utilizados:', `${itensDistintos}`);
+  writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
+  writer.keyValue('Saldo anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
+  writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '—'));
+
+  writer.section('3. Declaração de Conformidade Legal');
+  writer.text('Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:', { size: 9 });
+  writer.bullet('Todos os fatos apresentados ocorreram no exercício da carreira;');
+  writer.bullet('Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;');
+  writer.bullet('Toda a documentação anexada é autêntica e comprova integralmente as atividades;');
+  writer.bullet('Tenho ciência de que informações falsas implicam responsabilidade administrativa.');
+
+  writer.gap(16);
+  writer.text('Assinatura: ___________________________________________________', { size: 9 });
   writer.gap(6);
   writer.text('Data: ______ / ______ / __________', { size: 9 });
 
@@ -715,231 +696,115 @@ export async function generateMemorialDescritivo(
   const writer = new Writer({
     doc,
     title: 'Memorial Descritivo - RSC-PCCTAE',
-    subtitle: 'Anexo IV — Modelo de Memorial RSC-PCCTAE',
+    subtitle: 'Relatório circunstanciado de saberes e competências',
     footerRight: `${servidor.siape} · Memorial`,
   });
   await writer.init();
 
-  // ── Capa ─────────────────────────────────────────────────────────────────
   writer.text('ANEXO IV', { align: 'center', bold: true, size: 14, lineHeight: 18 });
   writer.text('MODELO DE MEMORIAL - RSC-PCCTAE', { align: 'center', bold: true, size: 11 });
   writer.gap(12);
-  writer.text(
-    'Modelo para instrução de processo de Reconhecimento de Saberes e Competências (RSC-PCCTAE)',
-    { align: 'center', size: 9, color: COLORS.muted, lineHeight: 13 },
-  );
 
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
   const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
 
-  // ── Seção 1: Identificação do Servidor ───────────────────────────────────
-  writer.gap(14);
   writer.section('1. Identificação do Servidor');
-
-  const nivelClass = servidor.nivel_classificacao ?? '';
+  const nivelClass = servidor.nivel_classificacao ?? 'C';
   const nivelClassStr = ['A', 'B', 'C', 'D', 'E']
-    .map((l) => `${l}( ${nivelClass === l ? 'X' : ' '} )`)
-    .join('  ');
+    .map((l) => `${l} ( ${nivelClass === l ? 'X' : ' '} )`)
+    .join('   ');
 
   writer.keyValue('Nome:', sanitize(servidor.nome_completo));
-  writer.keyValue('SIAPE', sanitize(servidor.siape));
+  writer.keyValue('SIAPE:', sanitize(servidor.siape));
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
-  writer.keyValue(
-    'Data de ingresso em Instituição Federal de Ensino:',
-    sanitize(
-      servidor.data_ingresso_ife
-        ? formatDate(servidor.data_ingresso_ife)
-        : servidor.data_ingresso
-          ? formatDate(servidor.data_ingresso)
-          : '-',
-    ),
-  );
-  writer.keyValue('Nível de Classificação:', nivelClassStr || 'A(  )  B(  )  C(  )  D(  )  E(  )');
+  writer.keyValue('Data de ingresso em IFE:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
+  writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
-  writer.keyValue('Função/Encargo (se houver):', sanitize(servidor.funcao_encargo ?? '-'));
-  writer.keyValue(
-    'Telefone/E-mail:',
-    sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'),
-  );
+  writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
 
-  // ── Seção 2: Informações do Requerimento ─────────────────────────────────
-  writer.gap(10);
   writer.section('2. Informações do Requerimento');
-
-  const nivelRoman = (() => {
-    if (!nivelElegivel) return '';
-    const m = nivelElegivel.label.match(/([IVX]+)$/);
-    return m ? m[1] : '';
-  })();
-  const nivelCheckboxes = ['I', 'II', 'III', 'IV', 'V', 'VI']
-    .map((r) => `( ${r === nivelRoman ? 'X' : ' '} )RSC-${r}`)
-    .join('  ');
-
-  const pontosMinStr = nivelElegivel ? `${nivelElegivel.pontosMinimos}` : '-';
-  const pontuacaoTotalStr = formatNumber(totalPontos);
   const excedente = nivelElegivel ? Math.max(0, totalPontos - nivelElegivel.pontosMinimos) : 0;
+  writer.keyValue('Pontuação mínima:', nivelElegivel ? `${nivelElegivel.pontosMinimos}` : '-');
+  writer.keyValue('Pontuação total apresentada:', `${formatNumber(totalPontos)} pts`);
+  writer.keyValue('Quantidade de critérios:', `${itensDistintos}`);
+  writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
+  writer.keyValue('Saldo anterior:', processo?.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
 
-  writer.keyValue('Nível de RSC pretendido:', nivelCheckboxes);
-  writer.keyValue('Pontuação mínima necessária:', pontosMinStr);
-  writer.keyValue('Pontuação total apresentada', pontuacaoTotalStr);
-  writer.keyValue('Quantidade de critérios específicos utilizados:', `${itensDistintos}`);
-  writer.keyValue(
-    'Pontuação total excedente (banco de pontos):',
-    excedente > 0 ? formatNumber(excedente) : '-',
-  );
-  writer.keyValue(
-    'Saldo de pontuação de concessão anterior:',
-    processo?.saldo_concessao_anterior !== undefined
-      ? formatNumber(processo.saldo_concessao_anterior)
-      : '-',
-  );
-  writer.keyValue(
-    'Número do processo relativo à concessão anterior do RSC-PCCTAE (se houver):',
-    sanitize(processo?.numero_processo_anterior ?? '-'),
-  );
-
-  // ── Seção 3: Declaração de Conformidade Legal ─────────────────────────────
-  writer.gap(10);
   writer.section('3. Declaração de Conformidade Legal');
-  writer.text(
-    'Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:',
-    { size: 9 },
-  );
-  writer.gap(2);
-  writer.bullet('Todos os fatos apresentados ocorreram no exercício da carreira;');
-  writer.bullet('Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;');
-  writer.bullet(
-    'Toda a documentação anexada é autêntica e comprova integralmente as atividades apresentadas;',
-  );
-  writer.bullet(
-    'Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.',
-  );
-  writer.gap(16);
-  writer.text('Assinatura: ___________________________________________________', { size: 9 });
-  writer.gap(6);
-  writer.text('Data: ______ / ______ / __________', { size: 9 });
+  writer.text('Declaro, para os fins previstos no RSC-PCCTAE, que os fatos apresentados são verídicos.', { size: 9 });
 
-  // ── Seção 4: Memorial e Descrição das Atividades por Requisito Legal ──────
   writer.addPage();
-  writer.section('4. Memorial e Descrição das Atividades por Requisito Legal');
+  writer.section('4. Memorial e Descrição das Atividades');
   writer.gap(4);
-  writer.text(
-    'Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das contribuições institucionais e conforme os requisitos do art. 4º do Decreto (incisos I a VI), vinculando cada atividade ao número correspondente aos critérios específicos.',
-    { size: 8, color: COLORS.muted, lineHeight: 11 },
-  );
-  writer.gap(8);
+  writer.text('Descrição detalhada das atividades vinculadas aos incisos do art. 4º do Decreto.', { size: 8, color: COLORS.muted });
 
   const CRITERIO_LABELS: Record<string, string> = {
-    I:   'Critério I - Participação em grupos, comissões, comitês, núcleos ou representações',
-    II:  'Critério II - Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência',
-    III: 'Critério III - Premiações e reconhecimentos públicos',
-    IV:  'Critério IV - Responsabilidades técnico-administrativas e/ou especializadas',
-    V:   'Critério V - Funções ou cargos de direção e assessoramento institucional',
-    VI:  'Critério VI - Produção, prospecção e difusão de conhecimento',
+    I: 'Participação em grupos, comissões, comitês, núcleos ou representações',
+    II: 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência',
+    III: 'Premiações e reconhecimentos públicos',
+    IV: 'Responsabilidades técnico-administrativas e/ou especializadas',
+    V: 'Funções ou cargos de direção e assessoramento institucional',
+    VI: 'Produção, prospecção e difusão de conhecimento',
   };
 
-  // Column widths for the 6-column table
-  const COL_WIDTHS = [0.07, 0.30, 0.13, 0.11, 0.19, 0.20];
-
-  // Column offset sums for subtotal positioning
-  // "Subtotal" label goes near col 4 start, value in col 5 start
-  const col4Start = COL_WIDTHS.slice(0, 3).reduce((a, b) => a + b, 0);
-  const col5Start = COL_WIDTHS.slice(0, 4).reduce((a, b) => a + b, 0);
-
-  type CriterioRow = {
-    itemId: string;
-    numero: number;
-    descricao: string;
-    unidade: string;
-    pontoPorUnidade: number;
-    pontosObtidos: number;
-    docNomes: string;
-  };
+  const COL_WIDTHS = [0.05, 0.38, 0.12, 0.10, 0.10, 0.25];
+  const colSubtotalLabelStart = 0.05 + 0.38 + 0.12;
+  const colSubtotalValueStart = 0.05 + 0.38 + 0.12 + 0.10;
 
   const RSC_IDS = ['I', 'II', 'III', 'IV', 'V', 'VI'];
-  const criterioMap = new Map<string, CriterioRow[]>();
-  RSC_IDS.forEach((id) => criterioMap.set(id, []));
-
-  lancamentos.forEach((lancamento) => {
-    const item = itensRSC.find((i) => i.id === lancamento.item_rsc_id);
-    if (!item) return;
-
-    const docEntry = documentos.find((d) => d.id === lancamento.documento_id);
-    const docNome = docEntry ? sanitize(docEntry.nome_arquivo) : '-';
-
-    const existing = criterioMap.get(item.inciso) ?? [];
-    const existingRow = existing.find((r) => r.itemId === item.id);
-    if (existingRow) {
-      existingRow.pontosObtidos = addPointValues(existingRow.pontosObtidos, lancamento.pontos_calculados);
-      if (docEntry && docNome !== '-' && !existingRow.docNomes.includes(docNome)) {
-        existingRow.docNomes =
-          existingRow.docNomes === '-' ? docNome : `${existingRow.docNomes}; ${docNome}`;
-      }
-    } else {
-      existing.push({
-        itemId: item.id,
-        numero: item.numero,
-        descricao: item.descricao,
-        unidade: item.unidade_medida,
-        pontoPorUnidade: item.pontos_por_unidade,
-        pontosObtidos: lancamento.pontos_calculados,
-        docNomes: docNome,
-      });
-    }
-    criterioMap.set(item.inciso, existing);
-  });
-
-  const criterioTotals: number[] = [];
+  const docsById = new Map(documentos.map((d) => [d.id, d]));
 
   for (const inciso of RSC_IDS) {
-    const rows = criterioMap.get(inciso) ?? [];
-    const label = CRITERIO_LABELS[inciso] ?? `Critério ${inciso}`;
+    const incisoLancamentos = lancamentos.filter((l) => {
+      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+      return item?.inciso === inciso;
+    });
 
-    writer.criterioHeader(label);
+    writer.criterioHeader(`Critério ${inciso} - ${CRITERIO_LABELS[inciso]}`);
 
-    const tableRows = rows
-      .sort((a, b) => a.numero - b.numero)
-      .map((row) => [
-        `${row.numero}`,
-        row.descricao,
-        row.unidade,
-        formatNumber(row.pontoPorUnidade),
-        formatNumber(row.pontosObtidos),
-        row.docNomes,
-      ]);
+    const groupedRows = new Map<string, { item: ItemRSC; points: number; docs: string[] }>();
+    incisoLancamentos.forEach((l) => {
+      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+      if (!item) return;
+      const entry = groupedRows.get(item.id) || { item, points: 0, docs: [] };
+      entry.points = addPointValues(entry.points, l.pontos_calculados);
+      const doc = l.documento_id ? docsById.get(l.documento_id) : undefined;
+      if (doc) {
+        const docLabel = `[DOC ${entry.docs.length + 1}] ${doc.nome_arquivo}`;
+        entry.docs.push(docLabel);
+      }
+      groupedRows.set(item.id, entry);
+    });
 
-    // Always show at least 3 empty data rows (blank lines in template)
-    const minBlankRows = Math.max(0, 3 - tableRows.length);
-    const blankRows = Array.from({ length: minBlankRows }, () => ['', '', '', '', '', '']);
+    const sortedGroups = Array.from(groupedRows.values()).sort((a, b) => a.item.numero - b.item.numero);
+    const tableRows = sortedGroups.map((g) => [
+      `${g.item.numero}`,
+      g.item.descricao,
+      `${g.docs.length} unid.`,
+      formatNumber(g.item.pontos_por_unidade),
+      formatNumber(g.points),
+      g.docs.join('\n'),
+    ]);
 
     writer.table(
-      ['Nº do\nitem', 'Critério específico', 'Unidade\nde\nmedida', 'Pontuação', 'Pontuação obtida\n(Pontuação X unidade\nde medida)', 'Documentos\ncomprobatórios\n(anexos)'],
-      [...tableRows, ...blankRows],
+      ['Nº', 'Critério específico', 'Unidade', 'Pts/Un', 'Subtotal', 'Documentos'],
+      tableRows.length > 0 ? tableRows : [['-', 'Sem lançamentos neste critério', '-', '-', '-', '-']],
       COL_WIDTHS,
     );
 
-    const subtotal = rows.reduce((acc, r) => addPointValues(acc, r.pontosObtidos), 0);
-    criterioTotals.push(subtotal);
-
-    writer.subtotalRow('Subtotal', formatNumber(subtotal), [col4Start, col5Start]);
-    writer.gap(4);
+    const subtotal = sortedGroups.reduce((acc, g) => addPointValues(acc, g.points), 0);
+    writer.subtotalRow(`Subtotal CRITÉRIO ${inciso}`, formatNumber(subtotal), [colSubtotalLabelStart, colSubtotalValueStart]);
+    writer.gap(8);
   }
 
-  // TOTAL row
-  const grandTotal = criterioTotals.reduce((acc, v) => addPointValues(acc, v), 0);
-  writer.subtotalRow('TOTAL', formatNumber(grandTotal), [col4Start, col5Start], true);
+  writer.subtotalRow('TOTAL ACUMULADO', formatNumber(totalPontos), [colSubtotalLabelStart, colSubtotalValueStart], true);
 
-  // ── Seção 6: Conclusão do Servidor ───────────────────────────────────────
   writer.gap(18);
   writer.section('6. Conclusão do Servidor');
-  writer.text(
-    `À vista das informações apresentadas, totalizo ${formatNumber(grandTotal)} pontos e atendo aos critérios legais e regulamentares para o nível ${nivelElegivel?.label?.replace('RSC-TAE', 'RSC-PCCTAE') ?? '______'} do RSC-PCCTAE. Solicito a análise pela CRSC-PCCTAE.`,
-    { size: 9 },
-  );
+  writer.text(`À vista das informações apresentadas, totalizo ${formatPointValue(totalPontos)} pontos.`, { size: 9 });
   writer.gap(22);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
-  writer.gap(6);
-  writer.text('Data: ______ / ______ / __________', { size: 9 });
 
   return doc.save();
 }

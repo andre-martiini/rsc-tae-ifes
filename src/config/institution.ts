@@ -48,7 +48,7 @@ export const institutionConfig: InstitutionConfig = {
     labelPlural: 'links institucionais',
     inputLabel: 'Links institucionais',
     helperText:
-      'Cole referências públicas ou internas do repositório documental da sua instituição. Elas serão registradas no memorial e no dossiê exportado.',
+      'Cole referências públicas ou internas do repositório documental da sua instituição. Os links devem direcionar para um arquivo PDF válido e serão registrados no memorial e no dossiê exportado.',
     inputPlaceholder: 'https://documentos.instituicao.edu.br/documento/identificador',
     referenceFileBaseName: 'referencias-institucionais',
   },
