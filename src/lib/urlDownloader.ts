@@ -3,19 +3,22 @@
  * Handles CORS limitations by providing clear feedback to the user.
  */
 export async function downloadFileFromUrl(url: string, useProxy = true): Promise<File> {
+    // Tenta usar um proxy que lida melhor com parâmetros complexos ou tenta acesso direto primeiro
     const finalUrl = useProxy ? `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` : url;
+    
     try {
         const response = await fetch(finalUrl);
 
         if (!response.ok) {
-            throw new Error(`Erro ao acessar o link: ${response.status} ${response.statusText}`);
+            throw new Error(`Erro ao acessar o link: ${response.status}`);
         }
 
-        const contentType = response.headers.get('Content-Type') || 'application/pdf';
         const blob = await response.blob();
+        const contentType = response.headers.get('Content-Type') || 'application/pdf';
 
-        // Try to get filename from Content-Disposition header
-        let fileName = 'documento_baixado.pdf';
+        // Melhoria na extração do nome do arquivo para links do GEDOC
+        let fileName = 'documento_gedoc.pdf';
+        
         const contentDisposition = response.headers.get('Content-Disposition');
         if (contentDisposition) {
             const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -23,32 +26,33 @@ export async function downloadFileFromUrl(url: string, useProxy = true): Promise
                 fileName = fileNameMatch[1].replace(/['"]/g, '');
             }
         } else {
-            // Fallback: extract from URL
+            // Lógica específica para extrair IDs de documentos como o do GEDOC
             try {
                 const urlObj = new URL(url);
-                const pathSegments = urlObj.pathname.split('/');
-                const lastSegment = pathSegments[pathSegments.length - 1];
-                if (lastSegment && lastSegment.includes('.')) {
-                    fileName = decodeURIComponent(lastSegment);
+                // Remove o jsessionid e parâmetros de busca para tentar pegar o ID do documento
+                const pathParts = urlObj.pathname.split(';')[0].split('/');
+                const lastPart = pathParts[pathParts.length - 1];
+                
+                if (lastPart && lastPart.length > 5) {
+                    fileName = `doc_${lastPart.substring(0, 8)}.pdf`;
                 }
             } catch {
-                // use default
+                // mantém o padrão
             }
         }
 
-        // Ensure it has .pdf extension if it's supposed to be a PDF
-        if (contentType.includes('pdf') && !fileName.toLowerCase().endsWith('.pdf')) {
+        // Garante a extensão pdf para o sistema
+        if (!fileName.toLowerCase().endsWith('.pdf')) {
             fileName += '.pdf';
         }
 
-        return new File([blob], fileName, { type: contentType });
+        return new File([blob], fileName, { type: 'application/pdf' });
     } catch (error) {
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-            throw new Error(
-                'Bloqueio de Segurança (CORS): O servidor onde o arquivo está hospedado não permite o download direto pelo navegador. ' +
-                'Tente baixar o arquivo manualmente e anexá-lo ao sistema.'
-            );
-        }
-        throw error;
+        console.error("Erro no download:", error);
+        // Mensagem personalizada para links governamentais/restritos
+        throw new Error(
+            'Não foi possível baixar este link automaticamente devido às restrições de segurança do portal de origem (CORS). ' +
+            'Por favor, baixe o arquivo manualmente no portal do Ifes e anexe o PDF aqui.'
+        );
     }
 }
