@@ -17,7 +17,7 @@ const LEGISLATIONS = [
 export default function Legislation() {
     return (
         <MainLayout activeView="legislation">
-            <div className="mx-auto max-w-5xl px-6 py-10">
+            <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
                 <header className="mb-10">
                     <h1 className="text-3xl font-black tracking-tight text-gray-900">Legislações e Normas</h1>
                     <p className="mt-2 text-gray-500">
@@ -42,7 +42,7 @@ export default function Legislation() {
                                     </span>
                                     <span className="text-xs text-gray-400">Publicado em {item.date}</span>
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-900 group-hover:text-primary transition-colors">{item.title}</h3>
+                                <h3 className="text-lg font-bold text-gray-900 transition-colors group-hover:text-primary sm:text-xl">{item.title}</h3>
                                 <p className="max-w-2xl text-sm leading-relaxed text-gray-500">
                                     {item.description}
                                 </p>
@@ -53,7 +53,7 @@ export default function Legislation() {
                                     href={item.url}
                                     target="_blank"
                                     rel="noreferrer"
-                                    className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 text-sm font-bold text-white transition-all hover:bg-primary hover:shadow-lg hover:shadow-primary/20"
+                                    className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 text-sm font-bold text-white transition-all hover:bg-primary hover:shadow-lg hover:shadow-primary/20 sm:w-auto"
                                 >
                                     Acessar documento
                                     <ExternalLink className="h-4 w-4" />

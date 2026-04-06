@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Calendar,
   ChevronRight,
+  CircleHelp,
   Loader2,
   PlusCircle,
   Trash2,
@@ -12,6 +13,7 @@ import {
   UserCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import AppFooter from '../components/AppFooter';
 import AppLogo from '../components/AppLogo';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -39,6 +41,7 @@ interface ConflictState {
 export default function LandingScreen() {
   const navigate = useNavigate();
   const [isImporting, setIsImporting] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const { sessions, createSession, loadSession, deleteSession, importSessionAsNew } = useAppContext();
 
@@ -181,19 +184,45 @@ export default function LandingScreen() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="w-full max-w-xl">
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <div className="flex flex-1 items-center justify-center px-4 py-12">
+        <div className="w-full max-w-xl">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center justify-center rounded-2xl bg-primary/10 p-4">
             <AppLogo className="h-10 w-10 object-contain" />
           </div>
           <h1 className="text-3xl font-black text-gray-900">{institutionConfig.appName}</h1>
           <p className="mt-1.5 text-sm text-gray-500">{institutionConfig.appSubtitle}</p>
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowAbout((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+            >
+              <CircleHelp className="h-3.5 w-3.5" />
+              O que é o Assistente RSC-TAE?
+            </button>
+          </div>
+          {showAbout && (
+            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm">
+              <p className="text-sm font-semibold text-gray-900">Sobre o assistente</p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                O Assistente RSC-TAE é uma ferramenta de apoio para organizar evidências,
+                registrar lançamentos por item, calcular pontuações e montar o dossiê
+                do processo de RSC-TAE com mais clareza e segurança.
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                Ele não substitui a análise institucional, mas ajuda você a reunir
+                informações e documentos de forma estruturada ao longo da preparação
+                do processo.
+              </p>
+            </div>
+          )}
         </div>
 
         {showForm ? (
           // ... form remains here
-          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
             <div className="mb-6 flex items-center gap-3">
               <button
                 type="button"
@@ -210,7 +239,7 @@ export default function LandingScreen() {
             </p>
 
             <form onSubmit={handleCreateSubmit} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="siape">
                     SIAPE <span className="text-red-500">*</span>
@@ -319,11 +348,20 @@ export default function LandingScreen() {
             </div>
             <ul className="divide-y divide-gray-100">
               {sessions.map((session) => (
-                <li key={session.id} className="flex items-center gap-4 px-5 py-3.5">
+                <li key={session.id} className="relative flex items-center gap-3 px-4 py-4 pr-16 sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-3.5 sm:pr-5">
+                  <button
+                    type="button"
+                    disabled={deletingId === session.id}
+                    onClick={() => handleDeleteSession(session.id)}
+                    className="absolute right-4 top-4 rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 sm:hidden"
+                    title="Remover sessÃ£o"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                   <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                     <UserCircle className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 sm:pr-0">
                     <p className="truncate text-sm font-semibold text-gray-900">{session.nome_completo}</p>
                     <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                       <span>SIAPE {session.siape}</span>
@@ -333,12 +371,12 @@ export default function LandingScreen() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center justify-end gap-2 self-center sm:w-auto">
                     <button
                       type="button"
                       disabled={deletingId === session.id}
                       onClick={() => handleDeleteSession(session.id)}
-                      className="rounded-lg p-2 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40"
+                      className="hidden rounded-lg p-2 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 sm:inline-flex"
                       title="Remover sessão"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -346,9 +384,17 @@ export default function LandingScreen() {
                     <button
                       type="button"
                       onClick={() => handleContinue(session.id)}
-                      className="flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+                      className="hidden items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 sm:flex"
                     >
                       Continuar
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleContinue(session.id)}
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white transition-colors hover:bg-primary/90 sm:hidden"
+                      title={`Continuar sessÃ£o de ${session.nome_completo}`}
+                    >
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
@@ -361,7 +407,9 @@ export default function LandingScreen() {
         <p className="mt-6 text-center text-xs text-gray-400">
           Todos os dados são armazenados exclusivamente neste navegador. Nenhuma informação é enviada a servidores externos.
         </p>
+        </div>
       </div>
+      <AppFooter />
     </div>
   );
 }

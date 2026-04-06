@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle, Info } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
 import MainLayout from '../components/MainLayout';
@@ -60,6 +60,9 @@ export default function Consolidation() {
   );
   const [dataUltimaConcessao, setDataUltimaConcessao] = useState(
     processo.data_ultima_concessao ?? '',
+  );
+  const [temConcessaoAnterior, setTemConcessaoAnterior] = useState(
+    !!(processo.saldo_concessao_anterior || processo.numero_processo_anterior || processo.data_ultima_concessao)
   );
   const nivelPleiteado = useMemo(
     () => niveisPleiteaveis.find((nivel) => nivel.id === nivelPleiteadoId) ?? null,
@@ -124,34 +127,44 @@ export default function Consolidation() {
     updateProcesso({
       nivel_pleiteado_id: nivelPleiteadoId || undefined,
       saldo_concessao_anterior:
-        saldoConcessaoAnterior.trim() === ''
+        !temConcessaoAnterior || saldoConcessaoAnterior.trim() === ''
           ? undefined
           : Number.parseFloat(saldoConcessaoAnterior),
-      numero_processo_anterior: numeroProcessoAnterior.trim() || undefined,
-      data_ultima_concessao: dataUltimaConcessao || undefined,
+      numero_processo_anterior: (temConcessaoAnterior && numeroProcessoAnterior.trim()) || undefined,
+      data_ultima_concessao: (temConcessaoAnterior && dataUltimaConcessao) || undefined,
     });
   }, [
     dataUltimaConcessao,
     nivelPleiteadoId,
     numeroProcessoAnterior,
     saldoConcessaoAnterior,
+    temConcessaoAnterior,
     updateProcesso,
   ]);
 
   const possuiDadosConcessaoAnterior =
-    !!numeroProcessoAnterior.trim() ||
-    !!saldoConcessaoAnterior.trim() ||
-    !!dataUltimaConcessao;
+    temConcessaoAnterior && (
+      !!numeroProcessoAnterior.trim() ||
+      !!saldoConcessaoAnterior.trim() ||
+      !!dataUltimaConcessao
+    );
 
   const intersticioOk = useMemo(() => {
-    if (!dataUltimaConcessao) return true;
+    if (!temConcessaoAnterior || !dataUltimaConcessao) return true;
     const ultimaConcessao = new Date(`${dataUltimaConcessao}T00:00:00`);
     if (Number.isNaN(ultimaConcessao.getTime())) return false;
     const hoje = new Date();
     const dataLimite = new Date(ultimaConcessao);
     dataLimite.setFullYear(dataLimite.getFullYear() + 3);
     return hoje >= dataLimite;
-  }, [dataUltimaConcessao]);
+  }, [dataUltimaConcessao, temConcessaoAnterior]);
+
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   const checks = useMemo(() => {
     const profileOk =
@@ -220,10 +233,10 @@ export default function Consolidation() {
       {
         ok: intersticioOk,
         label: 'Interstício de 3 anos',
-        detail: dataUltimaConcessao
-          ? intersticioOk
+        detail: (temConcessaoAnterior && dataUltimaConcessao)
+          ? (intersticioOk
             ? 'Data da última concessão compatível com novo requerimento.'
-            : 'A data informada da última concessão ainda não completa 3 anos.'
+            : 'A data informada da última concessão ainda não completa 3 anos.')
           : 'Sem concessão anterior informada.',
       },
       {
@@ -232,6 +245,7 @@ export default function Consolidation() {
         detail: autodeclaracaoGeral
           ? 'Declaração de veracidade registrada nesta preparação do dossiê.'
           : 'Falta concordar com a Autodeclaração Geral atestando a veracidade das informações.',
+        action: autodeclaracaoGeral ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
       {
         ok: declaracaoNaoDuplicidade,
@@ -239,6 +253,7 @@ export default function Consolidation() {
         detail: declaracaoNaoDuplicidade
           ? 'Confirmação de não-duplicidade registrada.'
           : 'Falta confirmar que itens/fatos não estão sendo duplicados no sistema.',
+        action: declaracaoNaoDuplicidade ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
       {
         ok: declaracaoExcedeAtribuicoes,
@@ -246,9 +261,10 @@ export default function Consolidation() {
         detail: declaracaoExcedeAtribuicoes
           ? 'Confirmação de atividade extraordinária registrada.'
           : 'Falta confirmar que atividades excedem as atribuições ordinárias.',
+        action: declaracaoExcedeAtribuicoes ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
     ];
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos, temConcessaoAnterior]);
 
   const pendencias = useMemo(() => {
     const issues: string[] = [];
@@ -320,7 +336,7 @@ export default function Consolidation() {
 
   return (
     <MainLayout activeView="consolidate">
-      <main className="mx-auto max-w-4xl px-4 py-8 print:p-0 print:max-w-none">
+      <main className="mx-auto max-w-4xl px-4 py-6 print:max-w-none print:p-0 sm:py-8">
         {/* Pre-flight checklist — hidden on print */}
         <div className="mb-6 print:hidden">
           <div className={cn(
@@ -328,7 +344,7 @@ export default function Consolidation() {
             canGenerate ? "border-emerald-100" : "border-amber-100"
           )}>
             <div className={cn(
-              "flex items-center gap-3 px-6 py-4",
+              "flex flex-col items-start gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6",
               canGenerate ? "bg-emerald-50/50" : "bg-amber-50/50"
             )}>
               <div className={cn(
@@ -352,26 +368,42 @@ export default function Consolidation() {
                 {checks.filter((c) => c.ok).length}/{checks.length} REQUISITOS
               </span>
             </div>
-            <ul className="divide-y divide-gray-100 px-6 py-2">
+            <ul className="divide-y divide-gray-100 px-4 py-2 sm:px-6">
               {checks.map((check) => (
-                <li key={check.label} className="flex items-center gap-4 py-3">
+                <li key={check.label} className={cn(
+                  "flex items-center gap-4 py-3.5 transition-colors group",
+                  !check.ok && "bg-amber-50/20 -mx-6 px-6"
+                )}>
                   <div className={cn(
-                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors",
-                    check.ok ? "bg-emerald-100 text-emerald-600" : "bg-gray-100 text-gray-400"
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all border-2",
+                    check.ok
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                      : "bg-white border-amber-200 text-amber-500 shadow-sm"
                   )}>
-                    {check.ok ? <CheckCircle2 className="h-3 w-3" /> : <div className="h-1.5 w-1.5 rounded-full bg-current" />}
+                    {check.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className={cn("text-[13px] font-bold leading-none", check.ok ? "text-gray-700" : "text-gray-900")}>
+                    <span className={cn("text-[13px] font-black uppercase tracking-tight leading-none", check.ok ? "text-gray-500" : "text-gray-900")}>
                       {check.label}
                     </span>
-                    <p className="mt-0.5 text-[11px] text-gray-500 leading-tight">{check.detail}</p>
+                    <p className="mt-0.5 text-[11px] font-medium text-gray-500 leading-tight">{check.detail}</p>
                   </div>
                   {check.action && (
                     <button
                       type="button"
-                      onClick={() => navigate(check.action!.href)}
-                      className="shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-wider text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+                      onClick={() => {
+                        if (check.action.onClick) {
+                          check.action.onClick();
+                        } else if (check.action.href) {
+                          navigate(check.action.href);
+                        }
+                      }}
+                      className={cn(
+                        "shrink-0 rounded-xl border px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition-all",
+                        check.ok
+                          ? "hidden"
+                          : "border-primary/20 bg-white text-primary shadow-sm hover:border-primary/40 hover:bg-primary/5 active:scale-95"
+                      )}
                     >
                       {check.action.label}
                     </button>
@@ -379,11 +411,19 @@ export default function Consolidation() {
                 </li>
               ))}
             </ul>
+            {/* SRP Support Link Footer */}
+            {!canGenerate && (
+              <div className="bg-gray-50 px-6 py-3 border-t border-gray-100">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">
+                  Dúvidas sobre o processo? Acesse o nosso site <a href="https://www.srp.org.br" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">www.srp.org.br</a>
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="mb-6 print:hidden">
-          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
             <div className="mb-6">
               <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Contexto do Processo</h3>
               <p className="text-sm text-gray-500">
@@ -391,8 +431,9 @@ export default function Consolidation() {
               </p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-1.5">
+            <div className="space-y-8">
+              {/* Nível - Sempre visível */}
+              <div className="max-w-md space-y-1.5">
                 <Label htmlFor="nivel-pleiteado" className="text-xs font-bold uppercase tracking-widest text-gray-400">Nível pleiteado no Requerimento</Label>
                 <select
                   id="nivel-pleiteado"
@@ -409,60 +450,88 @@ export default function Consolidation() {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="saldo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Saldo Concessão Anterior (pts)</Label>
-                <Input
-                  id="saldo-anterior"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="Ex.: 4.5"
-                  value={saldoConcessaoAnterior}
-                  onChange={(e) => setSaldoConcessaoAnterior(e.target.value)}
-                  className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
-                />
+              {/* Checkbox para Concessão Anterior */}
+              <div className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 transition-all hover:bg-gray-50">
+                <label className="flex cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    checked={temConcessaoAnterior}
+                    onChange={(e) => setTemConcessaoAnterior(e.target.checked)}
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-[13px] font-black text-gray-900 uppercase">Possuo concessão anterior de RSC-PCCTAE</span>
+                    <p className="text-[11px] text-gray-500">Marque se você já recebeu algum nível de RSC anteriormente e possui saldo ou processo vinculado.</p>
+                  </div>
+                </label>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="processo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Processo Anterior (Número)</Label>
-                <Input
-                  id="processo-anterior"
-                  placeholder="Ex.: 23000.000000/2024-00"
-                  value={numeroProcessoAnterior}
-                  onChange={(e) => setNumeroProcessoAnterior(e.target.value)}
-                  className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
-                />
-              </div>
+              {/* Campos condicionais */}
+              <AnimatePresence>
+                {temConcessaoAnterior && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="grid gap-6 pt-2 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="saldo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Saldo Concessão Anterior (pts)</Label>
+                        <Input
+                          id="saldo-anterior"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="Ex.: 4.5"
+                          value={saldoConcessaoAnterior}
+                          onChange={(e) => setSaldoConcessaoAnterior(e.target.value)}
+                          className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
+                        />
+                      </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="ultima-concessao" className="text-xs font-bold uppercase tracking-widest text-gray-400">Data da Última Concessão</Label>
-                <Input
-                  id="ultima-concessao"
-                  type="date"
-                  value={dataUltimaConcessao}
-                  onChange={(e) => setDataUltimaConcessao(e.target.value)}
-                  className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
-                />
-              </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="processo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Processo Anterior (Número)</Label>
+                        <Input
+                          id="processo-anterior"
+                          placeholder="Ex.: 23000.000000/2024-00"
+                          value={numeroProcessoAnterior}
+                          onChange={(e) => setNumeroProcessoAnterior(e.target.value)}
+                          className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="ultima-concessao" className="text-xs font-bold uppercase tracking-widest text-gray-400">Data da Última Concessão</Label>
+                        <Input
+                          id="ultima-concessao"
+                          type="date"
+                          value={dataUltimaConcessao}
+                          onChange={(e) => setDataUltimaConcessao(e.target.value)}
+                          className="h-11 rounded-xl border-gray-200 bg-gray-50 focus:bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className={cn(
+                      "mt-6 flex items-center gap-2 rounded-xl border px-4 py-3 transition-all",
+                      intersticioOk ? "border-emerald-100 bg-emerald-50/30 text-emerald-700" : "border-amber-100 bg-amber-50/30 text-amber-700"
+                    )}>
+                      <Info className="h-4 w-4 shrink-0" />
+                      <p className="text-[11px] font-bold">
+                        {intersticioOk
+                          ? 'Interstício válido: os dados da concessão anterior serão incluídos no dossiê.'
+                          : 'Atenção: A data informada indica que o interstício de 3 anos ainda não foi cumprido.'}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
-
-            {possuiDadosConcessaoAnterior && (
-              <div className={cn(
-                "mt-6 flex items-center gap-2 rounded-xl border px-4 py-3 transition-all",
-                intersticioOk ? "border-emerald-100 bg-emerald-50/30 text-emerald-700" : "border-amber-100 bg-amber-50/30 text-amber-700"
-              )}>
-                <Info className="h-4 w-4 shrink-0" />
-                <p className="text-[11px] font-bold">
-                  {intersticioOk
-                    ? 'Interstício válido: os dados da concessão anterior serão incluídos no dossiê.'
-                    : 'Atenção: A data informada indica que o interstício de 3 anos ainda não foi cumprido.'}
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="mb-6 print:hidden">
+        <div id="autodeclaracao-section" className="mb-6 print:hidden">
           <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-6 shadow-sm">
             <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Autodeclaração Legal</h3>
             <p className="mb-6 text-sm text-gray-500">
@@ -563,7 +632,7 @@ export default function Consolidation() {
             </div>
           </div>
 
-          <div className="min-h-[1000px] rounded-3xl border border-gray-200 bg-white p-10 shadow-2xl print:border-none print:shadow-none sm:p-16">
+          <div className="min-h-[1000px] rounded-3xl border border-gray-200 bg-white p-4 shadow-2xl print:border-none print:p-0 print:shadow-none sm:p-10 lg:p-16">
             <AnimatePresence mode="wait">
               {activeTab === 'requerimento' ? (
                 <motion.div
@@ -615,7 +684,7 @@ export default function Consolidation() {
                     <div className="space-y-6 text-[13px]">
                       <div>
                         <span className="font-bold uppercase text-[10px] text-gray-500 block mb-2">Nível de RSC pretendido:</span>
-                        <div className="grid grid-cols-3 gap-4 sm:flex sm:gap-6">
+                        <div className="grid grid-cols-2 gap-4 sm:flex sm:gap-6 md:grid-cols-3">
                           {[1, 2, 3, 4, 5, 6].map(num => {
                             const levelId = `RSC-${['I', 'II', 'III', 'IV', 'V', 'VI'][num - 1]}`;
                             return (
@@ -713,15 +782,16 @@ export default function Consolidation() {
                           <h2 className="bg-gray-100 px-4 py-1.5 text-[11px] font-black uppercase ring-1 ring-gray-900/10">
                             Critério {inciso} - {
                               inciso === 'I' ? 'Participação em grupos, comissões, comitês, núcleos ou representações' :
-                                inciso === 'II' ? 'Orientação, tutoria ou mentoria' :
-                                  inciso === 'III' ? 'Participação em bancas, exames ou avaliações' :
-                                    inciso === 'IV' ? 'Ministração de cursos, oficinas ou palestras' :
-                                      inciso === 'V' ? 'Participação em projetos de pesquisa, extensão ou inovação' :
+                                inciso === 'II' ? 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência' :
+                                  inciso === 'III' ? 'Premiações e reconhecimentos públicos' :
+                                    inciso === 'IV' ? 'Responsabilidades técnico-administrativas e/ou especializadas' :
+                                      inciso === 'V' ? 'Funções ou cargos de direção e assessoramento institucional' :
                                         'Produção, prospecção e difusão de conhecimento'
                             }
                           </h2>
 
-                          <table className="w-full table-fixed border-collapse border border-gray-900 text-[10px]">
+                          <div className="overflow-x-auto">
+                          <table className="min-w-[760px] w-full table-fixed border-collapse border border-gray-900 text-[10px]">
                             <thead>
                               <tr className="bg-gray-50 text-center">
                                 <th className="border border-gray-900 px-2 py-2 w-[5%] font-black italic uppercase">Nº</th>
@@ -762,10 +832,12 @@ export default function Consolidation() {
                               </tr>
                             </tbody>
                           </table>
+                          </div>
 
                           {isLast && (
                             <div className="mt-8 border-t-2 border-gray-900 pt-4">
-                              <table className="w-full border-collapse border border-gray-900 text-xs font-black">
+                              <div className="overflow-x-auto">
+                              <table className="min-w-[560px] w-full border-collapse border border-gray-900 text-xs font-black">
                                 <tbody>
                                   <tr className="bg-gray-200/50">
                                     <td className="border border-gray-900 px-6 py-4 text-right uppercase italic tracking-widest leading-relaxed">
@@ -779,6 +851,7 @@ export default function Consolidation() {
                                   </tr>
                                 </tbody>
                               </table>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -819,4 +892,3 @@ export default function Consolidation() {
     </MainLayout>
   );
 }
-

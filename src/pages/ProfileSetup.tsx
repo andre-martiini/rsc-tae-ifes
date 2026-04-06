@@ -91,14 +91,14 @@ export default function ProfileSetup() {
   return (
     <MainLayout activeView="profile">
       <main className="mx-auto max-w-xl px-4 py-10">
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
           <div className="mb-6 flex items-center gap-3">
             <UserCircle className="h-5 w-5 text-primary" />
             <h2 className="text-base font-bold text-gray-900">Editar Perfil</h2>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="siape">
                   SIAPE <span className="text-red-500">*</span>
@@ -156,7 +156,7 @@ export default function ProfileSetup() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="instituicao">
                   Instituição <span className="text-red-500">*</span>
@@ -192,7 +192,7 @@ export default function ProfileSetup() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="nivel_classificacao">
                   Nível de Classificação <span className="text-red-500">*</span>
@@ -225,7 +225,7 @@ export default function ProfileSetup() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="funcao_encargo">Função/Encargo</Label>
                 <Input
@@ -247,12 +247,12 @@ export default function ProfileSetup() {
               </div>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => navigate(-1)}
-                className="border-gray-200 text-gray-700"
+                className="border-gray-200 text-gray-700 sm:w-auto"
               >
                 Cancelar
               </Button>
