@@ -103,6 +103,7 @@ export interface Documento {
   convertido_para_pdf?: boolean;
   arquivo_origem_nome?: string;
   arquivo_origem_mime?: string;
+  transcricao?: string;
 }
 
 export interface Lancamento {

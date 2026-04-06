@@ -137,8 +137,10 @@ interface AppContextType {
     sourceName?: string;
     sourceMimeType?: string;
     convertedToPdf?: boolean;
+    transcription?: string;
   }) => Promise<Documento>;
   addDocumentoFromGedocLinks: (params: { servidorId: string; links: string[] }) => Promise<Documento>;
+  updateDocumento: (docId: string, updates: Partial<Documento>) => void;
   setWizardRecommendedIds: (ids: string[]) => void;
 }
 
@@ -399,12 +401,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     sourceName,
     sourceMimeType,
     convertedToPdf,
+    transcription,
   }: {
     servidorId: string;
     file: File;
     sourceName?: string;
     sourceMimeType?: string;
     convertedToPdf?: boolean;
+    transcription?: string;
   }) => {
     const fileHash = await computeDocumentHash(file);
     const normalizedName = normalizeFileName(file.name);
@@ -425,13 +429,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     if (duplicatedDocument) {
-      const duplicateReason =
-        duplicatedDocument.hash_arquivo === fileHash
-          ? 'o conteúdo do arquivo já foi carregado anteriormente'
-          : 'já existe um arquivo com o mesmo nome e tamanho nesta sessão';
-      throw new Error(
-        `Upload bloqueado: ${duplicateReason} (${duplicatedDocument.nome_arquivo}).`,
-      );
+      if (transcription && !duplicatedDocument.transcricao) {
+        updateDocumento(duplicatedDocument.id, { transcricao: transcription });
+      }
+      return { ...duplicatedDocument, transcricao: transcription || duplicatedDocument.transcricao };
     }
 
     const docId = `doc-${Date.now()}`;
@@ -449,6 +450,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       convertido_para_pdf: convertedToPdf || undefined,
       arquivo_origem_nome: sourceName,
       arquivo_origem_mime: sourceMimeType,
+      transcricao: transcription,
     };
 
     setDocumentos((current) => [...current, newDoc]);
@@ -500,6 +502,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return removed;
   };
 
+  const updateDocumento = (docId: string, updates: Partial<Documento>) => {
+    setDocumentos((current) =>
+      current.map((doc) => (doc.id === docId ? { ...doc, ...updates } : doc))
+    );
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -523,6 +531,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addDocumento,
         addDocumentoFromFile,
         addDocumentoFromGedocLinks,
+        updateDocumento,
         setWizardRecommendedIds,
       }}
     >
