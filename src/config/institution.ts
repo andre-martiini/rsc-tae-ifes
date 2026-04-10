@@ -63,6 +63,22 @@ export function isValidInstitutionDocumentLink(url: string): boolean {
   }
 }
 
+export function normalizeInstitutionDocumentLink(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+
+    // GEDOC/IFES sometimes appends a transient ;jsessionid path parameter that
+    // breaks automated fetches even though the canonical document URL works.
+    if (parsed.hostname.toLowerCase() === 'gedoc.ifes.edu.br') {
+      parsed.pathname = parsed.pathname.replace(/;jsessionid=[^/?#]+/i, '');
+    }
+
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
 export function buildInstitutionReferenceFileName(linkCount: number): string {
   const suffix = linkCount <= 1 ? '' : `-${linkCount}`;
   return `${institutionConfig.documentLinks.referenceFileBaseName}${suffix}.ref`;
