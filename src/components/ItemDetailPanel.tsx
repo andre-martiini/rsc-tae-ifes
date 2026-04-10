@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { institutionConfig, isValidInstitutionDocumentLink } from '../config/institution';
+import { institutionConfig, isValidInstitutionDocumentLink, normalizeInstitutionDocumentLink } from '../config/institution';
 import type { Documento, ItemRSC } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
 import { normalizeUploadToPdf, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
@@ -45,6 +45,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [documentProxyAvailable, setDocumentProxyAvailable] = useState<boolean | null>(null);
   const [referenceInput, setReferenceInput] = useState('');
   const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
   const [dataInicio, setDataInicio] = useState('');
@@ -100,6 +101,38 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setPendingDeleteId(null);
     resetForm();
   }, [item.id, resetForm]);
+
+  useEffect(() => {
+    if (docMode !== 'reference') return;
+
+    let cancelled = false;
+
+    const checkDocumentProxy = async () => {
+      try {
+        const response = await fetch('/api/document-proxy?health=1');
+        const contentType = response.headers.get('content-type') ?? '';
+        const signature = response.headers.get('X-Document-Proxy');
+        const available =
+          response.ok &&
+          signature === 'rsc-tae' &&
+          contentType.toLowerCase().includes('application/json');
+
+        if (!cancelled) {
+          setDocumentProxyAvailable(available);
+        }
+      } catch {
+        if (!cancelled) {
+          setDocumentProxyAvailable(false);
+        }
+      }
+    };
+
+    void checkDocumentProxy();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [docMode]);
 
   const acceptPreparedFile = async (incoming: File | null) => {
     if (!incoming) return;
@@ -164,6 +197,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       setUploadFeedback(`Processando ${referenceLinks.length} link(s)...`);
 
       const downloadedFiles: File[] = [];
+      const failedLinks: string[] = [];
+      let lastErrorMessage: string | null = null;
       let successCount = 0;
 
       for (const link of referenceLinks) {
@@ -174,8 +209,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           successCount++;
         } catch (err) {
           console.error(`Falha ao baixar link: ${link}`, err);
-          // We can choose to continue or abort. Let's show a toast.
-          toast.error(`Falha ao baixar: ${link}`);
+          failedLinks.push(link);
+          lastErrorMessage = err instanceof Error ? err.message : 'Erro ao baixar o link institucional.';
         }
       }
 
@@ -211,6 +246,12 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
       setDocMode('upload'); // Switch to upload mode after consolidation
       toast.success('Links baixados e consolidados em um único PDF!');
+      if (failedLinks.length > 0) {
+        toast.warning(
+          `${failedLinks.length} link(s) nao puderam ser anexados automaticamente. As referencias originais continuam disponiveis para salvar o lancamento.`,
+          { duration: 9000 },
+        );
+      }
       setUploadFeedback(null);
     } catch (error) {
       setUploadFeedback(null);
@@ -235,9 +276,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
   const addReference = () => {
     const trimmed = referenceInput.trim();
+    const normalizedReference = normalizeInstitutionDocumentLink(trimmed);
+    if (referenceLinks.includes(normalizedReference)) return void toast.error('Este link ja foi adicionado.');
     if (!isValidInstitutionDocumentLink(trimmed)) return void toast.error(`URL inválida. Use um endereço HTTP(S), como: ${institutionConfig.documentLinks.inputPlaceholder}`);
     if (referenceLinks.includes(trimmed)) return void toast.error('Este link já foi adicionado.');
-    setReferenceLinks((prev) => [...prev, trimmed]);
+    setReferenceLinks((prev) => [...prev, normalizedReference]);
     setReferenceInput('');
   };
 
@@ -405,7 +448,10 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
             <section className="space-y-4">
               {docMode === 'reference' ? (
                 <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <p className="mb-3 text-xs text-gray-500">{institutionConfig.documentLinks.helperText}</p>
+                  <p className="mb-2 text-xs text-gray-500">{institutionConfig.documentLinks.helperText}</p>
+                  <p className="text-[11px] text-gray-500">
+                    Salvar o lançamento por link já registra a comprovação. O botão abaixo é opcional e tenta anexar uma cópia local do PDF quando o portal institucional permitir esse acesso.
+                  </p>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
                     <button type="button" onClick={addReference} className="flex h-9 w-full items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary sm:w-9"><Plus className="h-4 w-4" /></button>
@@ -415,19 +461,24 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       <ul className="mt-3 space-y-1.5">{referenceLinks.map((link, index) => <li key={link} className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-900"><FileText className="h-3.5 w-3.5 shrink-0" /><span className="flex-1 truncate font-mono">{link}</span><button type="button" onClick={() => setReferenceLinks((prev) => prev.filter((_, i) => i !== index))}><X className="h-3.5 w-3.5" /></button></li>)}</ul>
 
                       <div className="mt-4 border-t border-gray-200 pt-4">
+                        {documentProxyAvailable === false && (
+                          <p className="mb-2 text-center text-[10px] text-amber-700">
+                            O anexo automatico de PDFs nao esta disponivel nesta versao do sistema. Voce ainda pode salvar normalmente usando apenas os links institucionais.
+                          </p>
+                        )}
                         <Button
                           type="button"
                           variant="outline"
                           className="w-full gap-2 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                           onClick={() => void handleConsolidateLinks()}
-                          disabled={isDownloading}
+                          disabled={isDownloading || documentProxyAvailable === false}
                         >
                           {isDownloading ? (
                             <>Processando...</>
                           ) : (
                             <>
                               <Download className="h-4 w-4" />
-                              Adicionar Arquivos
+                              Tentar anexar PDFs
                             </>
                           )}
                         </Button>

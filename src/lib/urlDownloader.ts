@@ -1,106 +1,105 @@
-/**
- * Utility to download files from a URL.
- * Handles CORS limitations by providing clear feedback to the user.
- */
-export async function downloadFileFromUrl(url: string, useProxy = true): Promise<File> {
-    const proxies = [
-        (u: string) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-        (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-        (u: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-    ];
+import { normalizeInstitutionDocumentLink } from '../config/institution';
 
-    let lastError: any = null;
-
-    // Se useProxy for false, tenta o link direto primeiro
-    if (!useProxy) {
-        try {
-            return await fetchAndCreateFile(url);
-        } catch (err) {
-            lastError = err;
-        }
+function parseFileName(contentDisposition: string | null, sourceUrl: string) {
+  if (contentDisposition) {
+    const utf8Match = contentDisposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+    if (utf8Match?.[1]) {
+      return decodeURIComponent(utf8Match[1]);
     }
 
-    // Tenta cada proxy em sequência
-    for (const getProxyUrl of proxies) {
-        try {
-            const proxyUrl = getProxyUrl(url);
-            console.log(`Tentando baixar via proxy: ${proxyUrl}`);
-            return await fetchAndCreateFile(proxyUrl, url);
-        } catch (err) {
-            console.warn(`Falha ao baixar via proxy:`, err);
-            lastError = err;
-            continue;
-        }
+    const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i);
+    if (fileNameMatch?.[1]) {
+      return fileNameMatch[1].replace(/['"]/g, '');
     }
+  }
 
-    // Se chegou aqui, todos falharam
-    console.error("Erro final no download:", lastError);
-    
-    // Verifica se é um link do IFES para dar uma dica extra
-    const isIfes = url.includes('ifes.edu.br');
-    const extraTip = isIfes ? ' Este portal (GEDOC Ifes) costuma ter restrições de acesso que impedem o download automático por segurança.' : '';
+  try {
+    const urlObj = new URL(sourceUrl);
+    const pathSegments = urlObj.pathname.split('/');
+    const lastSegment = pathSegments[pathSegments.length - 1];
+    if (lastSegment && lastSegment.includes('.')) {
+      return decodeURIComponent(lastSegment);
+    }
+  } catch {
+    // Keep fallback below.
+  }
 
-    throw new Error(
-        `Não foi possível baixar este link automaticamente${extraTip} ` +
-        'Por favor, baixe o arquivo manualmente no portal e anexe o PDF aqui.'
-    );
+  return 'documento_baixado.pdf';
 }
 
-async function fetchAndCreateFile(fetchUrl: string, originalUrl?: string): Promise<File> {
-    const response = await fetch(fetchUrl);
+function startsWithPdfHeader(buffer: Uint8Array) {
+  if (buffer.length < 5) return false;
+  return (
+    buffer[0] === 0x25 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x44 &&
+    buffer[3] === 0x46 &&
+    buffer[4] === 0x2d
+  );
+}
+
+export async function downloadFileFromUrl(url: string): Promise<File> {
+  try {
+    const normalizedUrl = normalizeInstitutionDocumentLink(url);
+    const response = await fetch(`/api/document-proxy?url=${encodeURIComponent(normalizedUrl)}`);
 
     if (!response.ok) {
-        throw new Error(`Erro ao acessar o link: ${response.status}`);
+      let message = `Erro ao acessar o link: ${response.status}`;
+      const responseType = response.headers.get('content-type') ?? '';
+
+      if (responseType.includes('application/json')) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        if (payload?.error) {
+          message = payload.error;
+        }
+      } else if (response.status === 404) {
+        message =
+          'A rota interna de download não está disponível nesta versão do sistema. Atualize o deploy ou baixe o PDF manualmente no portal institucional.';
+      }
+
+      throw new Error(message);
     }
 
+    const contentType = response.headers.get('Content-Type') || 'application/pdf';
+    const proxySignature = response.headers.get('X-Document-Proxy');
     const blob = await response.blob();
-    
-    // Se o blob for muito pequeno (ex: uma página de erro HTML), pode ser um falso positivo do proxy
-    // PDF mínimo tem cerca de 1000 bytes geralmente, mas vamos ser conservadores
-    if (blob.size < 600 && (blob.type.includes('text/html') || blob.type.includes('application/json'))) {
-        throw new Error('O conteúdo retornado não parece ser um documento válido (possível erro do proxy ou redirecionamento).');
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+
+    if (proxySignature !== 'rsc-tae') {
+      throw new Error(
+        'A rota interna de download nao respondeu como esperado. Isso normalmente indica que o deploy publicado ainda nao inclui a funcao /api/document-proxy.',
+      );
     }
 
-    // Tenta determinar o contentType mais real
-    let contentType = blob.type;
-    if (!contentType || contentType === 'application/octet-stream' || contentType === 'text/plain') {
-        contentType = response.headers.get('Content-Type') || 'application/pdf';
+    if (!contentType.toLowerCase().includes('pdf') || !startsWithPdfHeader(bytes)) {
+      const sample = new TextDecoder('utf-8')
+        .decode(bytes.slice(0, 120))
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (sample.toLowerCase().includes('<!doctype') || sample.toLowerCase().includes('<html')) {
+        throw new Error(
+          'O sistema recebeu HTML em vez de PDF. Isso costuma acontecer quando a rota /api/document-proxy nao foi publicada no deploy atual.',
+        );
+      }
+
+      throw new Error(
+        `O link nao retornou um PDF valido para anexacao automatica. Tipo recebido: ${contentType}.`,
+      );
     }
 
-    // Melhoria na extração do nome do arquivo
-    let fileName = 'documento_gedoc.pdf';
-    
-    const contentDisposition = response.headers.get('Content-Disposition');
-    if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-        if (fileNameMatch && fileNameMatch[1]) {
-            fileName = fileNameMatch[1].replace(/['"]/g, '');
-        }
-    } else {
-        // Lógica específica para extrair IDs de documentos
-        try {
-            const urlToParse = originalUrl || fetchUrl;
-            const urlObj = new URL(urlToParse);
-            // Remove o jsessionid e parâmetros de busca
-            const pathParts = urlObj.pathname.split(';')[0].split('/');
-            const lastPart = pathParts[pathParts.length - 1];
-            
-            if (lastPart && lastPart.length > 5 && !lastPart.includes('.')) {
-                fileName = `doc_${lastPart.substring(0, 8)}.pdf`;
-            } else if (lastPart && lastPart.includes('.')) {
-                fileName = lastPart;
-            }
-        } catch {
-            // mantém o padrão
-        }
+    const fileName = parseFileName(response.headers.get('Content-Disposition'), normalizedUrl);
+
+    return new File([bytes], fileName.toLowerCase().endsWith('.pdf') ? fileName : `${fileName}.pdf`, {
+      type: contentType,
+    });
+  } catch (error) {
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error(
+        'Não foi possível alcançar a rota interna de download. Se o problema persistir, baixe o PDF manualmente no portal institucional e anexe-o ao sistema.',
+      );
     }
 
-    // Garante a extensão pdf para o sistema se for PDF ou se não tiver extensão
-    if (!fileName.toLowerCase().endsWith('.pdf') && (contentType.includes('pdf') || !fileName.includes('.'))) {
-        fileName += '.pdf';
-    }
-
-    return new File([blob], fileName, { type: contentType });
+    throw error;
+  }
 }
-
-
