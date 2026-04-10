@@ -11,6 +11,7 @@ import {
   FileText,
   Info,
   Link,
+  LoaderCircle,
   Plus,
   ShieldAlert,
   Sparkles,
@@ -32,7 +33,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { generateLLMPrompt } from '../lib/llmPrompt';
-import { extractTextFromPdf } from '../lib/pdfTranscription';
+import { analyzePdfTranscription } from '../lib/pdfTranscription';
 
 type UploadMeta = { converted: boolean; originalName: string; originalMimeType: string; transcription?: string };
 
@@ -43,6 +44,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [file, setFile] = useState<File | null>(null);
   const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
+  const [isPreparingUpload, setIsPreparingUpload] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [documentProxyAvailable, setDocumentProxyAvailable] = useState<boolean | null>(null);
@@ -78,6 +80,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setFile(null);
     setUploadMeta(null);
     setUploadFeedback(null);
+    setIsPreparingUpload(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
@@ -136,6 +139,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
   const acceptPreparedFile = async (incoming: File | null) => {
     if (!incoming) return;
+    setIsPreparingUpload(true);
+    setUploadFeedback(`Preparando ${incoming.name}...`);
     const toastId = toast.loading('Processando arquivo e extraindo texto...');
     try {
       const normalized = await normalizeUploadToPdf(incoming);
@@ -145,6 +150,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         setUploadMeta(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         setUploadFeedback('O arquivo preparado em PDF excede 5MB. Envie um documento menor.');
+        setIsPreparingUpload(false);
         return;
       }
       setFile(normalized.file);
@@ -161,13 +167,23 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       setUploadMeta(null);
       setUploadFeedback(error instanceof Error ? error.message : 'Formato inválido.');
     }
+    setIsPreparingUpload(false);
   };
 
   const mergeAndAcceptFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     if (fileList.length === 1) return void acceptPreparedFile(fileList[0]);
     try {
-      const normalized = await Promise.all(Array.from(fileList).map((candidate) => normalizeUploadToPdf(candidate)));
+      setIsPreparingUpload(true);
+      setUploadFeedback(`Preparando ${fileList.length} arquivo(s) para consolidacao...`);
+      const normalized: Awaited<ReturnType<typeof normalizeUploadToPdf>>[] = [];
+      const selectedFiles = Array.from(fileList);
+      for (let index = 0; index < selectedFiles.length; index += 1) {
+        const candidate = selectedFiles[index];
+        setUploadFeedback(`Convertendo arquivo ${index + 1}/${selectedFiles.length}: ${candidate.name}`);
+        normalized.push(await normalizeUploadToPdf(candidate));
+      }
+      setUploadFeedback(`Mesclando ${normalized.length} arquivo(s) em um unico PDF...`);
       const merged = await PDFDocument.create();
       for (const entry of normalized) {
         const src = await PDFDocument.load(await entry.file.arrayBuffer(), { ignoreEncryption: true });
@@ -175,7 +191,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         pages.forEach((page) => merged.addPage(page));
       }
       const mergedFile = new File([await merged.save() as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
-      if (mergedFile.size > 5 * 1024 * 1024) return void setUploadFeedback('O PDF consolidado excede 5MB.');
+      if (mergedFile.size > 5 * 1024 * 1024) {
+        setUploadFeedback('O PDF consolidado excede 5MB.');
+        setIsPreparingUpload(false);
+        return;
+      }
       setFile(mergedFile);
       setUploadMeta({
         converted: true,
@@ -185,8 +205,10 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       });
       setUploadFeedback(`${fileList.length} arquivo(s) consolidados em um único PDF.`);
     } catch {
+      setUploadFeedback('Nao foi possivel preparar os arquivos selecionados.');
       toast.error('Não foi possível preparar os arquivos selecionados.');
     }
+    setIsPreparingUpload(false);
   };
 
   const handleConsolidateLinks = async () => {
@@ -314,6 +336,64 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     }
   };
 
+  const prepareDocumentForPrompt = useCallback(async (doc?: Documento) => {
+    if (!doc?.caminho_storage) {
+      return doc;
+    }
+
+    const needsTranscription =
+      !doc.transcricao ||
+      (!doc.transcricao.includes('--- DIAGNOSTICO DE TRANSCRICAO ---') && doc.transcricao.includes('--- P'));
+
+    if (!needsTranscription) {
+      return doc;
+    }
+
+    const toastId = toast.loading('Transcrevendo documento para análise...');
+
+    try {
+      const blob = await getDocumentBlob(doc.id);
+      if (!blob) {
+        toast.error('Documento não encontrado no armazenamento local.', { id: toastId });
+        return doc;
+      }
+
+      let text = '';
+      const fileName = doc.nome_arquivo.toLowerCase();
+      const isPdf = blob.type === 'application/pdf' || fileName.endsWith('.pdf');
+      const isImage = /^image\//i.test(blob.type) || /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
+      const isTextFile = blob.type.startsWith('text/') || /\.(txt|md|json)$/i.test(fileName);
+
+      console.log(`[PromptPrep] doc=${doc.id}, blobType="${blob.type}", fileName="${doc.nome_arquivo}", isPdf=${isPdf}, isImage=${isImage}`);
+
+      if (isPdf) {
+        const pdfFile = new File([blob], doc.nome_arquivo, { type: 'application/pdf' });
+        text = (await analyzePdfTranscription(pdfFile)).text;
+      } else if (isImage) {
+        const { extractTextFromImage } = await import('../lib/ocr');
+        text = await extractTextFromImage(blob);
+      } else if (isTextFile) {
+        text = await blob.text();
+      }
+
+      console.log(`[PromptPrep] Resultado: ${text.length} caracteres extraídos.`);
+
+      if (!text) {
+        toast.error('Não foi possível extrair texto. O documento pode ser uma imagem escaneada.', { id: toastId });
+        return doc;
+      }
+
+      updateDocumento(doc.id, { transcricao: text });
+      const updatedDoc = { ...doc, transcricao: text };
+      toast.success('Transcrição concluída!', { id: toastId });
+      return updatedDoc;
+    } catch (err) {
+      console.error('Erro na preparação do prompt:', err);
+      toast.error('Não foi possível transcrever este documento.', { id: toastId });
+      return doc;
+    }
+  }, [updateDocumento]);
+
   const save = async () => {
     if (!servidor || saving) return;
     if (!quantidade.trim() || Number.isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) return void toast.error('Informe uma quantidade maior que zero.');
@@ -358,11 +438,12 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         description: 'Deseja validar esta comprovação com uma IA agora?',
         action: {
           label: 'Gerar Prompt IA',
-          onClick: () => {
+          onClick: async () => {
+            const preparedDoc = await prepareDocumentForPrompt(newDoc);
             const prompt = generateLLMPrompt({
               item,
               lancamento: { ...lancamentoParaPrompt, id: '', status_auditoria: 'Pendente' },
-              documento: newDoc,
+              documento: preparedDoc,
               servidor,
             });
             setPromptModalText(prompt);
@@ -489,19 +570,29 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                 </div>
               ) : (
                 <div>
-                  <div className={`relative rounded-xl border p-4 transition-all ${file ? 'border-emerald-300 bg-emerald-50/60' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); void mergeAndAcceptFiles(e.dataTransfer.files); }}>
-                    <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" />
-                    {file && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
+                  <div className={`relative rounded-xl border p-4 transition-all ${isPreparingUpload ? 'border-blue-300 bg-blue-50/70' : file ? 'border-emerald-300 bg-emerald-50/60' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); if (!isPreparingUpload) setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (!isPreparingUpload) void mergeAndAcceptFiles(e.dataTransfer.files); }}>
+                    <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} disabled={isPreparingUpload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                    {file && !isPreparingUpload && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
                     <p className="mb-3 pr-10 text-xs text-gray-500">
                       Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.
                     </p>
-                    <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
-                      <div className="mr-2 rounded-full bg-white/80 p-1"><UploadCloud className="h-4 w-4 text-gray-400" /></div>
-                      <p className="flex-1 truncate" title={file?.name}>{file ? file.name : dragActive ? 'Solte os arquivos aqui' : 'Clique para selecionar um arquivo'}</p>
-                      <p className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-400">{file ? 'Pronto' : 'Anexar'}</p>
+                    <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${isPreparingUpload ? 'border-blue-300 text-blue-800' : file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
+                      <div className="mr-2 rounded-full bg-white/80 p-1">
+                        {isPreparingUpload ? <LoaderCircle className="h-4 w-4 animate-spin text-blue-500" /> : <UploadCloud className="h-4 w-4 text-gray-400" />}
+                      </div>
+                      <p className="flex-1 truncate" title={file?.name}>
+                        {isPreparingUpload
+                          ? (uploadFeedback ?? 'Preparando arquivos...')
+                          : file
+                            ? file.name
+                            : dragActive
+                              ? 'Solte os arquivos aqui'
+                              : 'Clique para selecionar um arquivo'}
+                      </p>
+                      <p className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-400">{isPreparingUpload ? 'Processando' : file ? 'Pronto' : 'Anexar'}</p>
                     </div>
                   </div>
-                  {uploadFeedback && <p className={`mt-2 text-xs ${file ? 'text-emerald-700' : 'text-gray-500'}`}>{uploadFeedback}</p>}
+                  {uploadFeedback && <p className={`mt-2 text-xs ${isPreparingUpload ? 'text-blue-700' : file ? 'text-emerald-700' : 'text-gray-500'}`}>{uploadFeedback}</p>}
                 </div>
               )}
             </section>
@@ -584,7 +675,10 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       <button
                         type="button"
                         onClick={async () => {
-                          let finalDoc = doc;
+                          let finalDoc = await prepareDocumentForPrompt(doc);
+                          console.log('[ValidarIA] Documento preparado para o prompt.');
+                          setPromptModalText(generateLLMPrompt({ item, lancamento, documento: finalDoc, servidor }));
+                          return;
 
                           // Lazy transcription for older or incomplete documents
                           const needsTranscription = doc && doc.caminho_storage && (
@@ -606,7 +700,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
                                 if (isPdf) {
                                   const pdfFile = new File([blob], doc.nome_arquivo, { type: 'application/pdf' });
-                                  text = await extractTextFromPdf(pdfFile);
+                                  text = (await analyzePdfTranscription(pdfFile)).text;
                                 } else if (isImage) {
                                   const { extractTextFromImage } = await import('../lib/ocr');
                                   text = await extractTextFromImage(blob);
