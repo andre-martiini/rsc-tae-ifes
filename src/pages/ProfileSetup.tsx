@@ -8,18 +8,12 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
-import type { Servidor } from '../data/mock';
+import {
+  ESCOLARIDADES,
+  SITUACOES_FUNCIONAIS,
+  type Servidor,
+} from '../data/mock';
 import InstituicaoCombobox from '../components/InstituicaoCombobox';
-
-const ESCOLARIDADES = [
-  'Ensino Fundamental Incompleto',
-  'Ensino Fundamental',
-  'Ensino Médio',
-  'Graduação',
-  'Especialização',
-  'Mestrado',
-  'Doutorado',
-];
 
 const NIVEIS_CLASSIFICACAO = ['A', 'B', 'C', 'D', 'E'] as const;
 
@@ -38,6 +32,8 @@ export default function ProfileSetup() {
     instituicao: servidor?.instituicao ?? '',
     lotacao: servidor?.lotacao ?? '',
     escolaridade_atual: servidor?.escolaridade_atual ?? '',
+    situacao_funcional: servidor?.situacao_funcional ?? 'Ativo',
+    em_estagio_probatorio: servidor?.em_estagio_probatorio ?? false,
     cargo: servidor?.cargo ?? '',
     nivel_classificacao: servidor?.nivel_classificacao ?? '',
     data_ingresso_ife: servidor?.data_ingresso_ife ?? servidor?.data_ingresso ?? '',
@@ -59,10 +55,11 @@ export default function ProfileSetup() {
       !form.email_institucional.trim() ||
       !form.instituicao.trim() ||
       !form.lotacao.trim() ||
+      !form.escolaridade_atual ||
+      !form.situacao_funcional ||
       !form.cargo.trim() ||
       !form.nivel_classificacao ||
-      !form.data_ingresso_ife ||
-      !form.escolaridade_atual
+      !form.data_ingresso_ife
     ) {
       toast.error('Preencha todos os campos obrigatórios.');
       return;
@@ -76,6 +73,8 @@ export default function ProfileSetup() {
       instituicao: form.instituicao.trim(),
       lotacao: form.lotacao.trim(),
       escolaridade_atual: form.escolaridade_atual,
+      situacao_funcional: form.situacao_funcional as Servidor['situacao_funcional'],
+      em_estagio_probatorio: form.em_estagio_probatorio,
       cargo: form.cargo.trim(),
       nivel_classificacao: form.nivel_classificacao as Servidor['nivel_classificacao'],
       data_ingresso_ife: form.data_ingresso_ife,
@@ -194,6 +193,24 @@ export default function ProfileSetup() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
+                <Label htmlFor="situacao_funcional">
+                  Situação Funcional <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="situacao_funcional"
+                  value={form.situacao_funcional}
+                  onChange={set('situacao_funcional')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {SITUACOES_FUNCIONAIS.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
                 <Label htmlFor="nivel_classificacao">
                   Nível de Classificação <span className="text-red-500">*</span>
                 </Label>
@@ -211,7 +228,9 @@ export default function ProfileSetup() {
                   ))}
                 </select>
               </div>
+            </div>
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="data_ingresso_ife">
                   Data de ingresso na IFE <span className="text-red-500">*</span>
@@ -222,6 +241,24 @@ export default function ProfileSetup() {
                   value={form.data_ingresso_ife}
                   onChange={set('data_ingresso_ife')}
                 />
+              </div>
+
+              <div className="space-y-2 rounded-md border border-gray-200 px-3 py-2.5">
+                <Label
+                  htmlFor="em_estagio_probatorio"
+                  className="flex cursor-pointer items-start gap-3 text-sm font-medium text-gray-900"
+                >
+                  <input
+                    id="em_estagio_probatorio"
+                    type="checkbox"
+                    checked={form.em_estagio_probatorio}
+                    onChange={(e) =>
+                      setForm((prev) => ({ ...prev, em_estagio_probatorio: e.target.checked }))
+                    }
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                  />
+                  <span>Servidor atualmente em estágio probatório</span>
+                </Label>
               </div>
             </div>
 

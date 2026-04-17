@@ -1,4 +1,4 @@
-import {
+﻿import {
   PDFDocument,
   PDFFont,
   PDFImage,
@@ -22,6 +22,20 @@ export type ComprovacaoItemResumo = {
   lancamentos: Lancamento[];
   documentos: Documento[];
 };
+
+const DOCUMENT_TYPE_LABELS: Record<NonNullable<Documento['tipo_documento']>, string> = {
+  comprobatorio_principal: 'Comprobatório principal',
+  complementar: 'Complementar',
+  autodeclaracao: 'Autodeclaração',
+  referencia_institucional: 'Referência institucional',
+  evidencia_vinculada: 'Evidência vinculada',
+  documento_apoio: 'Documento de apoio',
+};
+
+function getDocumentTypeLabel(tipo?: Documento['tipo_documento']) {
+  if (!tipo) return 'Não tipificado';
+  return DOCUMENT_TYPE_LABELS[tipo] ?? 'Não tipificado';
+}
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -627,7 +641,7 @@ export async function generateRequerimentoFormal(
   const writer = new Writer({
     doc,
     title: 'Requerimento - RSC-PCCTAE',
-    subtitle: 'Modelo para Reconhecimento de Saberes e Competências',
+    subtitle: 'Documento de instrução e organização do pedido',
     footerRight: `${servidor.siape} · Requerimento`,
   });
   await writer.init();
@@ -668,11 +682,11 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Saldo anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
   writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '—'));
 
-  writer.section('3. Declaração de Conformidade Legal');
-  writer.text('Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:', { size: 9 });
+  writer.section('3. Declaração do Servidor');
+  writer.text('Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:', { size: 9 });
   writer.bullet('Todos os fatos apresentados ocorreram no exercício da carreira;');
   writer.bullet('Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;');
-  writer.bullet('Toda a documentação anexada é autêntica e comprova integralmente as atividades;');
+  writer.bullet('A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;');
   writer.bullet('Tenho ciência de que informações falsas implicam responsabilidade administrativa.');
 
   writer.gap(16);
@@ -696,7 +710,7 @@ export async function generateMemorialDescritivo(
   const writer = new Writer({
     doc,
     title: 'Memorial Descritivo - RSC-PCCTAE',
-    subtitle: 'Relatório circunstanciado de saberes e competências',
+    subtitle: 'Consolidação documental dos fatos, atividades e comprovações',
     footerRight: `${servidor.siape} · Memorial`,
   });
   await writer.init();
@@ -731,13 +745,13 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
   writer.keyValue('Saldo anterior:', processo?.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
 
-  writer.section('3. Declaração de Conformidade Legal');
-  writer.text('Declaro, para os fins previstos no RSC-PCCTAE, que os fatos apresentados são verídicos.', { size: 9 });
+  writer.section('3. Declaração do Servidor');
+  writer.text('Este memorial consolida os fatos, atividades e documentos informados pelo servidor para composição do dossiê do pedido de RSC-PCCTAE.', { size: 9 });
 
   writer.addPage();
   writer.section('4. Memorial e Descrição das Atividades');
   writer.gap(4);
-  writer.text('Descrição detalhada das atividades vinculadas aos incisos do art. 4º do Decreto.', { size: 8, color: COLORS.muted });
+  writer.text('Descrição detalhada das atividades vinculadas aos incisos I a VI do art. 3º da base normativa adotada pelo sistema.', { size: 8, color: COLORS.muted });
 
   const CRITERIO_LABELS: Record<string, string> = {
     I: 'Participação em grupos, comissões, comitês, núcleos ou representações',
@@ -763,16 +777,19 @@ export async function generateMemorialDescritivo(
 
     writer.criterioHeader(`Critério ${inciso} - ${CRITERIO_LABELS[inciso]}`);
 
-    const groupedRows = new Map<string, { item: ItemRSC; points: number; docs: string[] }>();
+    const groupedRows = new Map<string, { item: ItemRSC; points: number; docs: string[]; justifications: string[] }>();
     incisoLancamentos.forEach((l) => {
       const item = itensRSC.find((i) => i.id === l.item_rsc_id);
       if (!item) return;
-      const entry = groupedRows.get(item.id) || { item, points: 0, docs: [] };
+      const entry = groupedRows.get(item.id) || { item, points: 0, docs: [], justifications: [] };
       entry.points = addPointValues(entry.points, l.pontos_calculados);
       const doc = l.documento_id ? docsById.get(l.documento_id) : undefined;
       if (doc) {
         const docLabel = `[DOC ${entry.docs.length + 1}] ${doc.nome_arquivo}`;
         entry.docs.push(docLabel);
+      }
+      if (l.justificativa_nao_ordinaria) {
+        entry.justifications.push(`Justificativa: ${l.justificativa_nao_ordinaria}`);
       }
       groupedRows.set(item.id, entry);
     });
@@ -784,7 +801,7 @@ export async function generateMemorialDescritivo(
       `${g.docs.length} unid.`,
       formatNumber(g.item.pontos_por_unidade),
       formatNumber(g.points),
-      g.docs.join('\n'),
+      [...g.docs, ...g.justifications].join('\n'),
     ]);
 
     writer.table(
@@ -802,7 +819,7 @@ export async function generateMemorialDescritivo(
 
   writer.gap(18);
   writer.section('6. Conclusão do Servidor');
-  writer.text(`À vista das informações apresentadas, totalizo ${formatPointValue(totalPontos)} pontos.`, { size: 9 });
+  writer.text(`À vista das informações apresentadas, este memorial consolida ${formatPointValue(totalPontos)} pontos para instrução documental do pedido de RSC-PCCTAE.`, { size: 9 });
   writer.gap(22);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
 
@@ -816,7 +833,7 @@ export async function generateComprovacoesIndice(
   const doc = await PDFDocument.create();
   const writer = new Writer({
     doc,
-    title: 'Índice de Comprovações',
+    title: 'Índice de Comprovações',
     subtitle: 'Organização do conjunto documental por item do rol de saberes e competências',
     footerRight: `${servidor.siape} · Comprovações`,
   });
@@ -871,6 +888,12 @@ export async function generateComprovacaoResumoItem(
   );
   const gedocDocs = grupo.documentos.filter((docItem) => (docItem.gedoc_links?.length ?? 0) > 0);
   const autodeclaracoes = grupo.documentos.filter((docItem) => docItem.autodeclaracao);
+  const docsByType = grupo.documentos.reduce<Record<string, Documento[]>>((acc, docItem) => {
+    const key = docItem.tipo_documento ?? 'nao_tipificado';
+    acc[key] = acc[key] ?? [];
+    acc[key].push(docItem);
+    return acc;
+  }, {});
 
   writer.section('1. Identificação do Item');
   writer.infoGrid(
@@ -894,7 +917,9 @@ export async function generateComprovacaoResumoItem(
         `${formatDate(entry.data_inicio)} a ${formatDate(entry.data_fim)}`,
         formatNumber(entry.quantidade_informada),
         `${formatNumber(entry.pontos_calculados)} pts`,
-        docItem?.nome_arquivo ?? '-',
+        [docItem?.nome_arquivo ?? '-', entry.fato_gerador_id ? `Fato: ${entry.fato_gerador_id}` : '', entry.justificativa_nao_ordinaria ? `Justificativa: ${entry.justificativa_nao_ordinaria}` : '']
+          .filter(Boolean)
+          .join('\n'),
       ];
     }),
     [0.34, 0.16, 0.16, 0.34],
@@ -904,6 +929,11 @@ export async function generateComprovacaoResumoItem(
   writer.keyValue('Arquivos físicos anexados', `${physicalDocs.length}`);
   writer.keyValue('Referências de links institucionais', `${gedocDocs.length}`);
   writer.keyValue('Autodeclarações', `${autodeclaracoes.length}`);
+  Object.entries(docsByType)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([tipo, docs]) => {
+      writer.keyValue(`Tipo documental - ${getDocumentTypeLabel(tipo as Documento['tipo_documento'])}`, `${docs.length}`);
+    });
 
   if (gedocDocs.length) {
     writer.gap(4);
@@ -923,6 +953,24 @@ export async function generateComprovacaoResumoItem(
       writer.text(`${docItem.nome_arquivo} - sem arquivo físico anexo.`, {
         size: 8.5,
         indent: 8,
+      });
+    });
+  }
+
+  const listedDocumentTypes = Object.entries(docsByType).filter(
+    ([tipo]) => tipo !== 'autodeclaracao' && tipo !== 'nao_tipificado',
+  );
+  if (listedDocumentTypes.length) {
+    writer.gap(4);
+    writer.text('Documentos organizados por tipologia:', { bold: true, size: 9 });
+    listedDocumentTypes.forEach(([tipo, docs]) => {
+      writer.text(`${getDocumentTypeLabel(tipo as Documento['tipo_documento'])}:`, {
+        size: 8.5,
+        bold: true,
+        indent: 8,
+      });
+      docs.forEach((docItem) => {
+        writer.text(docItem.nome_arquivo, { size: 8.2, indent: 14, color: COLORS.muted });
       });
     });
   }
@@ -992,3 +1040,4 @@ export async function generateRelatorioPontuacao(
 
   return doc.save();
 }
+

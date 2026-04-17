@@ -1,59 +1,30 @@
 import { institutionConfig } from '../config/institution';
+import {
+  type Inciso,
+  type ItemRSC,
+  type ModoCalculo,
+  RSC_LEVELS,
+  rolItensRSC,
+} from './normative/rsc-pcctae-2026';
 
-export type Inciso = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI';
+export type { Inciso, ItemRSC, ModoCalculo };
 
 export const INSTITUTION_UNITS = institutionConfig.units as readonly string[];
-
-export const RSC_LEVELS = [
-  {
-    id: 'RSC-I',
-    label: 'RSC-TAE I',
-    equivalencia: 'Ensino Fundamental',
-    pontosMinimos: 10,
-    itensMinimos: 1,
-    incisosObrigatorios: null,
-  },
-  {
-    id: 'RSC-II',
-    label: 'RSC-TAE II',
-    equivalencia: 'Ensino Médio',
-    pontosMinimos: 20,
-    itensMinimos: 2,
-    incisosObrigatorios: null,
-  },
-  {
-    id: 'RSC-III',
-    label: 'RSC-TAE III',
-    equivalencia: 'Graduação',
-    pontosMinimos: 25,
-    itensMinimos: 2,
-    incisosObrigatorios: null,
-  },
-  {
-    id: 'RSC-IV',
-    label: 'RSC-TAE IV',
-    equivalencia: 'Especialização',
-    pontosMinimos: 30,
-    itensMinimos: 3,
-    incisosObrigatorios: [['II', 'IV', 'V', 'VI']] as Inciso[][],
-  },
-  {
-    id: 'RSC-V',
-    label: 'RSC-TAE V',
-    equivalencia: 'Mestrado',
-    pontosMinimos: 52,
-    itensMinimos: 5,
-    incisosObrigatorios: [['IV', 'V', 'VI']] as Inciso[][],
-  },
-  {
-    id: 'RSC-VI',
-    label: 'RSC-TAE VI',
-    equivalencia: 'Doutorado',
-    pontosMinimos: 75,
-    itensMinimos: 7,
-    incisosObrigatorios: [['VI']] as Inciso[][],
-  },
+export { RSC_LEVELS };
+export const ESCOLARIDADES = [
+  'Ensino Fundamental Incompleto',
+  'Ensino Fundamental',
+  'Ensino Médio',
+  'Graduação',
+  'Especialização',
+  'Mestrado',
+  'Doutorado',
 ] as const;
+
+export type EscolaridadeAtual = (typeof ESCOLARIDADES)[number];
+
+export const SITUACOES_FUNCIONAIS = ['Ativo', 'Inativo'] as const;
+export type SituacaoFuncional = (typeof SITUACOES_FUNCIONAIS)[number];
 
 export interface Servidor {
   id: string;
@@ -62,7 +33,9 @@ export interface Servidor {
   email_institucional: string;
   instituicao?: string;
   lotacao: string;
-  escolaridade_atual: string;
+  escolaridade_atual: EscolaridadeAtual | string;
+  situacao_funcional?: SituacaoFuncional;
+  em_estagio_probatorio?: boolean;
   nivel_classificacao?: 'A' | 'B' | 'C' | 'D' | 'E';
   cargo?: string;
   /** Data de ingresso em Instituição Federal de Ensino (ISO date string) */
@@ -75,24 +48,17 @@ export interface Servidor {
   telefone?: string;
 }
 
-export type ModoCalculo = 'manual' | 'auto_ano_fracao' | 'auto_mes';
-
-export interface ItemRSC {
-  id: string;
-  numero: number;
-  inciso: Inciso;
-  descricao: string;
-  unidade_medida: string;
-  pontos_por_unidade: number;
-  quantidade_automatica: boolean;
-  modo_calculo: ModoCalculo;
-  limite_pontos?: number;
-}
-
 export interface Documento {
   id: string;
   servidor_id: string;
   nome_arquivo: string;
+  tipo_documento?:
+    | 'comprobatorio_principal'
+    | 'complementar'
+    | 'autodeclaracao'
+    | 'referencia_institucional'
+    | 'evidencia_vinculada'
+    | 'documento_apoio';
   hash_arquivo?: string;
   caminho_storage?: string;
   mime_type?: string;
@@ -111,12 +77,15 @@ export interface Lancamento {
   servidor_id: string;
   item_rsc_id: string;
   documento_id?: string;
+  fato_gerador_id?: string;
+  fato_gerador_descricao?: string;
   data_inicio: string;
   data_fim: string;
   quantidade_informada: number;
   justificativa_alteracao?: string;
   declaracao_nao_duplicidade?: boolean;
   declaracao_nao_ordinaria?: boolean;
+  justificativa_nao_ordinaria?: string;
   pontos_calculados: number;
   status_auditoria: 'Pendente' | 'Aprovado' | 'Rejeitado';
 }
@@ -132,4 +101,4 @@ export interface ProcessoRSC {
   data_ultima_concessao?: string;
 }
 
-export { rolItensRSC as mockItensRSC } from './rolItens';
+export { rolItensRSC as mockItensRSC };

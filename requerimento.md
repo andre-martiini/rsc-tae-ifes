@@ -1,29 +1,42 @@
-# RECONHECIMENTO DE SABERES E COMPETÊNCIAS - RSC
+# REQUERIMENTO DE RSC-PCCTAE
 
-## I – IDENTIFICAÇÃO
-* SERVIDOR(A): (Campo obrigatório para nome do(a) servidor(a) – 1 linha, formato: texto)
-* UNIDADE: (Campo obrigatório para Unidade – 1 linha, formato: texto)
-* CARGO: (Campo obrigatório para informar cargo – 1 linha, formato: texto)
-* SIAPE: (Campo obrigatório para informar SIAPE – 1 linha, formato: texto)
-* E-MAIL INSTITUCIONAL: (Campo para informar e-mail institucional – 1 linha, formato: texto)
+## 1. Identificação do Servidor
+- Servidor(a): campo obrigatório
+- Unidade/Lotação: campo obrigatório
+- Cargo: campo obrigatório
+- SIAPE: campo obrigatório
+- E-mail institucional: campo obrigatório
 
-## II – REQUERIMENTO
-Venho requerer:
-NÍVEL RSC REQUERIDO: Campo obrigatório selecionável entre as opções:
-* RSC-PCCTAE – I (destinado a servidor(a) que não concluiu o ensino fundamental)
-* RSC-PCCTAE – II (destinado a servidor(a) com certificado de conclusão do ensino fundamental)
-* RSC-PCCTAE – III (destinado a servidor(a) com certificado ou diploma de conclusão de ensino médio ou de técnico de nível médio)
-* RSC-PCCTAE – IV (destinado a servidor(a) com diploma de graduação)
-* RSC-PCCTAE – V (destinado a servidor(a) com certificado de pós-graduação lato sensu)
-* RSC-PCCTAE – VI (destinado a servidor(a) com diploma de mestrado)
+## 2. Nível Pleiteado
+O(a) servidor(a) requer a preparação documental do pedido de RSC-PCCTAE no nível:
 
-APRESENTA COMO REQUISITOS:
-* a) RSC-PCCTAE – I: comprovante de ensino fundamental incompleto, acrescido de 10 pontos, distribuídos em no mínimo 2 itens do rol de saberes e competências;
-* b) RSC-PCCTAE – II: diploma de ensino fundamental completo, acrescido de 20 pontos, distribuídos em no mínimo 3 itens do rol de saberes e competências;
-* c) RSC-PCCTAE – III: diploma de ensino médio ou técnico de nível médio, acrescido de 25 pontos, distribuídos em no mínimo 4 itens do rol de saberes e competências;
-* d) RSC-PCCTAE – IV: diploma de graduação, acrescido de 30 pontos, distribuídos em no mínimo 5 itens do rol de saberes e competências;
-* e) RSC-PCCTAE – V: certificado de pós-graduação lato sensu, acrescido de 52 pontos, distribuídos em no mínimo 8 itens do rol de saberes e competências;
-* f) RSC-PCCTAE – VI: diploma de mestrado, acrescido de 75 pontos, distribuídos em no mínimo 12 itens do rol de saberes e competências.
+- `RSC-PCCTAE I`
+- `RSC-PCCTAE II`
+- `RSC-PCCTAE III`
+- `RSC-PCCTAE IV`
+- `RSC-PCCTAE V`
+- `RSC-PCCTAE VI`
 
-### OBSERVAÇÕES:
-* Após anexar a documentação, o processo deverá ser encaminhado à Unidade SEI “CRSC – Comissão Institucional de Reconhecimento de Saberes e Competências” no SEI, para análise.
+## 3. Base de Conferência do Pedido
+O requerimento deve consolidar:
+
+- o nível de RSC-PCCTAE pretendido;
+- a pontuação total informada no sistema;
+- a quantidade de itens distintos utilizados;
+- o saldo excedente, quando houver;
+- a referência à documentação organizada para compor o dossiê.
+
+## 4. Declarações do Servidor
+Declaro, para instrução do meu pedido de RSC-PCCTAE, que:
+
+- os fatos e atividades aqui descritos ocorreram no exercício da carreira;
+- a documentação apresentada foi organizada para comprovar os itens lançados;
+- não utilizei o mesmo fato gerador em duplicidade entre itens;
+- as informações prestadas são verdadeiras, ficando sob minha responsabilidade.
+
+## 5. Observação de Uso
+Este documento integra o conjunto documental preparado pelo sistema e deve ser utilizado juntamente com:
+
+- os documentos originais organizados por item;
+- o memorial descritivo;
+- os comprovantes vinculados a cada lançamento.
