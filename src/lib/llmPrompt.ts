@@ -1,4 +1,4 @@
-import { format } from 'date-fns';
+﻿import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { ItemRSC, Lancamento, Documento, Servidor } from '../data/mock';
 
@@ -27,10 +27,10 @@ export function generateLLMPrompt(params: {
         : '- Documento de referência: (Verifique o arquivo anexo)';
 
     const transcricaoInfo = documento?.transcricao
-        ? `\n--- CONTEÚDO TRANSCRITO DO DOCUMENTO ---\n${documento.transcricao}\n--- FIM DA TRANSCRIÇÃO ---\n`
+        ? `\n--- CONTEÚDO TRANSCRITO DO DOCUMENTO ---\n${documento.transcricao}\n--- FIM DA TRANSCRIÇÍO ---\n`
         : `\n(Nota: A transcrição detalhada do documento não está disponível neste prompt. Por favor, analise o arquivo PDF anexo para realizar a avaliação de mérito.)\n`;
 
-    return `Contexto e Papel da IA: Você atua como um membro especialista da Comissão para Reconhecimento de Saberes e Competências (CRSC-PCCTAE) de uma Instituição Federal de Ensino. Estou submetendo um processo de RSC-PCCTAE e preciso que você faça a análise de mérito para validar se o documento em anexo comprova adequadamente o seguinte item da regulamentação.
+    return `Contexto e Papel da IA: Você atua como um assistente técnico de apoio ao servidor na preparação documental do pedido de RSC-PCCTAE. Sua função é revisar a aderência do documento em anexo ao item informado, sem substituir análise institucional posterior.
 
 Dados do Item Pleiteado:
 - Descrição: ${item.descricao}
@@ -57,8 +57,9 @@ Analise rigorosamente o documento fornecido em contraste com os dados declarados
 4. Filtro de Atribuição Ordinária: A atividade demonstra uma competência/saber adicional ou há indícios de que seja apenas a execução da rotina básica obrigatória do cargo?
 5. Métrica e Quantidade: A quantidade declarada de "${lancamento.quantidade_informada}" atende a métrica exigida pela unidade de medida ("${item.unidade_medida}") e pode ser comprovada no documento?
 
-Parecer Final da Comissão:
-Ao final da análise, emita um parecer classificando o lançamento EXCLUSIVAMENTE como ADEQUADO, PARCIALMENTE ADEQUADO ou INADEQUADO. Justifique sua resposta com base nos critérios do RSC-PCCTAE apontados acima. Caso seja inadequado ou parcial, aponte objetivamente quais as falhas de comprovação e o que o servidor precisaria fazer para corrigir.
+Resultado Esperado:
+Ao final da análise, classifique o lançamento EXCLUSIVAMENTE como ADEQUADO, PARCIALMENTE ADEQUADO ou INADEQUADO. Justifique sua resposta com base nos critérios do RSC-PCCTAE apontados acima. Caso seja inadequado ou parcial, aponte objetivamente quais as falhas de comprovação e o que o servidor precisaria ajustar no dossiê.
 
 Aviso: Lembre o servidor de que este mesmo fato documentado não poderá ser utilizado em duplicidade em outros itens do memorial.`;
 }
+

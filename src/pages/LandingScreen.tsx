@@ -21,17 +21,7 @@ import { Label } from '../components/ui/label';
 import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
 import type { SessionSummary } from '../context/AppContext';
-import type { Servidor } from '../data/mock';
-
-const ESCOLARIDADES = [
-  'Ensino Fundamental Incompleto',
-  'Ensino Fundamental',
-  'Ensino Médio',
-  'Graduação',
-  'Especialização',
-  'Mestrado',
-  'Doutorado',
-];
+import { ESCOLARIDADES, type Servidor } from '../data/mock';
 
 interface ConflictState {
   existingSession: SessionSummary;
@@ -86,6 +76,8 @@ export default function LandingScreen() {
     lotacao: '',
     cargo: '',
     escolaridade_atual: form.escolaridade_atual,
+    situacao_funcional: 'Ativo',
+    em_estagio_probatorio: false,
   });
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -209,12 +201,12 @@ export default function LandingScreen() {
               <p className="mt-2 text-sm leading-relaxed text-gray-600">
                 O Assistente RSC-TAE é uma ferramenta de apoio para organizar evidências,
                 registrar lançamentos por item, calcular pontuações e montar o dossiê
-                do processo de RSC-TAE com mais clareza e segurança.
+                documental do pedido de RSC-TAE com mais clareza e segurança.
               </p>
               <p className="mt-2 text-sm leading-relaxed text-gray-600">
                 Ele não substitui a análise institucional, mas ajuda você a reunir
                 informações e documentos de forma estruturada ao longo da preparação
-                do processo.
+                do pedido.
               </p>
             </div>
           )}
@@ -354,7 +346,7 @@ export default function LandingScreen() {
                     disabled={deletingId === session.id}
                     onClick={() => handleDeleteSession(session.id)}
                     className="absolute right-4 top-4 rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 sm:hidden"
-                    title="Remover sessÃ£o"
+                    title="Remover sessão"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -393,7 +385,7 @@ export default function LandingScreen() {
                       type="button"
                       onClick={() => handleContinue(session.id)}
                       className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white transition-colors hover:bg-primary/90 sm:hidden"
-                      title={`Continuar sessÃ£o de ${session.nome_completo}`}
+                      title={`Continuar sessão de ${session.nome_completo}`}
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
@@ -413,3 +405,4 @@ export default function LandingScreen() {
     </div>
   );
 }
+

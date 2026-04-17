@@ -59,9 +59,9 @@ export default function AppHeader({
             <HardDrive className="h-3.5 w-3.5" />
             <span className="ml-1.5 text-[10px] font-bold">AUTO-SAVE</span>
             <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-              <p className="mb-1 text-[11px] font-bold text-white">Salvamento local de seguranÃ§a</p>
+              <p className="mb-1 text-[11px] font-bold text-white">Salvamento local de segurança</p>
               <p className="text-[11px] leading-relaxed text-gray-300">
-                Seus dados sÃ£o gravados no cache do navegador. Para levar seu progresso para outro computador, exporte um backup no Dashboard.
+                Seus dados são gravados no cache do navegador. Para levar seu progresso para outro computador, exporte um backup no Dashboard.
               </p>
               <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900" />
             </div>

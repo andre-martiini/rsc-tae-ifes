@@ -12,7 +12,13 @@ import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
 import { exportPacoteRSC } from '../lib/pacoteExport';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
-import { getEligibleRscLevel, getEligibleRscLevels, validateLevelConstraints } from '../lib/rsc';
+import {
+  getEligibleRscLevel,
+  getEligibleRscLevels,
+  getServidorFunctionalEligibility,
+  itemRequiresQualitativeJustification,
+  validateLevelConstraints,
+} from '../lib/rsc';
 import { cn } from '../lib/utils';
 
 export default function Consolidation() {
@@ -68,6 +74,10 @@ export default function Consolidation() {
     () => niveisPleiteaveis.find((nivel) => nivel.id === nivelPleiteadoId) ?? null,
     [nivelPleiteadoId, niveisPleiteaveis],
   );
+  const functionalEligibility = useMemo(
+    () => getServidorFunctionalEligibility(servidor),
+    [servidor],
+  );
   const incisoViolations = useMemo(
     () =>
       nivelPleiteado
@@ -116,6 +126,15 @@ export default function Consolidation() {
       .filter((d) => ids.has(d.id))
       .sort((a, b) => (a.data_upload < b.data_upload ? 1 : -1));
   }, [documentos, lancamentosDoServidor]);
+
+  const fragileLaunchesMissingJustification = useMemo(
+    () =>
+      lancamentosDoServidor.filter((entry) => {
+        const item = itensRSC.find((candidate) => candidate.id === entry.item_rsc_id);
+        return item && itemRequiresQualitativeJustification(item) && !entry.justificativa_nao_ordinaria?.trim();
+      }),
+    [itensRSC, lancamentosDoServidor],
+  );
 
   useEffect(() => {
     if (!nivelPleiteadoId && nivelElegivel?.id) {
@@ -170,6 +189,7 @@ export default function Consolidation() {
     const profileOk =
       !!servidor.email_institucional?.trim() &&
       !!servidor.lotacao?.trim() &&
+      !!servidor.situacao_funcional &&
       !!servidor.cargo?.trim() &&
       !!servidor.nivel_classificacao &&
       !!servidor.data_ingresso_ife;
@@ -193,6 +213,14 @@ export default function Consolidation() {
         detail: nivelOk
           ? `${nivelPleiteado!.label} (${nivelPleiteado!.equivalencia})`
           : 'Selecione o nível que será levado para o requerimento.',
+      },
+      {
+        ok: functionalEligibility.ok,
+        label: 'Elegibilidade funcional',
+        detail: functionalEligibility.ok
+          ? 'Situação funcional compatível com a emissão do pedido.'
+          : functionalEligibility.reasons.join(' '),
+        action: functionalEligibility.ok ? undefined : { label: 'Completar perfil', href: '/perfil' },
       },
       {
         ok: lancamentosOk,
@@ -263,8 +291,20 @@ export default function Consolidation() {
           : 'Falta confirmar que atividades excedem as atribuições ordinárias.',
         action: declaracaoExcedeAtribuicoes ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
+      {
+        ok: fragileLaunchesMissingJustification.length === 0,
+        label: 'Justificativas qualitativas',
+        detail:
+          fragileLaunchesMissingJustification.length === 0
+            ? 'Itens sensíveis possuem justificativa qualitativa registrada.'
+            : `${fragileLaunchesMissingJustification.length} lançamento(s) sensível(is) ainda sem justificativa qualitativa.`,
+        action:
+          fragileLaunchesMissingJustification.length === 0
+            ? undefined
+            : { label: 'Revisar itens', href: '/itens' },
+      },
     ];
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos, temConcessaoAnterior]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, fragileLaunchesMissingJustification.length, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos, temConcessaoAnterior]);
 
   const pendencias = useMemo(() => {
     const issues: string[] = [];
@@ -276,6 +316,8 @@ export default function Consolidation() {
       issues.push(`Ainda faltam ${nivelPleiteado.itensMinimos - itensDistintos} itens distintos para liberar o envio.`);
     for (const v of incisoViolations)
       issues.push(`Falta ao menos um lançamento em algum dos Incisos: ${[...v.requiredIncisos].join('/')}.`);
+    if (!functionalEligibility.ok)
+      issues.push(...functionalEligibility.reasons);
     if (!intersticioOk)
       issues.push('A data informada da última concessão ainda não completa o interstício de 3 anos.');
     if (!autodeclaracaoGeral)
@@ -284,8 +326,10 @@ export default function Consolidation() {
       issues.push('Você precisa confirmar a declaração de não-duplicidade de itens.');
     if (!declaracaoExcedeAtribuicoes)
       issues.push('Você precisa confirmar a declaração de atividade extraordinária.');
+    if (fragileLaunchesMissingJustification.length > 0)
+      issues.push('Existem itens sensíveis sem justificativa qualitativa da atividade extraordinária.');
     return issues;
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, fragileLaunchesMissingJustification.length, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
 
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
@@ -427,7 +471,7 @@ export default function Consolidation() {
             <div className="mb-6">
               <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Contexto do Processo</h3>
               <p className="text-sm text-gray-500">
-                Informações complementares que serão injetadas nos documentos oficiais.
+                Informações complementares que serão inseridas nos documentos gerados pelo sistema.
               </p>
             </div>
 
@@ -535,7 +579,7 @@ export default function Consolidation() {
           <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-6 shadow-sm">
             <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Autodeclaração Legal</h3>
             <p className="mb-6 text-sm text-gray-500">
-              Essas declarações são obrigatórias para a validade jurídica do processo.
+              Essas declarações integram a composição documental do pedido preparado pelo sistema.
             </p>
             <div className="grid gap-4">
               <label className="flex cursor-pointer items-start gap-4 rounded-xl border border-white bg-white/60 p-4 transition-all hover:bg-white hover:shadow-md">
@@ -586,7 +630,7 @@ export default function Consolidation() {
           </div>
         </div>
 
-        {/* ── Document Viewer ── */}
+        {/* â”€â”€ Document Viewer â”€â”€ */}
         <div className="space-y-4">
           <div className="flex items-end justify-between px-1 print:hidden">
             <div className="flex items-center gap-1">
@@ -646,7 +690,7 @@ export default function Consolidation() {
                   <div className="flex flex-col items-center text-center border-b-2 border-gray-900 pb-8">
                     <AppLogo className="mb-4 h-16 w-16" />
                     <h2 className="text-base font-bold uppercase tracking-tight">{institutionConfig.networkName}</h2>
-                    <h1 className="text-xl font-black uppercase mt-1">Requerimento de Concessão de RSC-PCCTAE</h1>
+                    <h1 className="text-xl font-black uppercase mt-1">Requerimento de RSC-PCCTAE</h1>
                   </div>
 
                   {/* 1. Identificação */}
@@ -673,7 +717,7 @@ export default function Consolidation() {
                       </div>
 
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Lotação:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.lotacao}</p></div>
-                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Função/Encargo (se houver):</span> <p className="border-b border-gray-300 min-h-[20px]">{processo.funcao_encargo || '—'}</p></div>
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Função/Encargo (se houver):</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.funcao_encargo || '—'}</p></div>
                       <div className="md:col-span-2"><span className="font-bold uppercase text-[10px] text-gray-500 block">Telefone/E-mail:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.email_institucional}</p></div>
                     </div>
                   </section>
@@ -721,7 +765,7 @@ export default function Consolidation() {
                           <span className="font-bold">{saldoConcessaoAnterior || '0'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
-                          <span className="text-gray-600">Número do processo relativo à concessão anterior do RSC-PCCTAE:</span>
+                          <span className="text-gray-600">Número do processo relativo Í  concessão anterior do RSC-PCCTAE:</span>
                           <span className="font-bold">{numeroProcessoAnterior || '—'}</span>
                         </div>
                       </div>
@@ -730,13 +774,13 @@ export default function Consolidation() {
 
                   {/* 3. Declaração */}
                   <section className="space-y-4">
-                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">3. Declaração de Conformidade Legal</h3>
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">3. Declaração do Servidor</h3>
                     <div className="text-[12px] leading-relaxed space-y-4">
-                      <p>Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:</p>
+                      <p>Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:</p>
                       <ul className="list-disc pl-5 space-y-1">
                         <li>Todos os fatos apresentados ocorreram no exercício da carreira;</li>
                         <li>Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;</li>
-                        <li>Toda a documentação anexada é autêntica e comprova integralmente as atividades apresentadas;</li>
+                        <li>A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;</li>
                         <li>Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.</li>
                       </ul>
                     </div>
@@ -764,10 +808,10 @@ export default function Consolidation() {
                   className="space-y-12 text-gray-900"
                 >
                   <div className="text-center space-y-2 border-b-2 border-gray-900 pb-8">
-                    <h1 className="text-lg font-black uppercase tracking-tight decoration-2">Memorial e Descrição das Atividades por Requisito Legal</h1>
+                    <h1 className="text-lg font-black uppercase tracking-tight decoration-2">Memorial e Descrição das Atividades</h1>
                     <p className="max-w-3xl mx-auto text-[11px] leading-relaxed text-gray-500 italic pt-4">
                       Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das
-                      contribuições institucionais e conforme os requisitos do art. 4º do Decreto (incisos I a VI), vinculando cada
+                      contribuições institucionais e conforme os incisos I a VI do art. 3º da base normativa adotada pelo sistema, vinculando cada
                       atividade ao número correspondente aos critérios específicos.
                     </p>
                   </div>
@@ -818,6 +862,16 @@ export default function Consolidation() {
                                         {itemLancamentos.map((l, i) => (
                                           <span key={i} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
                                             [DOC {i + 1}] {documentos.find(d => d.id === l.documento_id)?.nome_arquivo}
+                                            {documentos.find(d => d.id === l.documento_id)?.tipo_documento && (
+                                              <span className="mt-1 block break-normal text-blue-700">
+                                                Tipo: {documentos.find(d => d.id === l.documento_id)?.tipo_documento}
+                                              </span>
+                                            )}
+                                            {l.justificativa_nao_ordinaria && (
+                                              <span className="mt-1 block break-normal text-amber-800">
+                                                Justificativa: {l.justificativa_nao_ordinaria}
+                                              </span>
+                                            )}
                                           </span>
                                         ))}
                                       </div>
@@ -864,9 +918,8 @@ export default function Consolidation() {
                     <h3 className="bg-gray-100 px-4 py-1.5 text-xs font-black uppercase ring-1 ring-gray-900/10 w-fit">6. Conclusão do Servidor</h3>
                     <div className="text-[14px] leading-relaxed">
                       <p>
-                        À vista das informações apresentadas, totalizo <strong>{formatPointValue(totalPontos)}</strong> pontos e atendo aos critérios legais
-                        e regulamentares para o nível <strong>{nivelPleiteado?.label || '—'}</strong> do RSC‑PCCTAE. Solicito a análise pela
-                        CRSC-PCCTAE.
+                        À vista das informações apresentadas, este memorial consolida <strong>{formatPointValue(totalPontos)}</strong> pontos para
+                        instrução documental do pedido no nível <strong>{nivelPleiteado?.label || '—'}</strong> do RSC‑PCCTAE.
                       </p>
                     </div>
 
@@ -892,3 +945,4 @@ export default function Consolidation() {
     </MainLayout>
   );
 }
+

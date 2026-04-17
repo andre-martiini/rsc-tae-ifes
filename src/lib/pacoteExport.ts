@@ -34,6 +34,20 @@ function sanitizeFileName(value: string) {
     .slice(0, 80);
 }
 
+const DOCUMENT_TYPE_FOLDER_LABELS: Record<NonNullable<Documento['tipo_documento']>, string> = {
+  comprobatorio_principal: '01_Comprobatorio_Principal',
+  complementar: '02_Complementar',
+  autodeclaracao: '03_Autodeclaracoes',
+  referencia_institucional: '04_Referencias_Institucionais',
+  evidencia_vinculada: '05_Evidencias_Vinculadas',
+  documento_apoio: '06_Documentos_Apoio',
+};
+
+function getDocumentTypeFolder(doc: Documento) {
+  if (!doc.tipo_documento) return '99_Nao_Tipificado';
+  return DOCUMENT_TYPE_FOLDER_LABELS[doc.tipo_documento] ?? '99_Nao_Tipificado';
+}
+
 async function appendPdfBytes(target: PDFDocument, bytes: Uint8Array | ArrayBuffer) {
   const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const pages = await target.copyPages(source, source.getPageIndices());
@@ -66,6 +80,15 @@ async function buildComprovacaoItemPdf(
   return merged.save();
 }
 
+function sortDocumentsByType(documents: Documento[]) {
+  return [...documents].sort((a, b) => {
+    const folderA = getDocumentTypeFolder(a);
+    const folderB = getDocumentTypeFolder(b);
+    if (folderA !== folderB) return folderA.localeCompare(folderB);
+    return a.nome_arquivo.localeCompare(b.nome_arquivo);
+  });
+}
+
 function buildComprovacaoGroups(
   lancamentos: Lancamento[],
   itensRSC: ItemRSC[],
@@ -85,14 +108,14 @@ function buildComprovacaoGroups(
       const item = itensRSC.find((candidate) => candidate.id === itemId);
       if (!item) return null;
 
-      const documentosDoItem = Array.from(
+      const documentosDoItem = sortDocumentsByType(Array.from(
         new Map(
           itemLancamentos
             .map((entry) => docsById.get(entry.documento_id))
             .filter((doc): doc is Documento => !!doc)
             .map((doc) => [doc.id, doc]),
         ).values(),
-      );
+      ));
 
       return {
         item,
@@ -144,9 +167,32 @@ export async function exportPacoteRSC(params: {
     comprovacoesFolder.file('00_Indice_Comprovacoes.pdf', indiceBytes);
 
     for (const group of groups) {
-      const itemPdfBytes = await buildComprovacaoItemPdf(servidor, group);
       const baseName = sanitizeFileName(`Item_${group.item.numero}_${group.item.descricao}`);
-      comprovacoesFolder.file(`${baseName}.pdf`, itemPdfBytes);
+      const itemFolder = comprovacoesFolder.folder(baseName);
+      if (!itemFolder) continue;
+
+      const itemPdfBytes = await buildComprovacaoItemPdf(servidor, group);
+      itemFolder.file(`00_Resumo_${baseName}.pdf`, itemPdfBytes);
+
+      for (const doc of sortDocumentsByType(group.documentos)) {
+        const typeFolder = itemFolder.folder(getDocumentTypeFolder(doc));
+        if (!typeFolder) continue;
+
+        if (doc.gedoc_links?.length) {
+          const linksContent = doc.gedoc_links.join('\n');
+          typeFolder.file(`${sanitizeFileName(doc.nome_arquivo)}.txt`, linksContent);
+          continue;
+        }
+
+        if (!doc.caminho_storage) {
+          typeFolder.file(`${sanitizeFileName(doc.nome_arquivo)}.txt`, `Registro documental sem arquivo físico anexado.\nTipo: ${doc.tipo_documento ?? 'nao_tipificado'}`);
+          continue;
+        }
+
+        const blob = await getDocumentBlob(doc.id);
+        if (!blob) continue;
+        typeFolder.file(sanitizeFileName(doc.nome_arquivo), blob);
+      }
     }
   }
 

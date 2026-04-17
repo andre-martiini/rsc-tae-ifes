@@ -76,6 +76,8 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
       servidor_id: servidor.id,
       item_rsc_id: item.id,
       documento_id: docId,
+      fato_gerador_id: `${item.id}-${file.name}-${dataInicio}-${dataFim}`.toLowerCase(),
+      fato_gerador_descricao: `Documento ${file.name}`,
       data_inicio: dataInicio,
       data_fim: dataFim,
       quantidade_informada: quantidade,

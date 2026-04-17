@@ -72,6 +72,15 @@ function normalizeFileName(value: string): string {
     .trim();
 }
 
+function normalizeFactIdentifier(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Migrate pre-multi-session data (flat keys) to the new format.
 // Returns a SessionSummary[] to seed the sessions index, or [] if nothing to migrate.
 function migrateOldSession(): SessionSummary[] {
@@ -134,12 +143,17 @@ interface AppContextType {
   addDocumentoFromFile: (params: {
     servidorId: string;
     file: File;
+    tipoDocumento?: Documento['tipo_documento'];
     sourceName?: string;
     sourceMimeType?: string;
     convertedToPdf?: boolean;
     transcription?: string;
   }) => Promise<Documento>;
-  addDocumentoFromGedocLinks: (params: { servidorId: string; links: string[] }) => Promise<Documento>;
+  addDocumentoFromGedocLinks: (params: {
+    servidorId: string;
+    links: string[];
+    tipoDocumento?: Documento['tipo_documento'];
+  }) => Promise<Documento>;
   updateDocumento: (docId: string, updates: Partial<Documento>) => void;
   setWizardRecommendedIds: (ids: string[]) => void;
 }
@@ -389,6 +403,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const newDoc: Documento = {
       ...doc,
       id: `doc-${Date.now()}`,
+      tipo_documento: doc.tipo_documento ?? 'comprobatorio_principal',
       data_upload: new Date().toISOString(),
     };
     setDocumentos((current) => [...current, newDoc]);
@@ -398,6 +413,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addDocumentoFromFile = async ({
     servidorId,
     file,
+    tipoDocumento,
     sourceName,
     sourceMimeType,
     convertedToPdf,
@@ -405,6 +421,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }: {
     servidorId: string;
     file: File;
+    tipoDocumento?: Documento['tipo_documento'];
     sourceName?: string;
     sourceMimeType?: string;
     convertedToPdf?: boolean;
@@ -442,6 +459,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: docId,
       servidor_id: servidorId,
       nome_arquivo: file.name,
+      tipo_documento: tipoDocumento ?? 'comprobatorio_principal',
       hash_arquivo: persistedFile.hash,
       caminho_storage: persistedFile.caminhoStorage,
       mime_type: persistedFile.mimeType,
@@ -460,9 +478,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addDocumentoFromGedocLinks = async ({
     servidorId,
     links,
+    tipoDocumento,
   }: {
     servidorId: string;
     links: string[];
+    tipoDocumento?: Documento['tipo_documento'];
   }): Promise<Documento> => {
     const docId = `doc-${Date.now()}`;
     const nomeArquivo = buildInstitutionReferenceFileName(links.length);
@@ -471,6 +491,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: docId,
       servidor_id: servidorId,
       nome_arquivo: nomeArquivo,
+      tipo_documento: tipoDocumento ?? 'referencia_institucional',
       data_upload: new Date().toISOString(),
       gedoc_links: links,
     };
@@ -480,8 +501,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addLancamento = (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => {
+    const normalizedFactId = normalizeFactIdentifier(lancamento.fato_gerador_id ?? '');
+    if (!normalizedFactId) {
+      throw new Error('Informe um identificador do fato gerador para este lançamento.');
+    }
+
+    const duplicateEntry = lancamentos.find(
+      (entry) =>
+        entry.servidor_id === lancamento.servidor_id &&
+        normalizeFactIdentifier(entry.fato_gerador_id ?? '') === normalizedFactId,
+    );
+
+    if (duplicateEntry) {
+      throw new Error(
+        'Este fato gerador já foi utilizado em outro lançamento. Revise o identificador informado para evitar duplicidade.',
+      );
+    }
+
     const newLancamento: Lancamento = {
       ...lancamento,
+      fato_gerador_id: lancamento.fato_gerador_id?.trim(),
+      fato_gerador_descricao: lancamento.fato_gerador_descricao?.trim() || undefined,
       id: `lanc-${Date.now()}`,
       status_auditoria: 'Pendente',
     };

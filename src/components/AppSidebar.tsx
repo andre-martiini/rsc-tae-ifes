@@ -145,7 +145,7 @@ export default function AppSidebar({
                                 transition={{ duration: 0.1 }}
                                 className="min-w-0 flex-1"
                             >
-                                <p className="truncate text-sm font-bold text-gray-900">{servidor?.nome_completo || 'UsuÃ¡rio'}</p>
+                                <p className="truncate text-sm font-bold text-gray-900">{servidor?.nome_completo || 'Usuário'}</p>
                                 <p className="truncate text-[11px] font-medium text-gray-500">SIAPE: {servidor?.siape || '---'}</p>
                             </motion.div>
                         )}
@@ -162,7 +162,7 @@ export default function AppSidebar({
                             'flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors hover:bg-red-50 hover:text-red-600',
                             collapsed && !isMobile ? 'justify-center text-gray-400' : 'text-gray-500'
                         )}
-                        title="Sair / Trocar sessÃ£o"
+                        title="Sair / Trocar sessão"
                     >
                         <LogOut className="h-5 w-5" />
                         <AnimatePresence>
