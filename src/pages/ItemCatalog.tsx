@@ -163,23 +163,7 @@ export default function ItemCatalog() {
   );
 
   return (
-    <MainLayout
-      activeView="catalog"
-      secondaryContent={
-        <div className="flex items-center gap-2">
-          {metasAtingidas && (
-            <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
-              <CheckCircle2 className="h-3 w-3" />
-              Metas atingidas
-            </div>
-          )}
-          <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-            <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
-            {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
-          </div>
-        </div>
-      }
-    >
+    <MainLayout activeView="catalog">
       <div className="flex h-full flex-1 overflow-hidden">
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">

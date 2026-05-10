@@ -13,7 +13,6 @@ import {
   Link,
   LoaderCircle,
   Plus,
-  ShieldAlert,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -24,9 +23,8 @@ import { institutionConfig, isValidInstitutionDocumentLink, normalizeInstitution
 import type { Documento, ItemRSC } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
 import { normalizeUploadToPdf, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
-import { getDocumentBlob } from '../lib/documentStorage';
+import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
-import { isItemJuridicallyFragile, itemRequiresQualitativeJustification } from '../lib/rsc';
 import { cn } from '../lib/utils';
 import { downloadFileFromUrl } from '../lib/urlDownloader';
 import { Button } from './ui/button';
@@ -35,25 +33,13 @@ import { Label } from './ui/label';
 import { generateLLMPrompt } from '../lib/llmPrompt';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
 
-type UploadMeta = { converted: boolean; originalName: string; originalMimeType: string; transcription?: string };
-type DocumentTypeOption = NonNullable<Documento['tipo_documento']>;
-
-const DOCUMENT_TYPE_OPTIONS: Array<{ value: DocumentTypeOption; label: string }> = [
-  { value: 'comprobatorio_principal', label: 'Comprobatório principal' },
-  { value: 'complementar', label: 'Complementar' },
-  { value: 'autodeclaracao', label: 'Autodeclaração' },
-  { value: 'referencia_institucional', label: 'Referência institucional' },
-  { value: 'evidencia_vinculada', label: 'Evidência vinculada' },
-  { value: 'documento_apoio', label: 'Documento de apoio' },
-];
-
-const DOCUMENT_TYPE_LABELS: Record<DocumentTypeOption, string> = {
-  comprobatorio_principal: 'Comprobatório principal',
-  complementar: 'Complementar',
-  autodeclaracao: 'Autodeclaração',
-  referencia_institucional: 'Referência institucional',
-  evidencia_vinculada: 'Evidência vinculada',
-  documento_apoio: 'Documento de apoio',
+type UploadMeta = {
+  converted: boolean;
+  originalName: string;
+  originalMimeType: string;
+  transcription?: string;
+  componentHashes?: string[];
+  componentFiles?: Documento['arquivos_componentes'];
 };
 
 export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSaved: () => void }) {
@@ -69,16 +55,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [documentProxyAvailable, setDocumentProxyAvailable] = useState<boolean | null>(null);
   const [referenceInput, setReferenceInput] = useState('');
   const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
-  const [documentType, setDocumentType] = useState<DocumentTypeOption>('comprobatorio_principal');
-  const [fatoGeradorId, setFatoGeradorId] = useState('');
-  const [fatoGeradorDescricao, setFatoGeradorDescricao] = useState('');
-  const [justificativaNaoOrdinaria, setJustificativaNaoOrdinaria] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [ongoing, setOngoing] = useState(false);
   const [quantidade, setQuantidade] = useState('');
   const [saving, setSaving] = useState(false);
-  const [confirmFragile, setConfirmFragile] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
@@ -86,8 +67,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isSubmitted = processo.status === 'Em triagem';
-  const isFragile = isItemJuridicallyFragile(item);
-  const requiresQualitativeJustification = itemRequiresQualitativeJustification(item);
   const allowsDecimals = item.quantidade_automatica || /tempo|m.s|ano/i.test(item.unidade_medida);
   const showDateFields = item.modo_calculo !== 'manual';
   const effectiveEndDate = ongoing ? format(new Date(), 'yyyy-MM-dd') : dataFim;
@@ -97,7 +76,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const pointsPreview = Number.isFinite(quantidadeNumerica) && quantidadeNumerica > 0 ? calculateLancamentoPoints(quantidadeNumerica, item.pontos_por_unidade) : 0;
   const docsById = useMemo(() => new Map(documentos.map((doc) => [doc.id, doc])), [documentos]);
 
-  useEffect(() => setConfirmFragile(!isFragile), [isFragile, item.id]);
   useEffect(() => () => Object.values<string>(blobUrls).forEach((url) => URL.revokeObjectURL(url)), [blobUrls]);
 
   const resetUpload = useCallback(() => {
@@ -112,20 +90,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setDocMode('upload');
     setReferenceInput('');
     setReferenceLinks([]);
-    setDocumentType('comprobatorio_principal');
     setIsDownloading(false);
-    setFatoGeradorId('');
-    setFatoGeradorDescricao('');
-    setJustificativaNaoOrdinaria('');
     setDataInicio('');
     setDataFim('');
     setOngoing(false);
     setQuantidade('');
-    setConfirmFragile(!isFragile);
-    setQuantidade('');
-    setConfirmFragile(!isFragile);
     resetUpload();
-  }, [isFragile, resetUpload]);
+  }, [resetUpload]);
 
   useEffect(() => {
     setTab('form');
@@ -171,6 +142,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setUploadFeedback(`Preparando ${incoming.name}...`);
     const toastId = toast.loading('Processando arquivo e extraindo texto...');
     try {
+      const originalHash = await computeDocumentHash(incoming);
       const normalized = await normalizeUploadToPdf(incoming);
       toast.dismiss(toastId);
       if (normalized.file.size > 5 * 1024 * 1024) {
@@ -187,6 +159,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         originalName: normalized.originalName,
         originalMimeType: normalized.originalMimeType,
         transcription: normalized.transcription,
+        componentHashes: [originalHash],
+        componentFiles: [{ nome_arquivo: incoming.name, hash_arquivo: originalHash }],
       });
       setUploadFeedback(normalized.converted ? `Convertido para PDF: ${normalized.originalName}` : `PDF pronto: ${normalized.file.name}`);
     } catch (error) {
@@ -206,9 +180,12 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       setUploadFeedback(`Preparando ${fileList.length} arquivo(s) para consolidacao...`);
       const normalized: Awaited<ReturnType<typeof normalizeUploadToPdf>>[] = [];
       const selectedFiles = Array.from(fileList);
+      const componentFiles: NonNullable<Documento['arquivos_componentes']> = [];
       for (let index = 0; index < selectedFiles.length; index += 1) {
         const candidate = selectedFiles[index];
         setUploadFeedback(`Convertendo arquivo ${index + 1}/${selectedFiles.length}: ${candidate.name}`);
+        const hash = await computeDocumentHash(candidate);
+        componentFiles.push({ nome_arquivo: candidate.name, hash_arquivo: hash });
         normalized.push(await normalizeUploadToPdf(candidate));
       }
       setUploadFeedback(`Mesclando ${normalized.length} arquivo(s) em um unico PDF...`);
@@ -229,7 +206,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         converted: true,
         originalName: `${fileList.length} arquivo(s) combinados`,
         originalMimeType: 'application/pdf',
-        transcription: undefined // Seria necessário transcrever o PDF consolidado se desejado
+        transcription: undefined,
+        componentHashes: componentFiles.map((entry) => entry.hash_arquivo),
+        componentFiles,
       });
       setUploadFeedback(`${fileList.length} arquivo(s) consolidados em um único PDF.`);
     } catch {
@@ -247,20 +226,21 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       setUploadFeedback(`Processando ${referenceLinks.length} link(s)...`);
 
       const downloadedFiles: File[] = [];
+      const componentFiles: NonNullable<Documento['arquivos_componentes']> = [];
       const failedLinks: string[] = [];
-      let lastErrorMessage: string | null = null;
       let successCount = 0;
 
       for (const link of referenceLinks) {
         setUploadFeedback(`Baixando link ${successCount + 1}/${referenceLinks.length}...`);
         try {
           const file = await downloadFileFromUrl(link);
+          const hash = await computeDocumentHash(file);
+          componentFiles.push({ nome_arquivo: file.name, hash_arquivo: hash });
           downloadedFiles.push(file);
           successCount++;
         } catch (err) {
           console.error(`Falha ao baixar link: ${link}`, err);
           failedLinks.push(link);
-          lastErrorMessage = err instanceof Error ? err.message : 'Erro ao baixar o link institucional.';
         }
       }
 
@@ -291,7 +271,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         converted: true,
         originalName: `${downloadedFiles.length} link(s) consolidados`,
         originalMimeType: 'application/pdf',
-        transcription: undefined
+        transcription: undefined,
+        componentHashes: componentFiles.map((entry) => entry.hash_arquivo),
+        componentFiles,
       });
 
       setDocMode('upload'); // Switch to upload mode after consolidation
@@ -424,11 +406,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
   const save = async () => {
     if (!servidor || saving) return;
-    if (!fatoGeradorId.trim()) return void toast.error('Informe o identificador do fato gerador.');
     if (!quantidade.trim() || Number.isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) return void toast.error('Informe uma quantidade maior que zero.');
     if (item.modo_calculo !== 'manual' && (!dataInicio || !effectiveEndDate)) return void toast.error('Este item exige datas de início e fim.');
-    if (isFragile && !confirmFragile) return void toast.error('Confirme que revisou o enquadramento sensível deste item.');
-    if (requiresQualitativeJustification && !justificativaNaoOrdinaria.trim()) return void toast.error('Este item exige uma justificativa qualitativa da atividade extraordinária.');
     if (docMode === 'reference' && referenceLinks.length === 0) return void toast.error(`Adicione ao menos um ${institutionConfig.documentLinks.label}.`);
     if ((docMode === 'upload') && !file) return void toast.error('Anexe ou baixe um documento comprobatório.');
     try {
@@ -439,18 +418,18 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         newDoc = await addDocumentoFromGedocLinks({
           servidorId: servidor.id,
           links: referenceLinks,
-          tipoDocumento: documentType,
         });
         documentoId = newDoc.id;
       } else if (file) {
         newDoc = await addDocumentoFromFile({
           servidorId: servidor.id,
           file,
-          tipoDocumento: documentType,
           sourceName: uploadMeta?.originalName,
           sourceMimeType: uploadMeta?.originalMimeType,
           convertedToPdf: uploadMeta?.converted,
           transcription: uploadMeta?.transcription,
+          componentHashes: uploadMeta?.componentHashes,
+          componentFiles: uploadMeta?.componentFiles,
         });
         documentoId = newDoc.id;
       }
@@ -459,14 +438,10 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         servidor_id: servidor.id,
         item_rsc_id: item.id,
         documento_id: documentoId,
-        fato_gerador_id: fatoGeradorId.trim(),
-        fato_gerador_descricao: fatoGeradorDescricao.trim() || undefined,
         data_inicio: showDateFields ? dataInicio : '',
         data_fim: showDateFields ? effectiveEndDate : '',
         quantidade_informada: quantidadeNumerica,
         declaracao_nao_duplicidade: true,
-        declaracao_nao_ordinaria: !requiresQualitativeJustification || !!justificativaNaoOrdinaria.trim(),
-        justificativa_nao_ordinaria: justificativaNaoOrdinaria.trim() || undefined,
         pontos_calculados: pontosCalculados,
       };
 
@@ -514,9 +489,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-4 py-4 sm:px-6">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          {isFragile && <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">Enquadramento sensível</span>}
-        </div>
         <h2 className="max-w-4xl text-lg font-bold leading-snug text-gray-900 lg:text-[1.55rem]">{item.descricao}</h2>
         <div className="mt-3 flex flex-wrap gap-3 text-xs sm:text-sm">
           <div className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 text-gray-500"><strong className="text-gray-900">{formatPointValue(item.pontos_por_unidade)} pts</strong> por {item.unidade_medida}</div>
@@ -636,55 +608,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
             </section>
 
             <section className="space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="tipo-documento" className="text-xs">
-                    Tipo do documento <span className="text-red-500">*</span>
-                  </Label>
-                  <select
-                    id="tipo-documento"
-                    value={documentType}
-                    onChange={(e) => setDocumentType(e.target.value as DocumentTypeOption)}
-                    className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    {DOCUMENT_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="fato-gerador-id" className="text-xs">
-                    Identificador do fato gerador <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="fato-gerador-id"
-                    value={fatoGeradorId}
-                    onChange={(e) => setFatoGeradorId(e.target.value)}
-                    className="h-11 text-sm"
-                    placeholder="Ex.: PORTARIA 123/2024, EDITAL 05/2025, PROC-23147..."
-                  />
-                  <p className="text-[11px] text-gray-500">
-                    Use um identificador único do fato ou evidência principal para evitar duplicidade entre itens.
-                  </p>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="fato-gerador-descricao" className="text-xs">
-                    Descrição resumida do fato gerador
-                  </Label>
-                  <Input
-                    id="fato-gerador-descricao"
-                    value={fatoGeradorDescricao}
-                    onChange={(e) => setFatoGeradorDescricao(e.target.value)}
-                    className="h-11 text-sm"
-                    placeholder="Resumo curto da evidência vinculada"
-                  />
-                </div>
-              </div>
-
               {showDateFields && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1.5">
@@ -731,11 +654,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                 </div>
               </div>
             </section>
-
-            {isFragile && <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><div className="flex items-start gap-3"><ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" /><div className="w-full"><p className="font-semibold">Item com enquadramento sensível</p><label className="mt-2 flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={confirmFragile} onChange={(e) => setConfirmFragile(e.target.checked)} />Confirmo que revisei o enquadramento deste item.</label><div className="mt-3 space-y-1.5"><Label htmlFor="justificativa-nao-ordinaria" className="text-xs text-amber-900">Justificativa qualitativa da atividade extraordinária <span className="text-red-500">*</span></Label><textarea id="justificativa-nao-ordinaria" value={justificativaNaoOrdinaria} onChange={(e) => setJustificativaNaoOrdinaria(e.target.value)} rows={4} className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-100" placeholder="Explique por que a atividade excede as atribuições ordinárias, qual foi o diferencial da atuação e qual resultado institucional foi alcançado." /><p className="text-[11px] text-amber-800">Essa justificativa será levada para o memorial e para o resumo do item no dossiê exportado.</p></div></div></div></div>}
-
-
-
             <div className="flex justify-end border-t border-gray-100 pt-4">
               <Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">
                 {saving ? 'Salvando...' : 'Salvar lançamento'}
@@ -751,7 +669,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
               return (
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${new Date(lancamento.data_inicio).toLocaleDateString('pt-BR')} a ${new Date(lancamento.data_fim).toLocaleDateString('pt-BR')}` : 'Período não informado/exigido'}</p>{doc?.tipo_documento && <p className="mt-1 text-[11px] font-medium text-blue-700">Tipo: {DOCUMENT_TYPE_LABELS[doc.tipo_documento as DocumentTypeOption]}</p>}{lancamento.fato_gerador_id && <p className="mt-1 text-[11px] font-medium text-gray-700">Fato gerador: {lancamento.fato_gerador_id}</p>}{lancamento.fato_gerador_descricao && <p className="mt-1 text-[11px] text-gray-500">{lancamento.fato_gerador_descricao}</p>}{lancamento.justificativa_nao_ordinaria && <p className="mt-1 text-[11px] leading-relaxed text-amber-800">Justificativa: {lancamento.justificativa_nao_ordinaria}</p>}{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}</div></div>
+                    <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${new Date(lancamento.data_inicio).toLocaleDateString('pt-BR')} a ${new Date(lancamento.data_fim).toLocaleDateString('pt-BR')}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
                     <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => remove(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -770,7 +688,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                           // Lazy transcription for older or incomplete documents
                           const needsTranscription = doc && doc.caminho_storage && (
                             !doc.transcricao ||
-                            (doc.transcricao.includes('--- PÁGINA 1') && !doc.transcricao.includes('--- PÁGINA 2'))
+                            (doc.transcricao.includes('--- P?GINA 1') && !doc.transcricao.includes('--- P?GINA 2'))
                           );
                           if (needsTranscription) {
                             const toastId = toast.loading('Transcrevendo documento para análise...');

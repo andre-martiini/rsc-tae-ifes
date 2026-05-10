@@ -32,7 +32,7 @@ Para cada item, o memorial deve consolidar:
 - pontuação obtida;
 - identificação do fato gerador;
 - documentos vinculados;
-- justificativa qualitativa, quando exigida.
+- justificativa qualitativa de que o fato não se limita a atribuições ordinárias do cargo.
 
 ### 4. Documentos Comprobatórios
 Cada lançamento deve ser acompanhado da referência ao documento organizado no dossiê, com indicação do papel documental atribuído no sistema, como:
@@ -45,7 +45,7 @@ Cada lançamento deve ser acompanhado da referência ao documento organizado no 
 - documento de apoio.
 
 ### 5. Declaração Final
-O memorial deve encerrar com declaração de veracidade das informações e de responsabilidade do servidor quanto aos documentos e fatos informados.
+O memorial deve encerrar com declaração de veracidade das informações, não duplicidade dos fatos e responsabilidade do servidor quanto aos documentos e fatos informados.
 
 ## Observação de Uso
 Este memorial é um documento de organização e consolidação do pedido. Ele não substitui a documentação comprobatória original e não executa etapas posteriores de análise institucional.

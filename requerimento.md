@@ -32,6 +32,8 @@ Declaro, para instrução do meu pedido de RSC-PCCTAE, que:
 - os fatos e atividades aqui descritos ocorreram no exercício da carreira;
 - a documentação apresentada foi organizada para comprovar os itens lançados;
 - não utilizei o mesmo fato gerador em duplicidade entre itens;
+- as atividades descritas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes, não se limitando a atribuições ordinárias do cargo;
+- os fatos declarados não foram utilizados em concessões anteriores;
 - as informações prestadas são verdadeiras, ficando sob minha responsabilidade.
 
 ## 5. Observação de Uso

@@ -89,11 +89,31 @@ export function getEligibleRscLevels(escolaridade: string) {
 
 export function isItemJuridicallyFragile(item: ItemRSC) {
   const rule = normalizeText(item.descricao);
-  return rule.includes('risco de nao enquadramento') || rule.includes('enquadramento questionavel');
+  const sensitiveItemIds = new Set([
+    'item-20',
+    'item-25',
+    'item-28',
+    'item-29',
+    'item-30',
+    'item-31',
+    'item-32',
+    'item-41',
+    'item-49',
+    'item-56',
+  ]);
+
+  return (
+    sensitiveItemIds.has(item.id) ||
+    rule.includes('risco de nao enquadramento') ||
+    rule.includes('enquadramento questionavel') ||
+    rule.includes('atividade tecnica de natureza especializada') ||
+    rule.includes('atuacao diferenciada') ||
+    rule.includes('atribuicoes ordinarias')
+  );
 }
 
 export function itemRequiresQualitativeJustification(item: ItemRSC) {
-  return isItemJuridicallyFragile(item);
+  return !!item;
 }
 
 export interface FunctionalEligibility {

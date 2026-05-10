@@ -1,4 +1,4 @@
-﻿import { format } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { ItemRSC, Lancamento, Documento, Servidor } from '../data/mock';
 
@@ -46,8 +46,9 @@ ${transcricaoInfo}
 
 Regras do RSC-PCCTAE a serem observadas:
 A) Documentos Válidos: A comprovação deve ocorrer por meios oficiais (portarias, certificados, diplomas, publicações, diários oficiais, atas, relatórios técnicos, declarações de conclusão/instrutoria, etc.).
-B) Atribuição Ordinária: Não poderão ser consideradas atividades que fazem parte das atribuições rotineiras e ordinárias do cargo ocupado pelo servidor.
-C) Conformidade da Unidade: A comprovação deve preencher estritamente a exigência da unidade de medida (ex: se for "Por designação", exige-se portaria/ato formal; se for "Por ano", exige-se comprovação de tempo).
+B) Não duplicidade: a mesma documentação ou o mesmo fato comprovado não deve ser utilizado em duplicidade entre requisitos específicos.
+C) Atribuição Ordinária: não podem ser pontuados fatos que representem exclusivamente atribuições legais do cargo, sem demonstração de saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes.
+D) Conformidade da Unidade: a comprovação deve preencher estritamente a unidade de medida (ex.: "Por designação" exige ato formal; "Por ano ou fração" exige comprovação temporal suficiente).
 
 Tarefa para a IA:
 Analise rigorosamente o documento fornecido em contraste com os dados declarados e responda aos seguintes pontos de verificação:
@@ -56,10 +57,11 @@ Analise rigorosamente o documento fornecido em contraste com os dados declarados
 3. Aderência ao Critério: A atividade descrita no documento comprova de forma inquestionável e exata a Descrição do Item (${item.descricao})?
 4. Filtro de Atribuição Ordinária: A atividade demonstra uma competência/saber adicional ou há indícios de que seja apenas a execução da rotina básica obrigatória do cargo?
 5. Métrica e Quantidade: A quantidade declarada de "${lancamento.quantidade_informada}" atende a métrica exigida pela unidade de medida ("${item.unidade_medida}") e pode ser comprovada no documento?
+6. Não duplicidade: há indícios de que a documentação ou o mesmo fato comprovado esteja sendo reaproveitado em outro critério?
 
 Resultado Esperado:
 Ao final da análise, classifique o lançamento EXCLUSIVAMENTE como ADEQUADO, PARCIALMENTE ADEQUADO ou INADEQUADO. Justifique sua resposta com base nos critérios do RSC-PCCTAE apontados acima. Caso seja inadequado ou parcial, aponte objetivamente quais as falhas de comprovação e o que o servidor precisaria ajustar no dossiê.
 
-Aviso: Lembre o servidor de que este mesmo fato documentado não poderá ser utilizado em duplicidade em outros itens do memorial.`;
+Aviso: Lembre o servidor de que a mesma documentação não poderá ser utilizada em duplicidade em outros itens do memorial.`;
 }
 

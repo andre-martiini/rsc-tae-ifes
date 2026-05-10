@@ -1,4 +1,4 @@
-﻿import {
+import {
   PDFDocument,
   PDFFont,
   PDFImage,
@@ -22,20 +22,6 @@ export type ComprovacaoItemResumo = {
   lancamentos: Lancamento[];
   documentos: Documento[];
 };
-
-const DOCUMENT_TYPE_LABELS: Record<NonNullable<Documento['tipo_documento']>, string> = {
-  comprobatorio_principal: 'Comprobatório principal',
-  complementar: 'Complementar',
-  autodeclaracao: 'Autodeclaração',
-  referencia_institucional: 'Referência institucional',
-  evidencia_vinculada: 'Evidência vinculada',
-  documento_apoio: 'Documento de apoio',
-};
-
-function getDocumentTypeLabel(tipo?: Documento['tipo_documento']) {
-  if (!tipo) return 'Não tipificado';
-  return DOCUMENT_TYPE_LABELS[tipo] ?? 'Não tipificado';
-}
 
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
@@ -667,8 +653,8 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
   writer.keyValue('Data de ingresso em IFE:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
-  writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
-  writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  writer.keyValue('Lota??o:', sanitize(servidor.lotacao ?? '-'));
+  writer.keyValue('Fun??o/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
   writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
 
   const excedente = nivelPleiteado ? Math.max(0, totalPontos - nivelPleiteado.pontosMinimos) : 0;
@@ -680,12 +666,14 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Qtd. critérios utilizados:', `${itensDistintos}`);
   writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
   writer.keyValue('Saldo anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
-  writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '—'));
+  writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '?'));
 
   writer.section('3. Declaração do Servidor');
   writer.text('Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:', { size: 9 });
   writer.bullet('Todos os fatos apresentados ocorreram no exercício da carreira;');
   writer.bullet('Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;');
+  writer.bullet('A documentação apresentada não foi utilizada em duplicidade no dossiê, vedada a duplicidade entre requisitos;');
+  writer.bullet('As atividades descritas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;');
   writer.bullet('A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;');
   writer.bullet('Tenho ciência de que informações falsas implicam responsabilidade administrativa.');
 
@@ -733,8 +721,8 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
   writer.keyValue('Data de ingresso em IFE:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
-  writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
-  writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  writer.keyValue('Lota??o:', sanitize(servidor.lotacao ?? '-'));
+  writer.keyValue('Fun??o/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
   writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
 
   writer.section('2. Informações do Requerimento');
@@ -777,19 +765,16 @@ export async function generateMemorialDescritivo(
 
     writer.criterioHeader(`Critério ${inciso} - ${CRITERIO_LABELS[inciso]}`);
 
-    const groupedRows = new Map<string, { item: ItemRSC; points: number; docs: string[]; justifications: string[] }>();
+    const groupedRows = new Map<string, { item: ItemRSC; points: number; docs: string[] }>();
     incisoLancamentos.forEach((l) => {
       const item = itensRSC.find((i) => i.id === l.item_rsc_id);
       if (!item) return;
-      const entry = groupedRows.get(item.id) || { item, points: 0, docs: [], justifications: [] };
+      const entry = groupedRows.get(item.id) || { item, points: 0, docs: [] };
       entry.points = addPointValues(entry.points, l.pontos_calculados);
       const doc = l.documento_id ? docsById.get(l.documento_id) : undefined;
       if (doc) {
         const docLabel = `[DOC ${entry.docs.length + 1}] ${doc.nome_arquivo}`;
         entry.docs.push(docLabel);
-      }
-      if (l.justificativa_nao_ordinaria) {
-        entry.justifications.push(`Justificativa: ${l.justificativa_nao_ordinaria}`);
       }
       groupedRows.set(item.id, entry);
     });
@@ -801,7 +786,7 @@ export async function generateMemorialDescritivo(
       `${g.docs.length} unid.`,
       formatNumber(g.item.pontos_por_unidade),
       formatNumber(g.points),
-      [...g.docs, ...g.justifications].join('\n'),
+      g.docs.join('\n'),
     ]);
 
     writer.table(
@@ -888,12 +873,6 @@ export async function generateComprovacaoResumoItem(
   );
   const gedocDocs = grupo.documentos.filter((docItem) => (docItem.gedoc_links?.length ?? 0) > 0);
   const autodeclaracoes = grupo.documentos.filter((docItem) => docItem.autodeclaracao);
-  const docsByType = grupo.documentos.reduce<Record<string, Documento[]>>((acc, docItem) => {
-    const key = docItem.tipo_documento ?? 'nao_tipificado';
-    acc[key] = acc[key] ?? [];
-    acc[key].push(docItem);
-    return acc;
-  }, {});
 
   writer.section('1. Identificação do Item');
   writer.infoGrid(
@@ -917,9 +896,7 @@ export async function generateComprovacaoResumoItem(
         `${formatDate(entry.data_inicio)} a ${formatDate(entry.data_fim)}`,
         formatNumber(entry.quantidade_informada),
         `${formatNumber(entry.pontos_calculados)} pts`,
-        [docItem?.nome_arquivo ?? '-', entry.fato_gerador_id ? `Fato: ${entry.fato_gerador_id}` : '', entry.justificativa_nao_ordinaria ? `Justificativa: ${entry.justificativa_nao_ordinaria}` : '']
-          .filter(Boolean)
-          .join('\n'),
+        docItem?.nome_arquivo ?? '-',
       ];
     }),
     [0.34, 0.16, 0.16, 0.34],
@@ -929,11 +906,6 @@ export async function generateComprovacaoResumoItem(
   writer.keyValue('Arquivos físicos anexados', `${physicalDocs.length}`);
   writer.keyValue('Referências de links institucionais', `${gedocDocs.length}`);
   writer.keyValue('Autodeclarações', `${autodeclaracoes.length}`);
-  Object.entries(docsByType)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .forEach(([tipo, docs]) => {
-      writer.keyValue(`Tipo documental - ${getDocumentTypeLabel(tipo as Documento['tipo_documento'])}`, `${docs.length}`);
-    });
 
   if (gedocDocs.length) {
     writer.gap(4);
@@ -953,24 +925,6 @@ export async function generateComprovacaoResumoItem(
       writer.text(`${docItem.nome_arquivo} - sem arquivo físico anexo.`, {
         size: 8.5,
         indent: 8,
-      });
-    });
-  }
-
-  const listedDocumentTypes = Object.entries(docsByType).filter(
-    ([tipo]) => tipo !== 'autodeclaracao' && tipo !== 'nao_tipificado',
-  );
-  if (listedDocumentTypes.length) {
-    writer.gap(4);
-    writer.text('Documentos organizados por tipologia:', { bold: true, size: 9 });
-    listedDocumentTypes.forEach(([tipo, docs]) => {
-      writer.text(`${getDocumentTypeLabel(tipo as Documento['tipo_documento'])}:`, {
-        size: 8.5,
-        bold: true,
-        indent: 8,
-      });
-      docs.forEach((docItem) => {
-        writer.text(docItem.nome_arquivo, { size: 8.2, indent: 14, color: COLORS.muted });
       });
     });
   }

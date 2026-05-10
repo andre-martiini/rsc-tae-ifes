@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Download, HardDrive, Info, Loader2, LayoutGrid, List, Upload, Wand2, Bot, ScrollText, UserCircle, ExternalLink } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Info, LayoutGrid, List, Wand2, Bot, ScrollText, UserCircle, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -10,8 +10,6 @@ import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
-import { exportSession } from '../lib/sessionExport';
-import { importSession } from '../lib/sessionImport';
 import MainLayout from '../components/MainLayout';
 import WizardModal from '../components/WizardModal';
 
@@ -43,40 +41,9 @@ const levelAccentClasses = [
 ];
 
 export default function Dashboard() {
-  const { servidor, activeSessionId, itensRSC, lancamentos, processo, wizardRecommendedIds, setWizardRecommendedIds, restoreSession } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo, wizardRecommendedIds, setWizardRecommendedIds } = useAppContext();
   const navigate = useNavigate();
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
-  const importInputRef = useRef<HTMLInputElement>(null);
-
-  const handleExportSession = async () => {
-    if (!activeSessionId) return;
-    setIsExporting(true);
-    try {
-      await exportSession(activeSessionId);
-      toast.success('Backup salvo com sucesso!');
-    } catch {
-      toast.error('Erro ao exportar o progresso. Tente novamente.');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  const handleImportSession = async (file: File) => {
-    setIsImporting(true);
-    try {
-      const session = await importSession(file, servidor?.id);
-      restoreSession(session);
-      toast.success('Progresso restaurado com sucesso!');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Arquivo inválido.';
-      toast.error(`Erro ao restaurar: ${message}`);
-    } finally {
-      setIsImporting(false);
-      if (importInputRef.current) importInputRef.current.value = '';
-    }
-  };
 
   if (!servidor) {
     return <Navigate to="/" replace />;
@@ -160,78 +127,7 @@ export default function Dashboard() {
   }, [itensRSC, lancamentosDoServidor]);
 
   return (
-    <MainLayout
-      activeView="dashboard"
-      secondaryContent={
-        <div className="flex w-full flex-col gap-2 lg:w-auto lg:items-end">
-          <div className="flex w-full flex-wrap items-center justify-center gap-2 lg:w-auto lg:justify-end">
-          {metasAtingidas && (
-            <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm">
-              <CheckCircle2 className="h-3 w-3" />
-              Metas atingidas
-            </div>
-          )}
-          <div className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] text-gray-600">
-            <span className="font-semibold text-gray-900">Nível pleiteável:</span>{' '}
-            {nivelElegivel ? nivelElegivel.label : 'Não mapeado'}
-          </div>
-
-          </div>
-
-          <div className="flex w-full flex-wrap items-center justify-center gap-1.5 lg:w-auto lg:justify-end">
-            {/* Salvar progresso + info */}
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                disabled={isExporting}
-                onClick={handleExportSession}
-                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-              >
-                {isExporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                Salvar
-              </button>
-            </div>
-
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".zip"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleImportSession(f);
-              }}
-            />
-
-            {/* Restaurar + info */}
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                disabled={isImporting}
-                onClick={() => importInputRef.current?.click()}
-                className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-50"
-              >
-                {isImporting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
-                Restaurar
-              </button>
-            </div>
-
-            <div className="group relative flex items-center rounded-full border border-gray-100 bg-gray-50 px-2.5 py-1 text-gray-400">
-              <HardDrive className="h-3.5 w-3.5" />
-              <span className="ml-1.5 text-[10px] font-bold">AUTO-SAVE</span>
-              <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-                <p className="mb-1 text-[11px] font-bold text-white">Salvamento local de segurança</p>
-                <p className="text-[11px] leading-relaxed text-gray-300">
-                  Seus dados são gravados no cache do navegador. Para levar seu progresso para outro computador, exporte um backup no Dashboard.
-                </p>
-                <div className="absolute bottom-full right-4 border-4 border-transparent border-b-gray-900" />
-              </div>
-            </div>
-          </div>
-        </div>
-      }
-      hideAutoSave
-    >
+    <MainLayout activeView="dashboard">
       <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-6">
         <Card className="border-gray-200 bg-white shadow-sm">
           <CardContent className="p-5 sm:p-6">

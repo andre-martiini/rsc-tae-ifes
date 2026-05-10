@@ -206,14 +206,14 @@ export default function AppSidebar({
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             onClick={onCloseMobile}
-                            className="fixed inset-0 z-40 bg-gray-950/45 lg:hidden"
+                            className="fixed inset-0 z-[100] bg-gray-950/45 lg:hidden"
                         />
                         <motion.aside
                             initial={{ x: '-100%' }}
                             animate={{ x: 0 }}
                             exit={{ x: '-100%' }}
                             transition={{ type: 'spring', stiffness: 320, damping: 32 }}
-                            className="fixed inset-y-0 left-0 z-50 flex w-[min(88vw,320px)] flex-col border-r border-gray-200 bg-white shadow-2xl lg:hidden"
+                            className="fixed inset-y-0 left-0 z-[110] flex w-[min(88vw,320px)] flex-col border-r border-gray-200 bg-white shadow-2xl lg:hidden"
                         >
                             {sidebarContent(true)}
                         </motion.aside>
