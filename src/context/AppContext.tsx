@@ -10,7 +10,6 @@ import {
 import { buildInstitutionReferenceFileName } from '../config/institution';
 import {
   persistDocumentFile,
-  persistDocumentBlob,
   deleteDocumentsByServidorId,
   computeDocumentHash,
 } from '../lib/documentStorage';
@@ -69,15 +68,6 @@ function normalizeFileName(value: string): string {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .trim();
-}
-
-function normalizeFactIdentifier(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -143,16 +133,16 @@ interface AppContextType {
   addDocumentoFromFile: (params: {
     servidorId: string;
     file: File;
-    tipoDocumento?: Documento['tipo_documento'];
     sourceName?: string;
     sourceMimeType?: string;
     convertedToPdf?: boolean;
     transcription?: string;
+    componentHashes?: string[];
+    componentFiles?: Documento['arquivos_componentes'];
   }) => Promise<Documento>;
   addDocumentoFromGedocLinks: (params: {
     servidorId: string;
     links: string[];
-    tipoDocumento?: Documento['tipo_documento'];
   }) => Promise<Documento>;
   updateDocumento: (docId: string, updates: Partial<Documento>) => void;
   setWizardRecommendedIds: (ids: string[]) => void;
@@ -403,7 +393,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const newDoc: Documento = {
       ...doc,
       id: `doc-${Date.now()}`,
-      tipo_documento: doc.tipo_documento ?? 'comprobatorio_principal',
       data_upload: new Date().toISOString(),
     };
     setDocumentos((current) => [...current, newDoc]);
@@ -413,29 +402,37 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addDocumentoFromFile = async ({
     servidorId,
     file,
-    tipoDocumento,
     sourceName,
     sourceMimeType,
     convertedToPdf,
     transcription,
+    componentHashes,
+    componentFiles,
   }: {
     servidorId: string;
     file: File;
-    tipoDocumento?: Documento['tipo_documento'];
     sourceName?: string;
     sourceMimeType?: string;
     convertedToPdf?: boolean;
     transcription?: string;
+    componentHashes?: string[];
+    componentFiles?: Documento['arquivos_componentes'];
   }) => {
     const fileHash = await computeDocumentHash(file);
     const normalizedName = normalizeFileName(file.name);
+    const incomingHashes = Array.from(new Set([fileHash, ...(componentHashes ?? [])].filter(Boolean)));
 
     const duplicatedDocument = documentos.find((doc) => {
       if (doc.servidor_id !== servidorId || !doc.caminho_storage) {
         return false;
       }
 
-      if (doc.hash_arquivo && doc.hash_arquivo === fileHash) {
+      const storedHashes = new Set([
+        doc.hash_arquivo,
+        ...(doc.hashes_componentes ?? []),
+      ].filter(Boolean));
+
+      if (incomingHashes.some((hash) => storedHashes.has(hash))) {
         return true;
       }
 
@@ -449,7 +446,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (transcription && !duplicatedDocument.transcricao) {
         updateDocumento(duplicatedDocument.id, { transcricao: transcription });
       }
-      return { ...duplicatedDocument, transcricao: transcription || duplicatedDocument.transcricao };
+      throw new Error('Olha, esse documento já foi carregado.');
     }
 
     const docId = `doc-${Date.now()}`;
@@ -459,8 +456,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: docId,
       servidor_id: servidorId,
       nome_arquivo: file.name,
-      tipo_documento: tipoDocumento ?? 'comprobatorio_principal',
       hash_arquivo: persistedFile.hash,
+      hashes_componentes: incomingHashes,
+      arquivos_componentes: componentFiles,
       caminho_storage: persistedFile.caminhoStorage,
       mime_type: persistedFile.mimeType,
       tamanho_bytes: persistedFile.tamanhoBytes,
@@ -478,11 +476,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addDocumentoFromGedocLinks = async ({
     servidorId,
     links,
-    tipoDocumento,
   }: {
     servidorId: string;
     links: string[];
-    tipoDocumento?: Documento['tipo_documento'];
   }): Promise<Documento> => {
     const docId = `doc-${Date.now()}`;
     const nomeArquivo = buildInstitutionReferenceFileName(links.length);
@@ -491,7 +487,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       id: docId,
       servidor_id: servidorId,
       nome_arquivo: nomeArquivo,
-      tipo_documento: tipoDocumento ?? 'referencia_institucional',
       data_upload: new Date().toISOString(),
       gedoc_links: links,
     };
@@ -501,27 +496,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addLancamento = (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => {
-    const normalizedFactId = normalizeFactIdentifier(lancamento.fato_gerador_id ?? '');
-    if (!normalizedFactId) {
-      throw new Error('Informe um identificador do fato gerador para este lançamento.');
-    }
-
-    const duplicateEntry = lancamentos.find(
-      (entry) =>
-        entry.servidor_id === lancamento.servidor_id &&
-        normalizeFactIdentifier(entry.fato_gerador_id ?? '') === normalizedFactId,
-    );
-
-    if (duplicateEntry) {
-      throw new Error(
-        'Este fato gerador já foi utilizado em outro lançamento. Revise o identificador informado para evitar duplicidade.',
-      );
-    }
-
     const newLancamento: Lancamento = {
       ...lancamento,
-      fato_gerador_id: lancamento.fato_gerador_id?.trim(),
-      fato_gerador_descricao: lancamento.fato_gerador_descricao?.trim() || undefined,
       id: `lanc-${Date.now()}`,
       status_auditoria: 'Pendente',
     };

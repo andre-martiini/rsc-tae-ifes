@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, FileText, Gavel } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, ExternalLink, FileText, Gavel } from 'lucide-react';
 import MainLayout from '../components/MainLayout';
 
 const LEGISLATIONS: Array<{
@@ -11,6 +11,7 @@ const LEGISLATIONS: Array<{
   statusLabel: string;
   notes: string;
   url: string;
+  download?: string;
   icon: typeof Gavel;
   color: string;
 }> = [
@@ -27,6 +28,21 @@ const LEGISLATIONS: Array<{
     url: 'https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2026/lei/L15367.htm',
     icon: Gavel,
     color: 'emerald',
+  },
+  {
+    title: 'Minuta de Decreto (MEC - 2026)',
+    description:
+      'Regulamenta os critérios e procedimentos para a concessão do RSC-PCCTAE aos servidores Técnico-Administrativos em Educação.',
+    category: 'Minuta de Decreto',
+    date: 'Maio de 2026',
+    status: 'referencial',
+    statusLabel: 'Minuta em análise',
+    notes:
+      'Documento de orientação normativa (EMI nº 8/2026/SEI/ASTEC/GM/GM). Os critérios de pontuação e níveis do sistema já estão alinhados a esta minuta.',
+    url: '/minuta_decreto_rsc_pcctae_2026.pdf',
+    download: 'minuta_decreto_rsc_pcctae_2026.pdf',
+    icon: FileText,
+    color: 'amber',
   },
 ];
 
@@ -134,15 +150,25 @@ export default function Legislation() {
                   <p className="max-w-2xl text-sm leading-relaxed text-gray-600">{item.notes}</p>
                 </div>
 
-                <div className="mt-4 sm:mt-0 sm:ml-4">
+                <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:ml-4 sm:flex-row">
                   <a
                     href={item.url}
                     target="_blank"
                     rel="noreferrer"
+                    download={item.download}
                     className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 text-sm font-bold text-white transition-all hover:bg-primary hover:shadow-lg hover:shadow-primary/20 sm:w-auto"
                   >
-                    Acessar documento
-                    <ExternalLink className="h-4 w-4" />
+                    {item.download ? (
+                      <>
+                        Baixar documento
+                        <Download className="h-4 w-4" />
+                      </>
+                    ) : (
+                      <>
+                        Acessar documento
+                        <ExternalLink className="h-4 w-4" />
+                      </>
+                    )}
                   </a>
                 </div>
               </div>

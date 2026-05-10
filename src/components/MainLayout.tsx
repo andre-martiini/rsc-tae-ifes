@@ -7,11 +7,9 @@ import AppFooter from './AppFooter';
 interface MainLayoutProps {
     children: React.ReactNode;
     activeView: 'dashboard' | 'catalog' | 'consolidate' | 'profile' | 'legislation';
-    secondaryContent?: React.ReactNode;
-    hideAutoSave?: boolean;
 }
 
-export default function MainLayout({ children, activeView, secondaryContent, hideAutoSave = false }: MainLayoutProps) {
+export default function MainLayout({ children, activeView }: MainLayoutProps) {
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
@@ -42,13 +40,11 @@ export default function MainLayout({ children, activeView, secondaryContent, hid
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden print:overflow-visible">
                 <div className="print:hidden">
                     <AppHeader
-                        secondaryContent={secondaryContent}
                         onOpenMenu={() => setMobileMenuOpen(true)}
-                        hideAutoSave={hideAutoSave}
                     />
                 </div>
 
-                <div className="relative flex-1 overflow-y-auto print:overflow-visible">
+                <div className="relative flex-1 overflow-y-auto pb-24 lg:pb-0 print:overflow-visible">
                     {children}
                 </div>
 

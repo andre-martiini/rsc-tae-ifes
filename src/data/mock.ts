@@ -60,6 +60,11 @@ export interface Documento {
     | 'evidencia_vinculada'
     | 'documento_apoio';
   hash_arquivo?: string;
+  hashes_componentes?: string[];
+  arquivos_componentes?: Array<{
+    nome_arquivo: string;
+    hash_arquivo: string;
+  }>;
   caminho_storage?: string;
   mime_type?: string;
   tamanho_bytes?: number;

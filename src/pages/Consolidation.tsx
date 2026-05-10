@@ -16,7 +16,6 @@ import {
   getEligibleRscLevel,
   getEligibleRscLevels,
   getServidorFunctionalEligibility,
-  itemRequiresQualitativeJustification,
   validateLevelConstraints,
 } from '../lib/rsc';
 import { cn } from '../lib/utils';
@@ -126,15 +125,6 @@ export default function Consolidation() {
       .filter((d) => ids.has(d.id))
       .sort((a, b) => (a.data_upload < b.data_upload ? 1 : -1));
   }, [documentos, lancamentosDoServidor]);
-
-  const fragileLaunchesMissingJustification = useMemo(
-    () =>
-      lancamentosDoServidor.filter((entry) => {
-        const item = itensRSC.find((candidate) => candidate.id === entry.item_rsc_id);
-        return item && itemRequiresQualitativeJustification(item) && !entry.justificativa_nao_ordinaria?.trim();
-      }),
-    [itensRSC, lancamentosDoServidor],
-  );
 
   useEffect(() => {
     if (!nivelPleiteadoId && nivelElegivel?.id) {
@@ -291,20 +281,8 @@ export default function Consolidation() {
           : 'Falta confirmar que atividades excedem as atribuições ordinárias.',
         action: declaracaoExcedeAtribuicoes ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
-      {
-        ok: fragileLaunchesMissingJustification.length === 0,
-        label: 'Justificativas qualitativas',
-        detail:
-          fragileLaunchesMissingJustification.length === 0
-            ? 'Itens sensíveis possuem justificativa qualitativa registrada.'
-            : `${fragileLaunchesMissingJustification.length} lançamento(s) sensível(is) ainda sem justificativa qualitativa.`,
-        action:
-          fragileLaunchesMissingJustification.length === 0
-            ? undefined
-            : { label: 'Revisar itens', href: '/itens' },
-      },
     ];
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, fragileLaunchesMissingJustification.length, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos, temConcessaoAnterior]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos, temConcessaoAnterior]);
 
   const pendencias = useMemo(() => {
     const issues: string[] = [];
@@ -326,10 +304,8 @@ export default function Consolidation() {
       issues.push('Você precisa confirmar a declaração de não-duplicidade de itens.');
     if (!declaracaoExcedeAtribuicoes)
       issues.push('Você precisa confirmar a declaração de atividade extraordinária.');
-    if (fragileLaunchesMissingJustification.length > 0)
-      issues.push('Existem itens sensíveis sem justificativa qualitativa da atividade extraordinária.');
     return issues;
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, fragileLaunchesMissingJustification.length, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
 
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
@@ -607,7 +583,7 @@ export default function Consolidation() {
                 <div className="space-y-1">
                   <p className="text-[13px] font-bold text-gray-900">Não-Duplicidade de Itens</p>
                   <p className="text-[11px] leading-relaxed text-gray-600">
-                    Confirmo que nenhum fato ou documento foi aproveitado simultaneamente em mais de um item deste ou de outro processo de RSC.
+                    Confirmo que a documentação apresentada não está sendo utilizada em duplicidade e que os fatos declarados não foram usados em concessões anteriores.
                   </p>
                 </div>
               </label>
@@ -622,7 +598,7 @@ export default function Consolidation() {
                 <div className="space-y-1">
                   <p className="text-[13px] font-bold text-gray-900">Atividades Extraordinárias</p>
                   <p className="text-[11px] leading-relaxed text-gray-600">
-                    Atividades informadas excedem a rotina acadêmica/administrativa ordinária do cargo ocupado.
+                    As atividades informadas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes.
                   </p>
                 </div>
               </label>
@@ -630,7 +606,7 @@ export default function Consolidation() {
           </div>
         </div>
 
-        {/* â”€â”€ Document Viewer â”€â”€ */}
+        {/* Document Viewer */}
         <div className="space-y-4">
           <div className="flex items-end justify-between px-1 print:hidden">
             <div className="flex items-center gap-1">
@@ -746,7 +722,7 @@ export default function Consolidation() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 border-t border-gray-100 pt-4">
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
                           <span className="text-gray-600">Pontuação mínima necessária:</span>
-                          <span className="font-bold">{nivelPleiteado?.pontosMinimos ?? '—'}</span>
+                          <span className="font-bold">{nivelPleiteado?.pontosMinimos ?? '?'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
                           <span className="text-gray-600">Pontuação total apresentada:</span>
@@ -765,7 +741,7 @@ export default function Consolidation() {
                           <span className="font-bold">{saldoConcessaoAnterior || '0'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
-                          <span className="text-gray-600">Número do processo relativo Í  concessão anterior do RSC-PCCTAE:</span>
+                          <span className="text-gray-600">Número do processo relativo à concessão anterior do RSC-PCCTAE:</span>
                           <span className="font-bold">{numeroProcessoAnterior || '—'}</span>
                         </div>
                       </div>
@@ -780,6 +756,8 @@ export default function Consolidation() {
                       <ul className="list-disc pl-5 space-y-1">
                         <li>Todos os fatos apresentados ocorreram no exercício da carreira;</li>
                         <li>Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;</li>
+                        <li>A documentação apresentada não foi utilizada em duplicidade neste dossiê;</li>
+                        <li>As atividades descritas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;</li>
                         <li>A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;</li>
                         <li>Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.</li>
                       </ul>
@@ -862,16 +840,6 @@ export default function Consolidation() {
                                         {itemLancamentos.map((l, i) => (
                                           <span key={i} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
                                             [DOC {i + 1}] {documentos.find(d => d.id === l.documento_id)?.nome_arquivo}
-                                            {documentos.find(d => d.id === l.documento_id)?.tipo_documento && (
-                                              <span className="mt-1 block break-normal text-blue-700">
-                                                Tipo: {documentos.find(d => d.id === l.documento_id)?.tipo_documento}
-                                              </span>
-                                            )}
-                                            {l.justificativa_nao_ordinaria && (
-                                              <span className="mt-1 block break-normal text-amber-800">
-                                                Justificativa: {l.justificativa_nao_ordinaria}
-                                              </span>
-                                            )}
                                           </span>
                                         ))}
                                       </div>
@@ -945,4 +913,3 @@ export default function Consolidation() {
     </MainLayout>
   );
 }
-
