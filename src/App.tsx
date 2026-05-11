@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
 import Consolidation from './pages/Consolidation';
 import Legislation from './pages/Legislation';
+import FeedbackWidget from './components/FeedbackWidget';
 
 // Protects routes that require an active session
 function RequireSession({ children }: { children: React.ReactNode }) {
@@ -72,6 +73,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <Toaster position="bottom-right" richColors />
+        <FeedbackWidget />
       </BrowserRouter>
     </AppProvider>
   );
