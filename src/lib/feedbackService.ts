@@ -17,7 +17,7 @@ const requiredEnvVars = {
 
 const missingVars = Object.entries(requiredEnvVars)
   .filter(([, v]) => !v)
-  .map(([k]) => `VITE_FIREBASE_${k.toUpperCase()}`);
+  .map(([k]) => `VITE_FIREBASE_${k.replace(/[A-Z]/g, (letter) => `_${letter}`).toUpperCase()}`);
 
 if (missingVars.length > 0) {
   console.error(
@@ -42,7 +42,7 @@ export interface FeedbackPayload {
   nome: string;
   email: string;
   mensagem: string;
-  tipo: "bug" | "sugestao" | "elogio" | "outro";
+  tipo: "bug" | "sugestao" | "elogio" | "duvida" | "outro";
   tela: string;
   rota: string;
   resolucao: string;

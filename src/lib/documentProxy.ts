@@ -52,8 +52,8 @@ export async function handleDocumentProxyRequest(request: Request) {
     return Response.json({ error: 'URL do documento invalida.' }, { status: 400 });
   }
 
-  if (parsed.protocol !== 'https:') {
-    return Response.json({ error: 'Apenas links HTTPS sao aceitos.' }, { status: 400 });
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return Response.json({ error: 'Apenas links HTTP ou HTTPS sao aceitos.' }, { status: 400 });
   }
 
   if (!isAllowedHostname(parsed.hostname)) {

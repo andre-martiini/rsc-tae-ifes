@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent } from '../components/ui/card';
 import { differenceInDays, parseISO, isValid } from 'date-fns';
-import { Lock, Unlock, UploadCloud, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { Lock, Unlock, UploadCloud, FileText, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -18,13 +18,17 @@ interface UploadCardProps {
 }
 
 export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) {
-  const { addLancamento, addDocumento, documentos, servidor } = useAppContext();
+  const { addLancamento, addDocumentoFromFile, servidor } = useAppContext();
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [quantidade, setQuantidade] = useState<number>(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [justificativa, setJustificativa] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    doc: Documento;
+    docId: string;
+  } | null>(null);
 
   // Auto-calculate quantity based on dates (only for items with quantidade_automatica)
   useEffect(() => {
@@ -42,7 +46,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
   }, [dataInicio, dataFim, isUnlocked, item.quantidade_automatica]);
 
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!servidor) return;
 
     if (!dataInicio || !dataFim) {
@@ -62,18 +66,29 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
 
     let docId: string | undefined;
 
-    if (file) {
-      const newDoc = addDocumento({
-        servidor_id: servidor.id,
-        nome_arquivo: file.name,
+    try {
+      const { doc, exists } = await addDocumentoFromFile({
+        servidorId: servidor.id,
+        file,
       });
-      docId = newDoc.id;
+      docId = doc.id;
+      if (exists) {
+        setDuplicateWarning({ doc, docId: doc.id });
+        return;
+      }
+    } catch (error) {
+      toast.error('Erro ao processar arquivo. Verifique o formato PDF.');
+      return;
     }
 
+    finishSave(docId!);
+  };
+
+  const finishSave = (docId: string) => {
     const pontosCalculados = quantidade * item.pontos_por_unidade;
 
     addLancamento({
-      servidor_id: servidor.id,
+      servidor_id: servidor!.id,
       item_rsc_id: item.id,
       documento_id: docId,
       data_inicio: dataInicio,
@@ -92,6 +107,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     setIsUnlocked(false);
     setJustificativa('');
     setFile(null);
+    setDuplicateWarning(null);
     onToggle(); // Close accordion
   };
 
@@ -215,6 +231,58 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
               </div>
             </CardContent>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Duplicate Warning Modal */}
+      <AnimatePresence>
+        {duplicateWarning && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+            >
+              {/* Decorative background element */}
+              <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-50" />
+              <div className="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-blue-50" />
+
+              <div className="relative p-8">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 shadow-inner">
+                  <AlertCircle className="h-8 w-8" />
+                </div>
+
+                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Atenção: Arquivo Duplicado</h3>
+                
+                <div className="space-y-4">
+                  <p className="text-sm leading-relaxed text-gray-600">
+                    O sistema identificou que o arquivo <strong className="text-gray-900">"{duplicateWarning.doc.nome_arquivo}"</strong> já foi carregado anteriormente.
+                  </p>
+                  
+                  <p className="text-sm text-gray-500">
+                    Deseja prosseguir com o lançamento utilizando o documento já existente no sistema?
+                  </p>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    onClick={() => finishSave(duplicateWarning.docId)}
+                    className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
+                  >
+                    Sim, reaproveitar e salvar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => setDuplicateWarning(null)}
+                    className="text-gray-500 hover:bg-gray-100"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </Card>
