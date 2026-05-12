@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { institutionConfig, isValidInstitutionDocumentLink, normalizeInstitutionDocumentLink } from '../config/institution';
 import type { Documento, ItemRSC } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeUploadToPdf, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
 import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
@@ -64,6 +65,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{
+    doc: Documento;
+    lancamentoParaPrompt: any;
+    newDoc: Documento;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isSubmitted = processo.status === 'Em triagem';
@@ -308,6 +314,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
   const addReference = () => {
     const trimmed = referenceInput.trim();
+    if (!trimmed) return;
     const normalizedReference = normalizeInstitutionDocumentLink(trimmed);
     if (referenceLinks.includes(normalizedReference)) return void toast.error('Este link ja foi adicionado.');
     if (!isValidInstitutionDocumentLink(trimmed)) return void toast.error(`URL inválida. Use um endereço HTTP(S), como: ${institutionConfig.documentLinks.inputPlaceholder}`);
@@ -414,6 +421,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       setSaving(true);
       let documentoId: string | undefined = undefined;
       let newDoc: Documento | undefined = undefined;
+      let isDuplicate = false;
+
       if (docMode === 'reference') {
         newDoc = await addDocumentoFromGedocLinks({
           servidorId: servidor.id,
@@ -421,7 +430,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         });
         documentoId = newDoc.id;
       } else if (file) {
-        newDoc = await addDocumentoFromFile({
+        const result = await addDocumentoFromFile({
           servidorId: servidor.id,
           file,
           sourceName: uploadMeta?.originalName,
@@ -431,7 +440,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           componentHashes: uploadMeta?.componentHashes,
           componentFiles: uploadMeta?.componentFiles,
         });
-        documentoId = newDoc.id;
+        newDoc = result.doc;
+        documentoId = result.doc.id;
+        isDuplicate = result.exists;
       }
       const pontosCalculados = calculateLancamentoPoints(quantidadeNumerica, item.pontos_por_unidade);
       const lancamentoParaPrompt = {
@@ -445,35 +456,50 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         pontos_calculados: pontosCalculados,
       };
 
-      addLancamento(lancamentoParaPrompt);
+      if (isDuplicate && newDoc) {
+        setDuplicateWarning({
+          doc: newDoc,
+          lancamentoParaPrompt,
+          newDoc: newDoc,
+        });
+        setSaving(false);
+        return;
+      }
 
-      toast.success(`Lançamento salvo! +${formatPointValue(pontosCalculados)} pts.`, {
-        description: 'Deseja validar esta comprovação com uma IA agora?',
-        action: {
-          label: 'Gerar Prompt IA',
-          onClick: async () => {
-            const preparedDoc = await prepareDocumentForPrompt(newDoc);
-            const prompt = generateLLMPrompt({
-              item,
-              lancamento: { ...lancamentoParaPrompt, id: '', status_auditoria: 'Pendente' },
-              documento: preparedDoc,
-              servidor,
-            });
-            setPromptModalText(prompt);
-          },
-        },
-      });
-      resetForm();
-      setTab('history');
-      onSaved();
+      finishSave(lancamentoParaPrompt, newDoc);
     } catch (error) {
       // Surface duplicate-upload validation and other recoverable messages.
       const message =
         error instanceof Error ? error.message : 'Não foi possível salvar este lançamento.';
       toast.error(message);
-    } finally {
       setSaving(false);
     }
+  };
+
+  const finishSave = (lancamentoParaPrompt: any, newDoc?: Documento) => {
+    addLancamento(lancamentoParaPrompt);
+
+    toast.success(`Lançamento salvo! +${formatPointValue(lancamentoParaPrompt.pontos_calculados)} pts.`, {
+      description: 'Deseja validar esta comprovação com uma IA agora?',
+      action: {
+        label: 'Gerar Prompt IA',
+        onClick: async () => {
+          const preparedDoc = await prepareDocumentForPrompt(newDoc);
+          const prompt = generateLLMPrompt({
+            item,
+            lancamento: { ...lancamentoParaPrompt, id: '', status_auditoria: 'Pendente' },
+            documento: preparedDoc,
+            servidor,
+          });
+          setPromptModalText(prompt);
+        },
+      },
+    });
+    resetForm();
+    setTab('history');
+    onSaved();
+    setSaving(false);
+    setDuplicateWarning(null);
   };
 
   const remove = (lancamentoId: string) => {
@@ -545,7 +571,19 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   </p>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
-                    <button type="button" onClick={addReference} className="flex h-9 w-full items-center justify-center rounded-lg border border-primary/30 bg-primary/10 text-primary sm:w-9"><Plus className="h-4 w-4" /></button>
+                    <button
+                      type="button"
+                      onClick={addReference}
+                      disabled={!referenceInput.trim()}
+                      className={cn(
+                        "flex h-9 w-full items-center justify-center rounded-lg border sm:w-9 transition-colors",
+                        referenceInput.trim()
+                          ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                          : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                      )}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
                   </div>
                   {referenceLinks.length > 0 && (
                     <>
@@ -854,6 +892,61 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           </div>
         </div>
       )}
+
+      {/* Duplicate Warning Modal */}
+      <AnimatePresence>
+        {duplicateWarning && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+            >
+              {/* Decorative background element */}
+              <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-50" />
+              <div className="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-blue-50" />
+
+              <div className="relative p-8">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 shadow-inner">
+                  <AlertCircle className="h-8 w-8" />
+                </div>
+
+                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Atenção: Arquivo Duplicado</h3>
+                
+                <div className="space-y-4">
+                  <p className="text-sm leading-relaxed text-gray-600">
+                    O sistema identificou que o arquivo <strong className="text-gray-900">"{duplicateWarning.doc.nome_arquivo}"</strong> já foi carregado anteriormente.
+                  </p>
+                  
+                  <p className="text-sm text-gray-500">
+                    Deseja prosseguir com o lançamento utilizando o documento já existente no sistema?
+                  </p>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    onClick={() => finishSave(duplicateWarning.lancamentoParaPrompt, duplicateWarning.newDoc)}
+                    className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
+                  >
+                    Sim, reaproveitar e salvar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setDuplicateWarning(null);
+                      setSaving(false);
+                    }}
+                    className="text-gray-500 hover:bg-gray-100"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

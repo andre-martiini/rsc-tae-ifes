@@ -7,7 +7,10 @@ import {
   ProcessoRSC,
   mockItensRSC,
 } from '../data/mock';
-import { buildInstitutionReferenceFileName } from '../config/institution';
+import {
+  buildInstitutionReferenceFileName,
+  normalizeInstitutionDocumentLink,
+} from '../config/institution';
 import {
   persistDocumentFile,
   deleteDocumentsByServidorId,
@@ -139,7 +142,7 @@ interface AppContextType {
     transcription?: string;
     componentHashes?: string[];
     componentFiles?: Documento['arquivos_componentes'];
-  }) => Promise<Documento>;
+  }) => Promise<{ doc: Documento; exists: boolean }>;
   addDocumentoFromGedocLinks: (params: {
     servidorId: string;
     links: string[];
@@ -446,7 +449,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (transcription && !duplicatedDocument.transcricao) {
         updateDocumento(duplicatedDocument.id, { transcricao: transcription });
       }
-      throw new Error('Olha, esse documento já foi carregado.');
+      return { doc: duplicatedDocument, exists: true };
     }
 
     const docId = `doc-${Date.now()}`;
@@ -470,7 +473,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     setDocumentos((current) => [...current, newDoc]);
-    return newDoc;
+    return { doc: newDoc, exists: false };
   };
 
   const addDocumentoFromGedocLinks = async ({
@@ -480,15 +483,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     servidorId: string;
     links: string[];
   }): Promise<Documento> => {
+    const normalizedLinks = links.map(normalizeInstitutionDocumentLink);
     const docId = `doc-${Date.now()}`;
-    const nomeArquivo = buildInstitutionReferenceFileName(links.length);
+    const nomeArquivo = buildInstitutionReferenceFileName(normalizedLinks.length);
 
     const newDoc: Documento = {
       id: docId,
       servidor_id: servidorId,
       nome_arquivo: nomeArquivo,
       data_upload: new Date().toISOString(),
-      gedoc_links: links,
+      gedoc_links: normalizedLinks,
     };
 
     setDocumentos((current) => [...current, newDoc]);

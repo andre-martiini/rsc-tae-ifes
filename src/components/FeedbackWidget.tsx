@@ -8,6 +8,7 @@ const TIPOS = [
   { value: "bug", label: "Erro / Bug" },
   { value: "sugestao", label: "Sugestão" },
   { value: "elogio", label: "Elogio" },
+  { value: "duvida", label: "Dúvida" },
   { value: "outro", label: "Outro" },
 ] as const;
 
