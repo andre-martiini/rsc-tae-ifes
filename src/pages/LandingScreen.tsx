@@ -214,7 +214,7 @@ export default function LandingScreen() {
         </div>
 
         {/* Banner de Aviso de Testes */}
-        <div className="group relative mb-8 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/50 p-4 transition-all hover:bg-amber-50">
+        <div className="group relative mb-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 transition-all hover:bg-amber-50 cursor-help">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-amber-100 p-2 text-amber-600">
               <Beaker className="h-5 w-5" />
@@ -222,23 +222,28 @@ export default function LandingScreen() {
             <div className="flex-1">
               <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Ambiente de Demonstração e Testes</h3>
               <p className="mt-1 text-xs leading-relaxed text-amber-800/80">
-                Este sistema é um protótipo em fase de validação técnica e as regras de negócio são preliminares. <span className="font-bold underline decoration-amber-300 underline-offset-2">Passe o mouse para saber mais.</span>
+                Este sistema é um protótipo em fase de validação técnica e as regras de negócio são preliminares. <span className="font-bold underline decoration-amber-300 underline-offset-2">Saiba mais.</span>
               </p>
               
-              <div className="mt-3 hidden space-y-2 text-[11px] leading-relaxed text-amber-900/70 group-hover:block animate-in fade-in slide-in-from-top-2 duration-300">
-                <p>
-                  Sua colaboração é fundamental: utilize o canal de feedback para enviar críticas, sugestões ou dúvidas. 
-                  Nos ajude a construir uma ferramenta de apoio ao RSC cada vez melhor.
-                </p>
-                <div className="border-t border-amber-200/50 pt-2">
-                  <p className="font-semibold text-amber-900/90">
-                    Aviso Importante:
-                  </p>
-                  <p>
-                    Os cálculos e critérios baseiam-se em interpretações preliminares da legislação do RSC-TAE e ainda não foram formalmente homologados pelas instâncias institucionais. 
-                    As regras de negócio podem sofrer alterações significativas na versão final definitiva.
-                  </p>
+              {/* Tooltip (Balão) */}
+              <div className="absolute left-1/2 top-full z-50 mt-3 w-80 -translate-x-1/2 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none">
+                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-2xl">
+                  <div className="space-y-3 text-xs leading-relaxed text-gray-600">
+                    <p>
+                      Sua colaboração é fundamental: utilize o canal de feedback para enviar críticas, sugestões ou dúvidas. 
+                      Nos ajude a construir uma ferramenta de apoio ao RSC cada vez melhor.
+                    </p>
+                    <div className="border-t border-gray-100 pt-3">
+                      <p className="font-bold text-gray-900 mb-1 text-[11px] uppercase tracking-wider">Aviso Importante:</p>
+                      <p>
+                        Os cálculos e critérios baseiam-se em interpretações preliminares da legislação do RSC-TAE e ainda não foram formalmente homologados pelas instâncias institucionais. 
+                        As regras de negócio podem sofrer alterações significativas na versão final definitiva.
+                      </p>
+                    </div>
+                  </div>
                 </div>
+                {/* Seta do Balão */}
+                <div className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-gray-200 bg-white"></div>
               </div>
             </div>
           </div>
