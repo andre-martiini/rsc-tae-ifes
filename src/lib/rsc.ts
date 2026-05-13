@@ -15,6 +15,7 @@ const ESCOLARIDADE_TO_LEVEL: Record<EscolaridadeAtual, RscLevelId | null> = {
   'Ensino Fundamental Incompleto': 'RSC-I',
   'Ensino Fundamental': 'RSC-II',
   'Ensino Médio': 'RSC-III',
+  'Técnico de Nível Médio': 'RSC-III',
   'Graduação': 'RSC-IV',
   'Especialização': 'RSC-V',
   Mestrado: 'RSC-VI',
@@ -48,7 +49,11 @@ export function getEligibleRscLevelId(escolaridade: string): RscLevelId | null {
     return 'RSC-II';
   }
 
-  if (normalized.includes('medio')) {
+  // Técnico de Nível Médio e Ensino Médio → RSC-III
+  if (
+    normalized.includes('medio') ||
+    (normalized.includes('tecnico') && normalized.includes('nivel'))
+  ) {
     return 'RSC-III';
   }
 

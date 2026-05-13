@@ -15,6 +15,7 @@ export const ESCOLARIDADES = [
   'Ensino Fundamental Incompleto',
   'Ensino Fundamental',
   'Ensino Médio',
+  'Técnico de Nível Médio',
   'Graduação',
   'Especialização',
   'Mestrado',
