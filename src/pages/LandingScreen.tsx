@@ -11,6 +11,7 @@ import {
   Trash2,
   Upload,
   UserCircle,
+  Beaker,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppFooter from '../components/AppFooter';
@@ -210,6 +211,37 @@ export default function LandingScreen() {
               </p>
             </div>
           )}
+        </div>
+
+        {/* Banner de Aviso de Testes */}
+        <div className="group relative mb-8 overflow-hidden rounded-2xl border border-amber-200 bg-amber-50/50 p-4 transition-all hover:bg-amber-50">
+          <div className="flex items-start gap-3">
+            <div className="rounded-xl bg-amber-100 p-2 text-amber-600">
+              <Beaker className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Ambiente de Demonstração e Testes</h3>
+              <p className="mt-1 text-xs leading-relaxed text-amber-800/80">
+                Este sistema é um protótipo em fase de validação técnica e as regras de negócio são preliminares. <span className="font-bold underline decoration-amber-300 underline-offset-2">Passe o mouse para saber mais.</span>
+              </p>
+              
+              <div className="mt-3 hidden space-y-2 text-[11px] leading-relaxed text-amber-900/70 group-hover:block animate-in fade-in slide-in-from-top-2 duration-300">
+                <p>
+                  Sua colaboração é fundamental: utilize o canal de feedback para enviar críticas, sugestões ou dúvidas. 
+                  Nos ajude a construir uma ferramenta de apoio ao RSC cada vez melhor.
+                </p>
+                <div className="border-t border-amber-200/50 pt-2">
+                  <p className="font-semibold text-amber-900/90">
+                    Aviso Importante:
+                  </p>
+                  <p>
+                    Os cálculos e critérios baseiam-se em interpretações preliminares da legislação do RSC-TAE e ainda não foram formalmente homologados pelas instâncias institucionais. 
+                    As regras de negócio podem sofrer alterações significativas na versão final definitiva.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {showForm ? (

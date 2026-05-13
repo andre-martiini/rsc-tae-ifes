@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ChevronRight, Menu, CheckCircle2, Download, Upload, Loader2 } from 'lucide-react';
+import { Menu, CheckCircle2, Download, Upload, Loader2, Beaker } from 'lucide-react';
 import { formatPointValue, sumPointValues } from '../lib/points';
 import { useAppContext } from '../context/AppContext';
 import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
@@ -84,10 +84,21 @@ export default function AppHeader({
               <Menu className="h-4 w-4" />
             </button>
 
-            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 sm:text-xs">
-              <span className="hover:text-gray-600 cursor-default transition-colors">RSC</span>
-              <ChevronRight className="h-3 w-3" />
-              <span className="text-gray-900">Processo Ativo</span>
+            <div className="flex items-center justify-around gap-2 rounded-xl bg-gray-50/50 border border-gray-100 px-3 py-1.5 shadow-inner sm:justify-center sm:gap-6 lg:rounded-full lg:px-4 lg:py-1.5">
+              <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                <span className="text-emerald-600 uppercase tracking-widest opacity-80">Total:</span>
+                <span className="text-gray-900 tabular-nums">{formatPointValue(totalPontos)} pts</span>
+              </div>
+              <div className="w-px h-2.5 bg-gray-200" />
+              <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                <span className="text-blue-600 uppercase tracking-widest opacity-80">Itens:</span>
+                <span className="text-gray-900 tabular-nums">{itensDistintos}</span>
+              </div>
+              <div className="w-px h-2.5 bg-gray-200" />
+              <div className="flex items-center gap-1.5 text-[10px] font-bold">
+                <span className="text-indigo-600 uppercase tracking-widest opacity-80">Alvo:</span>
+                <span className="text-gray-900">{nivelElegivel?.label || 'Não definido'}</span>
+              </div>
             </div>
           </div>
 
@@ -104,25 +115,40 @@ export default function AppHeader({
                 <CheckCircle2 className="h-3 w-3 text-emerald-500" />
               </div>
             )}
+
+            {/* Aviso de Testes (Mobile) */}
+            <div className="group relative flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50/50 px-3 py-1.5 text-[9px] font-bold text-amber-700 shadow-inner cursor-help">
+              <Beaker className="h-3 w-3 text-amber-500" />
+              <span>TESTES</span>
+
+              {/* Tooltip Mobile (Simplified) */}
+              <div className="absolute top-full right-0 mt-2 w-48 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">
+                <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-xl">
+                  <p className="text-[10px] leading-relaxed text-gray-600 font-normal normal-case">
+                    Ambiente de testes com regras preliminares. Use o canal de feedback.
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* SEGUNDA LINHA (Mobile: 100% largura) / CENTRO (Desktop: Absoluto) */}
-        <div className="lg:absolute lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2 lg:flex lg:items-center lg:justify-center">
-          <div className="flex w-full items-center justify-around gap-2 rounded-xl bg-gray-50/50 border border-gray-100 px-3.5 py-1.5 shadow-inner sm:justify-center sm:gap-6 lg:w-auto lg:rounded-full lg:px-4 lg:py-1.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-bold">
-              <span className="text-emerald-600 uppercase tracking-widest opacity-80">Total:</span>
-              <span className="text-gray-900 tabular-nums">{formatPointValue(totalPontos)} pts</span>
-            </div>
-            <div className="w-px h-2.5 bg-gray-200" />
-            <div className="flex items-center gap-1.5 text-[10px] font-bold">
-              <span className="text-blue-600 uppercase tracking-widest opacity-80">Itens:</span>
-              <span className="text-gray-900 tabular-nums">{itensDistintos}</span>
-            </div>
-            <div className="w-px h-2.5 bg-gray-200" />
-            <div className="flex items-center gap-1.5 text-[10px] font-bold">
-              <span className="text-indigo-600 uppercase tracking-widest opacity-80">Alvo:</span>
-              <span className="text-gray-900">{nivelElegivel?.label || 'Não definido'}</span>
+        {/* Aviso de Testes (Centro Desktop) */}
+        <div className="hidden lg:flex lg:absolute lg:left-1/2 lg:top-1/2 lg:-translate-x-1/2 lg:-translate-y-1/2">
+          <div className="group relative flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50/50 px-3 py-1 text-[10px] font-bold text-amber-700 shadow-inner cursor-help">
+            <Beaker className="h-3 w-3 text-amber-500" />
+            <span className="uppercase tracking-widest">Ambiente de Testes</span>
+
+            {/* Tooltip Desktop */}
+            <div className="absolute top-full left-1/2 mt-2 w-64 -translate-x-1/2 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">
+              <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
+                <p className="text-[11px] leading-relaxed text-gray-600 font-normal normal-case">
+                  <span className="block font-bold text-gray-900 mb-1">Protótipo em Validação</span>
+                  Este sistema utiliza regras preliminares do RSC-TAE que podem sofrer alterações. Sua contribuição via feedback é fundamental.
+                </p>
+              </div>
+              {/* Arrow */}
+              <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-l border-t border-gray-200 bg-white"></div>
             </div>
           </div>
         </div>
