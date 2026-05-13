@@ -6,6 +6,8 @@ export interface RscLevelDefinition {
   id: 'RSC-I' | 'RSC-II' | 'RSC-III' | 'RSC-IV' | 'RSC-V' | 'RSC-VI';
   label: string;
   equivalencia: string;
+  /** Percentual de Incentivo à Qualificação (IQ) garantido por este nível de RSC, sobre o vencimento básico. */
+  percentualIncentivo: number;
   pontosMinimos: number;
   itensMinimos: number;
   incisosObrigatorios: Inciso[][] | null;
@@ -28,6 +30,7 @@ export const RSC_LEVELS: readonly RscLevelDefinition[] = [
     id: 'RSC-I',
     label: 'RSC-TAE I',
     equivalencia: 'Ensino Fundamental',
+    percentualIncentivo: 10,
     pontosMinimos: 10,
     itensMinimos: 1,
     incisosObrigatorios: null,
@@ -36,6 +39,7 @@ export const RSC_LEVELS: readonly RscLevelDefinition[] = [
     id: 'RSC-II',
     label: 'RSC-TAE II',
     equivalencia: 'Ensino Médio',
+    percentualIncentivo: 15,
     pontosMinimos: 15,
     itensMinimos: 2,
     incisosObrigatorios: null,
@@ -44,6 +48,7 @@ export const RSC_LEVELS: readonly RscLevelDefinition[] = [
     id: 'RSC-III',
     label: 'RSC-TAE III',
     equivalencia: 'Graduação',
+    percentualIncentivo: 25,
     pontosMinimos: 25,
     itensMinimos: 2,
     incisosObrigatorios: null,
@@ -52,6 +57,7 @@ export const RSC_LEVELS: readonly RscLevelDefinition[] = [
     id: 'RSC-IV',
     label: 'RSC-TAE IV',
     equivalencia: 'Especialização',
+    percentualIncentivo: 30,
     pontosMinimos: 30,
     itensMinimos: 3,
     incisosObrigatorios: [['II', 'IV', 'V', 'VI']],
@@ -60,6 +66,7 @@ export const RSC_LEVELS: readonly RscLevelDefinition[] = [
     id: 'RSC-V',
     label: 'RSC-TAE V',
     equivalencia: 'Mestrado',
+    percentualIncentivo: 52,
     pontosMinimos: 52,
     itensMinimos: 5,
     incisosObrigatorios: [['IV', 'V', 'VI']],
@@ -68,6 +75,7 @@ export const RSC_LEVELS: readonly RscLevelDefinition[] = [
     id: 'RSC-VI',
     label: 'RSC-TAE VI',
     equivalencia: 'Doutorado',
+    percentualIncentivo: 75,
     pontosMinimos: 75,
     itensMinimos: 7,
     incisosObrigatorios: [['VI']],
