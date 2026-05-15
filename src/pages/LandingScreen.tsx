@@ -68,6 +68,8 @@ export default function LandingScreen() {
       (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
+  const hasDoctorate = form.escolaridade_atual === 'Doutorado';
+
   const buildPerfil = (): Servidor => ({
     id: `srv-${Date.now()}`,
     siape: form.siape.trim(),
@@ -78,7 +80,6 @@ export default function LandingScreen() {
     cargo: '',
     escolaridade_atual: form.escolaridade_atual,
     situacao_funcional: 'Ativo',
-    em_estagio_probatorio: false,
   });
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -300,6 +301,17 @@ export default function LandingScreen() {
                   </select>
                 </div>
               </div>
+
+              {hasDoctorate && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <p className="leading-relaxed">
+                      Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponde à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="nome_completo">

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Save, UserCircle } from 'lucide-react';
+import { AlertCircle, Save, UserCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import MainLayout from '../components/MainLayout';
 import { Button } from '../components/ui/button';
@@ -13,6 +13,7 @@ import {
   SITUACOES_FUNCIONAIS,
   type Servidor,
 } from '../data/mock';
+import { getServidorProbationaryStatus } from '../lib/rsc';
 import InstituicaoCombobox from '../components/InstituicaoCombobox';
 
 const NIVEIS_CLASSIFICACAO = ['A', 'B', 'C', 'D', 'E'] as const;
@@ -33,7 +34,6 @@ export default function ProfileSetup() {
     lotacao: servidor?.lotacao ?? '',
     escolaridade_atual: servidor?.escolaridade_atual ?? '',
     situacao_funcional: servidor?.situacao_funcional ?? 'Ativo',
-    em_estagio_probatorio: servidor?.em_estagio_probatorio ?? false,
     cargo: servidor?.cargo ?? '',
     nivel_classificacao: servidor?.nivel_classificacao ?? '',
     data_ingresso_ife: servidor?.data_ingresso_ife ?? servidor?.data_ingresso ?? '',
@@ -74,7 +74,6 @@ export default function ProfileSetup() {
       lotacao: form.lotacao.trim(),
       escolaridade_atual: form.escolaridade_atual,
       situacao_funcional: form.situacao_funcional as Servidor['situacao_funcional'],
-      em_estagio_probatorio: form.em_estagio_probatorio,
       cargo: form.cargo.trim(),
       nivel_classificacao: form.nivel_classificacao as Servidor['nivel_classificacao'],
       data_ingresso_ife: form.data_ingresso_ife,
@@ -86,6 +85,13 @@ export default function ProfileSetup() {
     toast.success('Perfil atualizado com sucesso.');
     navigate('/dashboard');
   };
+
+  const probationaryStatus = useMemo(
+    () => getServidorProbationaryStatus({ data_ingresso_ife: form.data_ingresso_ife }),
+    [form.data_ingresso_ife],
+  );
+  const probationEndDate = probationaryStatus.probationEndDate?.toLocaleDateString('pt-BR');
+  const hasDoctorate = form.escolaridade_atual === 'Doutorado';
 
   return (
     <MainLayout activeView="profile">
@@ -141,6 +147,17 @@ export default function ProfileSetup() {
                 onChange={set('nome_completo')}
               />
             </div>
+
+            {hasDoctorate && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <p className="leading-relaxed">
+                    Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponde à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="email_institucional">
@@ -243,24 +260,30 @@ export default function ProfileSetup() {
                 />
               </div>
 
-              <div className="space-y-2 rounded-md border border-gray-200 px-3 py-2.5">
-                <Label
-                  htmlFor="em_estagio_probatorio"
-                  className="flex cursor-pointer items-start gap-3 text-sm font-medium text-gray-900"
-                >
-                  <input
-                    id="em_estagio_probatorio"
-                    type="checkbox"
-                    checked={form.em_estagio_probatorio}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, em_estagio_probatorio: e.target.checked }))
-                    }
-                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span>Servidor atualmente em estágio probatório</span>
-                </Label>
+              <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                  <div>
+                    <p className="font-medium text-gray-900">Verificação automática do estágio probatório</p>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      O sistema usa a data de ingresso para avisar quando o período probatório ainda não foi concluído.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
+
+            {probationaryStatus.inProbation && (
+              <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <p className="leading-relaxed">
+                    Pela data de ingresso informada, o servidor ainda está em estágio probatório
+                    {probationEndDate ? ` até ${probationEndDate}` : ''}. Ele pode usar o sistema para organizar informações e documentos, mas não pode solicitar o RSC neste momento.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">

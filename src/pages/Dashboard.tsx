@@ -9,7 +9,7 @@ import { RSC_LEVELS } from '../data/mock';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
-import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
+import { getEligibleRscLevel, getServidorProbationaryStatus, validateLevelConstraints } from '../lib/rsc';
 import MainLayout from '../components/MainLayout';
 import WizardModal from '../components/WizardModal';
 
@@ -53,6 +53,8 @@ export default function Dashboard() {
   const totalPontos = sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados));
   const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
+  const probationaryStatus = getServidorProbationaryStatus(servidor);
+  const probationEndDate = probationaryStatus.probationEndDate?.toLocaleDateString('pt-BR');
 
   const profileFields = [
     { key: 'siape', label: 'SIAPE' },
@@ -153,6 +155,21 @@ export default function Dashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {probationaryStatus.inProbation && (
+          <Card className="border-amber-200 bg-amber-50 shadow-sm">
+            <CardContent className="flex items-start gap-3 p-4 text-amber-900 sm:p-5">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+              <div>
+                <p className="text-sm font-bold">Estágio probatório identificado pela data de ingresso</p>
+                <p className="mt-1 text-sm leading-relaxed">
+                  O servidor pode usar o sistema para organizar informações, documentos e pontuação
+                  {probationEndDate ? `, mas só poderá solicitar o RSC após ${probationEndDate}` : ', mas não pode solicitar o RSC neste momento'}.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
 
 
