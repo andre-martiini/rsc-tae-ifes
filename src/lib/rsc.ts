@@ -126,17 +126,48 @@ export interface FunctionalEligibility {
   reasons: string[];
 }
 
+export interface ProbationaryStatus {
+  inProbation: boolean;
+  probationEndDate?: Date;
+}
+
+export function getServidorProbationaryStatus(
+  servidor: Pick<Servidor, 'data_ingresso_ife' | 'data_ingresso'>,
+  referenceDate = new Date(),
+): ProbationaryStatus {
+  const ingresso = servidor.data_ingresso_ife || servidor.data_ingresso;
+
+  if (!ingresso) {
+    return { inProbation: false };
+  }
+
+  const ingressoDate = new Date(`${ingresso}T00:00:00`);
+
+  if (Number.isNaN(ingressoDate.getTime())) {
+    return { inProbation: false };
+  }
+
+  const probationEndDate = new Date(ingressoDate);
+  probationEndDate.setFullYear(probationEndDate.getFullYear() + 3);
+
+  return {
+    inProbation: referenceDate < probationEndDate,
+    probationEndDate,
+  };
+}
+
 export function getServidorFunctionalEligibility(
-  servidor: Pick<Servidor, 'situacao_funcional' | 'em_estagio_probatorio'>,
+  servidor: Pick<Servidor, 'situacao_funcional' | 'data_ingresso_ife' | 'data_ingresso'>,
 ): FunctionalEligibility {
   const reasons: string[] = [];
+  const probationaryStatus = getServidorProbationaryStatus(servidor);
 
   if (servidor.situacao_funcional && servidor.situacao_funcional !== 'Ativo') {
     reasons.push('O RSC-PCCTAE é aplicável apenas a servidor em situação funcional ativa.');
   }
 
-  if (servidor.em_estagio_probatorio) {
-    reasons.push('Não é possível emitir o pedido final para servidor em estágio probatório.');
+  if (probationaryStatus.inProbation) {
+    reasons.push('A data de ingresso indica estágio probatório em andamento; o servidor pode organizar informações no sistema, mas não pode solicitar o RSC neste momento.');
   }
 
   return {
