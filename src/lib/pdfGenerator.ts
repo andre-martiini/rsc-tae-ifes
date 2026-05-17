@@ -574,10 +574,14 @@ class Writer {
       borderColor: COLORS.border,
       borderWidth: grand ? 0.7 : 0.4,
     });
-    const font = grand ? this.bold : this.bold;
+    const font = this.bold;
     const size = grand ? 8.5 : 7.5;
-    const labelX = MARGIN_X + CONTENT_W * colOffsets[0] - (grand ? 4 : 40);
-    const valueX = MARGIN_X + CONTENT_W * colOffsets[1] + 4;
+    const valueColumnX = MARGIN_X + CONTENT_W * colOffsets[1];
+    const labelRightX = valueColumnX - 8;
+    const labelText = sanitize(label);
+    const valueText = sanitize(value);
+    const labelX = Math.max(MARGIN_X + 8, labelRightX - font.widthOfTextAtSize(labelText, size));
+    const valueX = valueColumnX + 8;
     const textY = grand ? this.y - rowH / 2 - 3 : this.y - 1;
 
     if (grand) {
@@ -590,14 +594,14 @@ class Writer {
         color: COLORS.muted,
       });
     }
-    this.page.drawText(sanitize(label), {
+    this.page.drawText(labelText, {
       x: labelX,
       y: textY,
       size,
       font,
       color: COLORS.text,
     });
-    this.page.drawText(sanitize(value), {
+    this.page.drawText(valueText, {
       x: valueX,
       y: textY,
       size,
