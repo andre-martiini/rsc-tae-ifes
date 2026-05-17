@@ -48,7 +48,12 @@ let logoBytesPromise: Promise<Uint8Array | null> | null = null;
 
 function sanitize(value: unknown): string {
   return String(value ?? '')
-    .replace(/[^\u0000-\u00FF\u2022]/g, '?')
+    .normalize('NFKC')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+    .replace(/[–—−]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[^\u0020-\u007E\u00A0-\u00FF\u2022]/g, '?')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -994,4 +999,3 @@ export async function generateRelatorioPontuacao(
 
   return doc.save();
 }
-
