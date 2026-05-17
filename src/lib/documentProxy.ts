@@ -8,6 +8,16 @@ const DEFAULT_ALLOWED_HOSTS = [
 
 const PDF_CONTENT_TYPES = ['application/pdf', 'application/octet-stream'];
 
+function jsonResponse(body: unknown, init?: ResponseInit) {
+  const headers = new Headers(init?.headers);
+  headers.set('Content-Type', 'application/json; charset=utf-8');
+
+  return new Response(JSON.stringify(body), {
+    ...init,
+    headers,
+  });
+}
+
 function getAllowedHosts() {
   const configured = process.env.DOCUMENT_PROXY_ALLOWED_HOSTS
     ?.split(',')
@@ -28,7 +38,7 @@ export async function handleDocumentProxyRequest(request: Request) {
   const { searchParams } = new URL(request.url);
 
   if (searchParams.get('health') === '1') {
-    return Response.json(
+    return jsonResponse(
       { ok: true, service: 'document-proxy' },
       {
         status: 200,
@@ -42,22 +52,22 @@ export async function handleDocumentProxyRequest(request: Request) {
 
   const target = searchParams.get('url')?.trim();
   if (!target) {
-    return Response.json({ error: 'Informe a URL do documento.' }, { status: 400 });
+    return jsonResponse({ error: 'Informe a URL do documento.' }, { status: 400 });
   }
 
   let parsed: URL;
   try {
     parsed = new URL(target);
   } catch {
-    return Response.json({ error: 'URL do documento invalida.' }, { status: 400 });
+    return jsonResponse({ error: 'URL do documento invalida.' }, { status: 400 });
   }
 
   if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-    return Response.json({ error: 'Apenas links HTTP ou HTTPS sao aceitos.' }, { status: 400 });
+    return jsonResponse({ error: 'Apenas links HTTP ou HTTPS sao aceitos.' }, { status: 400 });
   }
 
   if (!isAllowedHostname(parsed.hostname)) {
-    return Response.json(
+    return jsonResponse(
       { error: `Dominio nao autorizado para proxy: ${parsed.hostname}` },
       { status: 403 },
     );
@@ -78,7 +88,7 @@ export async function handleDocumentProxyRequest(request: Request) {
         status: upstream.status,
         url: parsed.toString(),
       });
-      return Response.json(
+      return jsonResponse(
         { error: `O repositorio institucional respondeu com status ${upstream.status}.` },
         { status: upstream.status },
       );
@@ -86,7 +96,7 @@ export async function handleDocumentProxyRequest(request: Request) {
 
     const contentType = upstream.headers.get('content-type') ?? 'application/pdf';
     if (!PDF_CONTENT_TYPES.some((allowed) => contentType.toLowerCase().includes(allowed))) {
-      return Response.json(
+      return jsonResponse(
         { error: `O link retornou um conteudo nao suportado: ${contentType}` },
         { status: 415 },
       );
@@ -116,7 +126,7 @@ export async function handleDocumentProxyRequest(request: Request) {
       url: parsed.toString(),
       error,
     });
-    return Response.json(
+    return jsonResponse(
       {
         error:
           'Nao foi possivel acessar esse link a partir do servidor. Tente novamente ou baixe o PDF manualmente no portal institucional.',
