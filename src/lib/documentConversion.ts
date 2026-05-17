@@ -3,7 +3,6 @@ import {
   StandardFonts,
   rgb,
   type PDFFont,
-  type PDFPage,
 } from 'pdf-lib';
 
 const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png'];
@@ -57,52 +56,70 @@ function splitTextInLines(text: string): string[] {
   return text.replace(/\r\n/g, '\n').split('\n');
 }
 
-function drawWrappedLine(
-  page: PDFPage,
-  font: PDFFont,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  fontSize: number,
-  lineHeight: number,
-): { nextY: number } {
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length === 0) {
-    return { nextY: y - lineHeight };
+function sanitizePdfText(value: string): string {
+  return value
+    .normalize('NFKC')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
+    .replace(/[–—−]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/[^\u0020-\u007E\u00A0-\u00FF\u2022]/g, '?');
+}
+
+function splitToken(token: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {
+  if (!token || font.widthOfTextAtSize(token, fontSize) <= maxWidth) {
+    return [token];
   }
 
-  let buffer = '';
-  let cursorY = y;
-
-  for (const word of words) {
-    const tentative = buffer ? `${buffer} ${word}` : word;
-    const width = font.widthOfTextAtSize(tentative, fontSize);
-    if (width <= maxWidth || !buffer) {
-      buffer = tentative;
+  const parts: string[] = [];
+  let current = '';
+  for (const char of Array.from(token)) {
+    const candidate = `${current}${char}`;
+    if (!current || font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+      current = candidate;
       continue;
     }
 
-    page.drawText(buffer, {
-      x,
-      y: cursorY,
-      size: fontSize,
-      font,
-      color: rgb(0.15, 0.15, 0.15),
-    });
-    buffer = word;
-    cursorY -= lineHeight;
+    parts.push(current);
+    current = char;
   }
 
-  page.drawText(buffer, {
-    x,
-    y: cursorY,
-    size: fontSize,
-    font,
-    color: rgb(0.15, 0.15, 0.15),
-  });
+  if (current) {
+    parts.push(current);
+  }
+  return parts;
+}
 
-  return { nextY: cursorY - lineHeight };
+function wrapTextLine(
+  font: PDFFont,
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+): string[] {
+  const words = sanitizePdfText(text).split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return [''];
+  }
+
+  let buffer = '';
+  const lines: string[] = [];
+
+  for (const word of words) {
+    for (const token of splitToken(word, font, fontSize, maxWidth)) {
+      const tentative = buffer ? `${buffer} ${token}` : token;
+      const width = font.widthOfTextAtSize(tentative, fontSize);
+      if (width <= maxWidth) {
+        buffer = tentative;
+        continue;
+      }
+
+      if (buffer) lines.push(buffer);
+      buffer = token;
+    }
+  }
+
+  if (buffer) lines.push(buffer);
+  return lines;
 }
 
 async function convertTextToPdf(file: File): Promise<File> {
@@ -136,17 +153,17 @@ async function convertTextToPdf(file: File): Promise<File> {
       continue;
     }
 
-    const { nextY } = drawWrappedLine(
-      page,
-      font,
-      rawLine,
-      marginX,
-      cursorY,
-      maxWidth,
-      fontSize,
-      lineHeight,
-    );
-    cursorY = nextY;
+    for (const line of wrapTextLine(font, rawLine, maxWidth, fontSize)) {
+      ensureSpace();
+      page.drawText(line, {
+        x: marginX,
+        y: cursorY,
+        size: fontSize,
+        font,
+        color: rgb(0.15, 0.15, 0.15),
+      });
+      cursorY -= lineHeight;
+    }
   }
 
   const pdfBytes = await pdf.save();

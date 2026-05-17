@@ -281,6 +281,30 @@ class Writer {
     });
   }
 
+  private splitToken(token: string, font: PDFFont, size: number, maxWidth: number): string[] {
+    if (!token || font.widthOfTextAtSize(token, size) <= maxWidth) {
+      return [token];
+    }
+
+    const parts: string[] = [];
+    let current = '';
+    for (const char of Array.from(token)) {
+      const candidate = `${current}${char}`;
+      if (!current || font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        current = candidate;
+        continue;
+      }
+
+      parts.push(current);
+      current = char;
+    }
+
+    if (current) {
+      parts.push(current);
+    }
+    return parts;
+  }
+
   private wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
     const pieces: string[] = [];
     for (const paragraph of sanitize(text).split('\n')) {
@@ -290,12 +314,14 @@ class Writer {
       }
       let line = '';
       for (const word of paragraph.split(' ')) {
-        const candidate = line ? `${line} ${word}` : word;
-        if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
-          line = candidate;
-        } else {
-          if (line) pieces.push(line);
-          line = word;
+        for (const token of this.splitToken(word, font, size, maxWidth)) {
+          const candidate = line ? `${line} ${token}` : token;
+          if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+            line = candidate;
+          } else {
+            if (line) pieces.push(line);
+            line = token;
+          }
         }
       }
       if (line) pieces.push(line);
@@ -442,7 +468,10 @@ class Writer {
   infoGrid(cells: Array<{ label: string; value: string }>, columns: 2 | 4 = 2) {
     const colWidth = CONTENT_W / columns;
     const top = this.y;
-    const rowHeight = 36;
+    const valueLines = cells.map((cell) =>
+      this.wrap(sanitize(cell.value || '-'), this.bold, 8.5, colWidth - 16),
+    );
+    const rowHeight = Math.max(36, Math.max(...valueLines.map((lines) => lines.length)) * 10 + 20);
     this.ensure(rowHeight + 6);
 
     this.page.drawRectangle({
@@ -474,14 +503,14 @@ class Writer {
         font: this.bold,
         color: COLORS.soft,
       });
-      this.drawWrapped(sanitize(cell.value || '-'), {
-        x: x + 8,
-        y: top - 14,
-        maxWidth: colWidth - 16,
-        size: 8.5,
-        font: this.bold,
-        color: COLORS.text,
-        lineHeight: 10,
+      valueLines[index].forEach((line, lineIndex) => {
+        this.page.drawText(line, {
+          x: x + 8,
+          y: top - 14 - lineIndex * 10,
+          size: 8.5,
+          font: this.bold,
+          color: COLORS.text,
+        });
       });
     });
 
@@ -501,24 +530,30 @@ class Writer {
 
   /** Renders a full-width header row with a darker background for a criteria block (ANEXO IV). */
   criterioHeader(label: string) {
-    this.ensure(24);
+    const size = 7.5;
+    const lineHeight = 9;
+    const lines = this.wrap(label, this.bold, size, CONTENT_W - 12);
+    const height = Math.max(18, lines.length * lineHeight + 8);
+    this.ensure(height + 6);
     this.page.drawRectangle({
       x: MARGIN_X,
-      y: this.y - 4,
+      y: this.y - height + 4,
       width: CONTENT_W,
-      height: 18,
+      height,
       color: rgb(0.78, 0.78, 0.78),
       borderColor: COLORS.border,
       borderWidth: 0.7,
     });
-    this.page.drawText(sanitize(label), {
-      x: MARGIN_X + 6,
-      y: this.y + 1,
-      size: 7.5,
-      font: this.bold,
-      color: COLORS.text,
+    lines.forEach((line, index) => {
+      this.page.drawText(line, {
+        x: MARGIN_X + 6,
+        y: this.y - 4 - index * lineHeight,
+        size,
+        font: this.bold,
+        color: COLORS.text,
+      });
     });
-    this.y -= 22;
+    this.y -= height + 4;
   }
 
   /**
