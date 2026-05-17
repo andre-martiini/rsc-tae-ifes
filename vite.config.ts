@@ -2,7 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig, loadEnv} from 'vite';
-import { handleDocumentProxyRequest } from './src/lib/documentProxy';
+import { handleDocumentProxyRequest } from './api/document-proxy';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
