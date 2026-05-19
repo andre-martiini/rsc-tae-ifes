@@ -161,6 +161,26 @@ export async function clearDocumentStorage() {
   });
 }
 
+export async function deleteDocumentFile(docId: string): Promise<void> {
+  const database = await openDatabase();
+
+  return new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    store.delete(docId);
+
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error);
+    };
+  });
+}
+
 export async function deleteDocumentsByServidorId(servidorId: string): Promise<void> {
   const database = await openDatabase();
 

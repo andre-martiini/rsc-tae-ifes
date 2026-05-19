@@ -14,6 +14,7 @@ import {
 import {
   persistDocumentFile,
   deleteDocumentsByServidorId,
+  deleteDocumentFile,
   computeDocumentHash,
 } from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
@@ -148,6 +149,7 @@ interface AppContextType {
     links: string[];
   }) => Promise<Documento>;
   updateDocumento: (docId: string, updates: Partial<Documento>) => void;
+  deleteDocumento: (docId: string) => Promise<void>;
   setWizardRecommendedIds: (ids: string[]) => void;
 }
 
@@ -535,6 +537,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
   };
 
+  const deleteDocumento = async (docId: string) => {
+    setDocumentos((current) => current.filter((doc) => doc.id !== docId));
+    await deleteDocumentFile(docId);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -559,6 +566,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addDocumentoFromFile,
         addDocumentoFromGedocLinks,
         updateDocumento,
+        deleteDocumento,
         setWizardRecommendedIds,
       }}
     >

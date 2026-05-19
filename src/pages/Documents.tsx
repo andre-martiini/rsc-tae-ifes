@@ -13,6 +13,7 @@ import {
   LoaderCircle,
   Search,
   Sparkles,
+  Trash2,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -261,7 +262,7 @@ function alertClass(tone: DocumentAlert['tone']) {
 }
 
 export default function Documents() {
-  const { servidor, itensRSC, documentos, lancamentos, updateDocumento } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, updateDocumento, deleteDocumento } = useAppContext();
   const navigate = useNavigate();
   const servidorId = servidor?.id ?? '';
   const [query, setQuery] = useState('');
@@ -272,6 +273,8 @@ export default function Documents() {
   const [viewerLoadingDocId, setViewerLoadingDocId] = useState<string | null>(null);
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
   const [promptLoadingDocId, setPromptLoadingDocId] = useState<string | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [pendingDeleteRow, setPendingDeleteRow] = useState<InventoryRow | null>(null);
   const blobUrlsRef = useRef<Record<string, string>>({});
 
   const docsDoServidor = useMemo(
@@ -442,6 +445,39 @@ export default function Documents() {
       }));
     } finally {
       setPromptLoadingDocId(null);
+    }
+  };
+
+  const deleteUnlinkedDocument = async (row: InventoryRow) => {
+    if (row.usages.length > 0) {
+      toast.error('Apenas documentos sem vínculo podem ser apagados por aqui.');
+      return;
+    }
+
+    setDeletingDocId(row.doc.id);
+    try {
+      const existingUrl = blobUrls[row.doc.id];
+      if (existingUrl) {
+        URL.revokeObjectURL(existingUrl);
+      }
+      setBlobUrls((current) => {
+        const next = { ...current };
+        delete next[row.doc.id];
+        return next;
+      });
+      setViewerErrors((current) => {
+        const next = { ...current };
+        delete next[row.doc.id];
+        return next;
+      });
+      await deleteDocumento(row.doc.id);
+      setSelectedDocId(null);
+      setPendingDeleteRow(null);
+      toast.success('Documento apagado.');
+    } catch {
+      toast.error('Não foi possível apagar o documento.');
+    } finally {
+      setDeletingDocId(null);
     }
   };
 
@@ -652,7 +688,9 @@ export default function Documents() {
                 viewerLoading={viewerLoadingDocId === selectedRow.doc.id}
                 viewerError={viewerErrors[selectedRow.doc.id]}
                 promptLoading={promptLoadingDocId === selectedRow.doc.id}
+                deleting={deletingDocId === selectedRow.doc.id}
                 onGeneratePrompt={() => void generatePromptForRow(selectedRow)}
+                onDelete={() => setPendingDeleteRow(selectedRow)}
                 onNavigateToItem={(itemId) => navigate(`/itens?item=${itemId}`)}
               />
             ) : (
@@ -669,6 +707,14 @@ export default function Documents() {
       </main>
       {promptModalText && (
         <PromptModal text={promptModalText} onClose={() => setPromptModalText(null)} />
+      )}
+      {pendingDeleteRow && (
+        <DeleteDocumentModal
+          row={pendingDeleteRow}
+          deleting={deletingDocId === pendingDeleteRow.doc.id}
+          onClose={() => setPendingDeleteRow(null)}
+          onConfirm={() => void deleteUnlinkedDocument(pendingDeleteRow)}
+        />
       )}
     </MainLayout>
   );
@@ -705,7 +751,9 @@ function DocumentDetail({
   viewerLoading,
   viewerError,
   promptLoading,
+  deleting,
   onGeneratePrompt,
+  onDelete,
   onNavigateToItem,
 }: {
   row: InventoryRow;
@@ -713,7 +761,9 @@ function DocumentDetail({
   viewerLoading: boolean;
   viewerError?: string;
   promptLoading: boolean;
+  deleting: boolean;
   onGeneratePrompt: () => void;
+  onDelete: () => void;
   onNavigateToItem: (itemId: string) => void;
 }) {
   const { doc } = row;
@@ -733,20 +783,38 @@ function DocumentDetail({
             <p className="text-[11px] font-black uppercase tracking-wide text-gray-400">Detalhe do documento</p>
             <h2 className="mt-1 break-words text-lg font-black leading-tight text-gray-900">{doc.nome_arquivo}</h2>
           </div>
-          <button
-            type="button"
-            onClick={onGeneratePrompt}
-            disabled={promptLoading || row.usages.length === 0}
-            title={row.usages.length === 0 ? 'Vincule o documento a um item antes de gerar o prompt' : 'Gerar prompt para validação com IA'}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            {promptLoading ? (
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5" />
+          <div className="flex shrink-0 items-center gap-2">
+            {row.usages.length === 0 && (
+              <button
+                type="button"
+                onClick={onDelete}
+                disabled={deleting}
+                title="Apagar documento sem vínculo"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                {deleting ? (
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Trash2 className="h-3.5 w-3.5" />
+                )}
+                Apagar
+              </button>
             )}
-            IA
-          </button>
+            <button
+              type="button"
+              onClick={onGeneratePrompt}
+              disabled={promptLoading || row.usages.length === 0}
+              title={row.usages.length === 0 ? 'Vincule o documento a um item antes de gerar o prompt' : 'Gerar prompt para validação com IA'}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 transition-colors hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {promptLoading ? (
+                <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              IA
+            </button>
+          </div>
         </div>
 
         {row.alerts.length > 0 && (
@@ -1001,6 +1069,65 @@ function PromptModal({ text, onClose }: { text: string; onClose: () => void }) {
               event.target.setSelectionRange(0, event.target.value.length);
             }}
           />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DeleteDocumentModal({
+  row,
+  deleting,
+  onClose,
+  onConfirm,
+}: {
+  row: InventoryRow;
+  deleting: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={deleting ? undefined : onClose}>
+      <div
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-red-100 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
+            <Trash2 className="h-5 w-5" />
+          </div>
+
+          <h3 className="text-lg font-black tracking-tight text-gray-900">Apagar documento?</h3>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+            Este documento não possui vínculos e será removido do inventário. Se houver arquivo local salvo no navegador, ele também será apagado.
+          </p>
+
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="break-words text-sm font-bold text-gray-900">{row.doc.nome_arquivo}</p>
+            <p className="mt-1 text-[11px] text-gray-500">
+              {formatUserFileKind(row.doc)} · {formatBytes(row.doc.tamanho_bytes)}
+            </p>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={deleting}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              Apagar documento
+            </button>
+          </div>
         </div>
       </div>
     </div>
