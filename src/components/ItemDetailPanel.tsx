@@ -23,7 +23,7 @@ import { institutionConfig, isValidInstitutionDocumentLink, normalizeInstitution
 import type { Documento, ItemRSC } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
-import { normalizeUploadToPdf, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
+import { normalizeUploadToPdf, toPdfFile, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
 import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
 import { cn } from '../lib/utils';
@@ -184,26 +184,48 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     try {
       setIsPreparingUpload(true);
       setUploadFeedback(`Preparando ${fileList.length} arquivo(s) para consolidacao...`);
-      const normalized: Awaited<ReturnType<typeof normalizeUploadToPdf>>[] = [];
       const selectedFiles = Array.from(fileList);
       const componentFiles: NonNullable<Documento['arquivos_componentes']> = [];
+      const pdfFiles: File[] = [];
+
       for (let index = 0; index < selectedFiles.length; index += 1) {
         const candidate = selectedFiles[index];
         setUploadFeedback(`Convertendo arquivo ${index + 1}/${selectedFiles.length}: ${candidate.name}`);
         const hash = await computeDocumentHash(candidate);
         componentFiles.push({ nome_arquivo: candidate.name, hash_arquivo: hash });
-        normalized.push(await normalizeUploadToPdf(candidate));
+        // toPdfFile converts format only — skips OCR to avoid memory pressure on large docs
+        pdfFiles.push(await toPdfFile(candidate));
       }
-      setUploadFeedback(`Mesclando ${normalized.length} arquivo(s) em um unico PDF...`);
+
+      setUploadFeedback(`Mesclando ${pdfFiles.length} arquivo(s) em um unico PDF...`);
       const merged = await PDFDocument.create();
-      for (const entry of normalized) {
-        const src = await PDFDocument.load(await entry.file.arrayBuffer(), { ignoreEncryption: true });
-        const pages = await merged.copyPages(src, src.getPageIndices());
+      let expectedPages = 0;
+
+      for (let i = 0; i < pdfFiles.length; i += 1) {
+        const fileName = selectedFiles[i].name;
+        let src: PDFDocument;
+        try {
+          src = await PDFDocument.load(await pdfFiles[i].arrayBuffer(), { ignoreEncryption: true });
+        } catch {
+          throw new Error(`Não foi possível ler o arquivo "${fileName}". Verifique se ele é um PDF válido.`);
+        }
+        const indices = src.getPageIndices();
+        if (indices.length === 0) {
+          throw new Error(`O arquivo "${fileName}" não contém páginas legíveis ou não pôde ser processado.`);
+        }
+        const pages = await merged.copyPages(src, indices);
         pages.forEach((page) => merged.addPage(page));
+        expectedPages += indices.length;
       }
-      const mergedFile = new File([await merged.save() as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
+
+      if (merged.getPageCount() !== expectedPages) {
+        throw new Error(`Erro na consolidação: esperado ${expectedPages} página(s), mas apenas ${merged.getPageCount()} foram incluídas.`);
+      }
+
+      const mergedBytes = await merged.save();
+      const mergedFile = new File([mergedBytes as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
       if (mergedFile.size > 5 * 1024 * 1024) {
-        setUploadFeedback('O PDF consolidado excede 5MB.');
+        setUploadFeedback('O PDF consolidado excede 5MB. Tente reduzir a resolução ou o número de páginas.');
         setIsPreparingUpload(false);
         return;
       }
@@ -216,10 +238,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         componentHashes: componentFiles.map((entry) => entry.hash_arquivo),
         componentFiles,
       });
-      setUploadFeedback(`${fileList.length} arquivo(s) consolidados em um único PDF.`);
-    } catch {
-      setUploadFeedback('Nao foi possivel preparar os arquivos selecionados.');
-      toast.error('Não foi possível preparar os arquivos selecionados.');
+      setUploadFeedback(`${fileList.length} arquivo(s) consolidados em um único PDF (${expectedPages} página(s)).`);
+    } catch (error) {
+      setFile(null);
+      setUploadMeta(null);
+      const message = error instanceof Error ? error.message : 'Não foi possível preparar os arquivos selecionados.';
+      setUploadFeedback(message);
+      toast.error(message);
     }
     setIsPreparingUpload(false);
   };
