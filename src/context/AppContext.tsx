@@ -500,12 +500,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const addLancamento = (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => {
+    if (
+      lancamento.documento_id &&
+      lancamentos.some(
+        (current) =>
+          current.servidor_id === lancamento.servidor_id &&
+          current.documento_id === lancamento.documento_id,
+      )
+    ) {
+      return false;
+    }
+
     const newLancamento: Lancamento = {
       ...lancamento,
       id: `lanc-${Date.now()}`,
       status_auditoria: 'Pendente',
     };
-    setLancamentos((current) => [...current, newLancamento]);
+    setLancamentos((current) => {
+      if (
+        lancamento.documento_id &&
+        current.some(
+          (entry) =>
+            entry.servidor_id === lancamento.servidor_id &&
+            entry.documento_id === lancamento.documento_id,
+        )
+      ) {
+        return current;
+      }
+
+      return [...current, newLancamento];
+    });
     return true;
   };
 

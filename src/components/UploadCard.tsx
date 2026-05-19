@@ -87,7 +87,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
   const finishSave = (docId: string) => {
     const pontosCalculados = quantidade * item.pontos_por_unidade;
 
-    addLancamento({
+    const saved = addLancamento({
       servidor_id: servidor!.id,
       item_rsc_id: item.id,
       documento_id: docId,
@@ -97,6 +97,13 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
       justificativa_alteracao: isUnlocked ? justificativa : undefined,
       pontos_calculados: pontosCalculados,
     });
+
+    if (!saved) {
+      toast.warning('Este documento já possui lançamento registrado. Os pontos não foram somados novamente.');
+      setDuplicateWarning(null);
+      setFile(null);
+      return;
+    }
 
     toast.success(`Lançamento salvo! Você acumulou +${pontosCalculados} pontos no Inciso ${item.inciso}`);
 
@@ -261,20 +268,26 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                   </p>
                   
                   <p className="text-sm text-gray-500">
-                    Deseja prosseguir com o lançamento utilizando o documento já existente no sistema?
+                    Para evitar duplicidade de pontuação, nenhum novo lançamento será salvo para este mesmo documento.
                   </p>
                 </div>
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Button
-                    onClick={() => finishSave(duplicateWarning.docId)}
+                    onClick={() => {
+                      setDuplicateWarning(null);
+                      setFile(null);
+                    }}
                     className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
                   >
-                    Sim, reaproveitar e salvar
+                    Entendi
                   </Button>
                   <Button
                     variant="ghost"
-                    onClick={() => setDuplicateWarning(null)}
+                    onClick={() => {
+                      setDuplicateWarning(null);
+                      setFile(null);
+                    }}
                     className="text-gray-500 hover:bg-gray-100"
                   >
                     Cancelar
