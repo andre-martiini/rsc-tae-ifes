@@ -175,6 +175,15 @@ import { extractTextFromPdf } from './pdfTranscription';
 
 import { extractTextFromImage } from './ocr';
 
+// Converts a file to PDF without running OCR/transcription.
+// Use this for multi-file merges where transcription of individual files is not needed.
+export async function toPdfFile(file: File): Promise<File> {
+  if (isPdf(file)) return file;
+  if (isImage(file)) return convertImageToPdf(file);
+  if (isText(file)) return convertTextToPdf(file);
+  throw new Error('Formato inválido. Envie PDF, imagem JPG/PNG ou arquivo de texto.');
+}
+
 export async function normalizeUploadToPdf(file: File): Promise<{
   file: File;
   converted: boolean;
