@@ -6,7 +6,7 @@ import AppFooter from './AppFooter';
 
 interface MainLayoutProps {
     children: React.ReactNode;
-    activeView: 'dashboard' | 'catalog' | 'consolidate' | 'profile' | 'legislation';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'legislation';
 }
 
 export default function MainLayout({ children, activeView }: MainLayoutProps) {
@@ -18,6 +18,7 @@ export default function MainLayout({ children, activeView }: MainLayoutProps) {
             case 'dashboard': navigate('/dashboard'); break;
             case 'profile': navigate('/perfil'); break;
             case 'catalog': navigate('/itens'); break;
+            case 'documents': navigate('/documentos'); break;
             case 'consolidate': navigate('/consolidar'); break;
             case 'legislation': navigate('/legislacao'); break;
             default: navigate('/dashboard');

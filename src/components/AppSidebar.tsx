@@ -3,6 +3,7 @@ import {
     LayoutDashboard,
     UserCircle,
     ScrollText,
+    Files,
     FileCheck,
     ChevronLeft,
     ChevronRight,
@@ -16,7 +17,7 @@ import AppLogo from './AppLogo';
 import { useAppContext } from '../context/AppContext';
 
 interface SidebarProps {
-    activeView: 'dashboard' | 'catalog' | 'consolidate' | 'profile' | 'legislation';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'legislation';
     onNavigate: (view: any) => void;
     onLogout: () => void;
     mobileOpen?: boolean;
@@ -37,6 +38,7 @@ export default function AppSidebar({
         { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { key: 'profile', label: 'Perfil', icon: UserCircle },
         { key: 'catalog', label: 'Itens', icon: ScrollText },
+        { key: 'documents', label: 'Documentos', icon: Files },
         { key: 'consolidate', label: 'Consolidar', icon: FileCheck },
         { key: 'legislation', label: 'Legislação', icon: Scale },
     ] as const;
@@ -113,12 +115,29 @@ export default function AppSidebar({
                                         animate={{ opacity: 1 }}
                                         exit={{ opacity: 0 }}
                                         transition={{ duration: 0.1 }}
-                                        className="whitespace-nowrap"
-                                    >
-                                        {label}
-                                    </motion.span>
-                                )}
-                            </AnimatePresence>
+                                            className="flex min-w-0 items-center gap-2 whitespace-nowrap"
+                                        >
+                                            <span>{label}</span>
+                                            {key === 'documents' && (
+                                                <span className={cn(
+                                                    'rounded-full border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide',
+                                                    isActive
+                                                        ? 'border-white/30 bg-white/20 text-white'
+                                                        : 'border-primary/20 bg-primary/10 text-primary'
+                                                )}>
+                                                    Novo
+                                                </span>
+                                            )}
+                                        </motion.span>
+                                    )}
+                                </AnimatePresence>
+
+                            {key === 'documents' && collapsed && !isMobile && (
+                                <span className={cn(
+                                    'absolute right-2 top-2 h-2 w-2 rounded-full',
+                                    isActive ? 'bg-white' : 'bg-primary'
+                                )} />
+                            )}
 
                             {isActive && collapsed && !isMobile && (
                                 <div className="absolute right-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-l-full bg-white" />
