@@ -12,6 +12,7 @@ import LandingScreen from './pages/LandingScreen';
 import ProfileSetup from './pages/ProfileSetup';
 import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
+import Documents from './pages/Documents';
 import Consolidation from './pages/Consolidation';
 import Legislation from './pages/Legislation';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -50,6 +51,14 @@ export default function App() {
             element={
               <RequireSession>
                 <ItemCatalog />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="/documentos"
+            element={
+              <RequireSession>
+                <Documents />
               </RequireSession>
             }
           />
