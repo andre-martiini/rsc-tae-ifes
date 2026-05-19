@@ -424,6 +424,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const fileHash = await computeDocumentHash(file);
     const normalizedName = normalizeFileName(file.name);
     const incomingHashes = Array.from(new Set([fileHash, ...(componentHashes ?? [])].filter(Boolean)));
+    // A merge of N source files — component hashes must NOT be used across different merges
+    // because two distinct merges can legitimately share source files.
+    const isMultiFileMerge = (componentHashes?.length ?? 0) > 1;
 
     const duplicatedDocument = documentos.find((doc) => {
       if (doc.servidor_id !== servidorId || !doc.caminho_storage) {
@@ -435,8 +438,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...(doc.hashes_componentes ?? []),
       ].filter(Boolean));
 
-      if (incomingHashes.some((hash) => storedHashes.has(hash))) {
-        return true;
+      if (isMultiFileMerge) {
+        // Only the final merged file hash triggers a duplicate — comparing component
+        // hashes would produce false positives when different merges share source files.
+        if (storedHashes.has(fileHash)) return true;
+      } else {
+        if (incomingHashes.some((hash) => storedHashes.has(hash))) return true;
       }
 
       return (
