@@ -67,8 +67,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{
     doc: Documento;
-    lancamentoParaPrompt: any;
-    newDoc: Documento;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -445,6 +443,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         isDuplicate = result.exists;
       }
       const pontosCalculados = calculateLancamentoPoints(quantidadeNumerica, item.pontos_por_unidade);
+
+      if (isDuplicate && newDoc) {
+        setDuplicateWarning({ doc: newDoc });
+        setSaving(false);
+        return;
+      }
+
       const lancamentoParaPrompt = {
         servidor_id: servidor.id,
         item_rsc_id: item.id,
@@ -455,16 +460,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         declaracao_nao_duplicidade: true,
         pontos_calculados: pontosCalculados,
       };
-
-      if (isDuplicate && newDoc) {
-        setDuplicateWarning({
-          doc: newDoc,
-          lancamentoParaPrompt,
-          newDoc: newDoc,
-        });
-        setSaving(false);
-        return;
-      }
 
       finishSave(lancamentoParaPrompt, newDoc);
     } catch (error) {
@@ -477,7 +472,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   };
 
   const finishSave = (lancamentoParaPrompt: any, newDoc?: Documento) => {
-    addLancamento(lancamentoParaPrompt);
+    const saved = addLancamento(lancamentoParaPrompt);
+    if (!saved) {
+      toast.warning('Este documento já possui lançamento registrado. Os pontos não foram somados novamente.');
+      setSaving(false);
+      setDuplicateWarning(null);
+      return;
+    }
 
     toast.success(`Lançamento salvo! +${formatPointValue(lancamentoParaPrompt.pontos_calculados)} pts.`, {
       description: 'Deseja validar esta comprovação com uma IA agora?',
@@ -920,22 +921,27 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   </p>
                   
                   <p className="text-sm text-gray-500">
-                    Deseja prosseguir com o lançamento utilizando o documento já existente no sistema?
+                    Para evitar duplicidade de pontuação, nenhum novo lançamento será salvo para este mesmo documento.
                   </p>
                 </div>
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Button
-                    onClick={() => finishSave(duplicateWarning.lancamentoParaPrompt, duplicateWarning.newDoc)}
+                    onClick={() => {
+                      setDuplicateWarning(null);
+                      setSaving(false);
+                      resetUpload();
+                    }}
                     className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
                   >
-                    Sim, reaproveitar e salvar
+                    Entendi
                   </Button>
                   <Button
                     variant="ghost"
                     onClick={() => {
                       setDuplicateWarning(null);
                       setSaving(false);
+                      resetUpload();
                     }}
                     className="text-gray-500 hover:bg-gray-100"
                   >
