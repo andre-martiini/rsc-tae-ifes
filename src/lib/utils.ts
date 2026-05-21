@@ -23,3 +23,17 @@ export function formatarDataSegura(dataStr?: string, fallback: string = '—'): 
   if (Number.isNaN(date.getTime())) return dataStr;
   return date.toLocaleDateString('pt-BR');
 }
+
+/**
+ * Cria um objeto Date no fuso horário local do navegador a partir de uma string 'YYYY-MM-DD' (com ou sem time),
+ * evitando desvios de fuso horário.
+ */
+export function parseLocalDate(dateString: string): Date {
+  if (!dateString) return new Date();
+  const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match.map(Number);
+    return new Date(year, month - 1, day);
+  }
+  return new Date(dateString);
+}

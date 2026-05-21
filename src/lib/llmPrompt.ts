@@ -1,6 +1,5 @@
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import type { ItemRSC, Lancamento, Documento, Servidor } from '../data/mock';
+import { formatarDataSegura } from './utils';
 
 export function generateLLMPrompt(params: {
     item: ItemRSC;
@@ -10,12 +9,8 @@ export function generateLLMPrompt(params: {
 }): string {
     const { item, lancamento, documento, servidor } = params;
 
-    const dataInicioStr = lancamento.data_inicio
-        ? format(new Date(lancamento.data_inicio), 'dd/MM/yyyy', { locale: ptBR })
-        : 'Não informada';
-    const dataFimStr = lancamento.data_fim
-        ? format(new Date(lancamento.data_fim), 'dd/MM/yyyy', { locale: ptBR })
-        : 'Não informada';
+    const dataInicioStr = formatarDataSegura(lancamento.data_inicio, 'Não informada');
+    const dataFimStr = formatarDataSegura(lancamento.data_fim, 'Não informada');
 
     const periodoStr =
         lancamento.data_inicio && lancamento.data_fim

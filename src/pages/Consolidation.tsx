@@ -18,7 +18,7 @@ import {
   getServidorFunctionalEligibility,
   validateLevelConstraints,
 } from '../lib/rsc';
-import { cn, formatarDataSegura } from '../lib/utils';
+import { cn, formatarDataSegura, parseLocalDate } from '../lib/utils';
 
 export default function Consolidation() {
   const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso } = useAppContext();
@@ -164,7 +164,7 @@ export default function Consolidation() {
 
   const intersticioOk = useMemo(() => {
     if (!temConcessaoAnterior || !dataUltimaConcessao) return true;
-    const ultimaConcessao = new Date(`${dataUltimaConcessao}T00:00:00`);
+    const ultimaConcessao = parseLocalDate(dataUltimaConcessao);
     if (Number.isNaN(ultimaConcessao.getTime())) return false;
     const hoje = new Date();
     const dataLimite = new Date(ultimaConcessao);

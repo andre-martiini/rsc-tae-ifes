@@ -141,7 +141,13 @@ export function getServidorProbationaryStatus(
     return { inProbation: false };
   }
 
-  const ingressoDate = new Date(`${ingresso}T00:00:00`);
+  let ingressoDate: Date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(ingresso)) {
+    const [year, month, day] = ingresso.split('-').map(Number);
+    ingressoDate = new Date(year, month - 1, day);
+  } else {
+    ingressoDate = new Date(`${ingresso}T00:00:00`);
+  }
 
   if (Number.isNaN(ingressoDate.getTime())) {
     return { inProbation: false };
