@@ -9,7 +9,7 @@ import {
 import { institutionConfig } from '../config/institution';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { addPointValues, formatPointValue, sumPointValues } from './points';
-import { formatarDataSegura } from './utils';
+import { formatarDataSegura, sanitizeForTag } from './utils';
 
 export type NivelRsc = {
   label: string;
@@ -106,6 +106,7 @@ class Writer {
   private footerRight: string;
   private regular!: PDFFont;
   private bold!: PDFFont;
+  public courier!: PDFFont;
   private logo?: PDFImage;
   private page!: PDFPage;
   public y = 0;
@@ -127,6 +128,7 @@ class Writer {
   async init() {
     this.regular = await this.doc.embedFont(StandardFonts.Helvetica);
     this.bold = await this.doc.embedFont(StandardFonts.HelveticaBold);
+    this.courier = await this.doc.embedFont(StandardFonts.Courier);
     const logoBytes = await getLogoBytes();
     if (logoBytes) {
       try {
@@ -353,6 +355,20 @@ class Writer {
     });
   }
 
+  drawTag(text: string, options: { x?: number; y: number; size?: number; color?: ReturnType<typeof rgb> }) {
+    const size = options.size ?? 8;
+    const font = this.courier;
+    const color = options.color ?? rgb(0.6, 0.6, 0.6);
+    const x = options.x ?? MARGIN_X;
+    this.page.drawText(text, {
+      x,
+      y: options.y,
+      size,
+      font,
+      color,
+    });
+  }
+
   ensure(height: number) {
     if (this.y - height < MARGIN_BOTTOM + FOOTER_H) {
       this.addPage();
@@ -395,10 +411,11 @@ class Writer {
       indent?: number;
       maxWidth?: number;
       align?: 'left' | 'center' | 'right';
+      font?: PDFFont;
     } = {},
   ) {
     const size = options.size ?? 9.5;
-    const font = options.bold ? this.bold : this.regular;
+    const font = options.font ?? (options.bold ? this.bold : this.regular);
     const x = MARGIN_X + (options.indent ?? 0);
     const maxWidth = options.maxWidth ?? CONTENT_W - (options.indent ?? 0);
     const lineHeight = options.lineHeight ?? size * 1.45;
@@ -726,6 +743,20 @@ export async function generateRequerimentoFormal(
   writer.gap(6);
   writer.text('Data: ______ / ______ / __________', { size: 9 });
 
+  // Injeção de metadados estruturados (Sistema 2)
+  writer.gap(10);
+  const grayColor = rgb(0.6, 0.6, 0.6);
+  const sanitizedNome = sanitizeForTag(servidor.nome_completo);
+  const sanitizedNivel = nivelPleiteado ? sanitizeForTag(nivelPleiteado.label) : 'RSC_NAO_DEFINIDO';
+  const sanitizedSiape = sanitizeForTag(servidor.siape);
+
+  // Desenhamos as tags diretamente na página para garantir que caibam na primeira página do Requerimento
+  writer.drawTag(`[RSC:DOC_TIPO:REQUERIMENTO]`, { y: writer.y - 10, color: grayColor, size: 8 });
+  writer.drawTag(`[RSC:SIAPE:${sanitizedSiape}]`, { y: writer.y - 20, color: grayColor, size: 8 });
+  writer.drawTag(`[RSC:NOME:${sanitizedNome}]`, { y: writer.y - 30, color: grayColor, size: 8 });
+  writer.drawTag(`[RSC:NIVEL_PRETENDIDO:${sanitizedNivel}]`, { y: writer.y - 40, color: grayColor, size: 8 });
+  writer.y -= 45;
+
   return doc.save();
 }
 
@@ -737,6 +768,7 @@ export async function generateMemorialDescritivo(
   itensRSC: ItemRSC[],
   documentos: Documento[],
   processo?: ProcessoRSC,
+  documentPageRanges?: Record<string, { startPage: number; endPage: number }>,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const writer = new Writer({
@@ -851,6 +883,57 @@ export async function generateMemorialDescritivo(
   writer.text(`À vista das informações apresentadas, este memorial consolida ${formatPointValue(totalPontos)} pontos para instrução documental do pedido de RSC-PCCTAE.`, { size: 9 });
   writer.gap(22);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
+
+  // Injeção de página de metadados dedicada (Extrato Estruturado de Dados) para o Sistema 2
+  writer.addPage();
+  writer.text('EXTRATO ESTRUTURADO DE DADOS', { align: 'center', bold: true, size: 10 });
+  writer.gap(12);
+
+  const grayColor = rgb(0.6, 0.6, 0.6);
+  const sanitizedNome = sanitizeForTag(servidor.nome_completo);
+  const sanitizedSiape = sanitizeForTag(servidor.siape);
+  const totalPontosStr = formatPointValue(totalPontos);
+
+  writer.text(`[RSC:DOC_TIPO:MEMORIAL]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:START]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:SIAPE:${sanitizedSiape}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+
+  // Ordena os lançamentos por número do item e ID para gerar tags de forma previsível
+  const sortedLancamentosForTags = [...lancamentos].sort((a, b) => {
+    const itemA = itensRSC.find((i) => i.id === a.item_rsc_id);
+    const itemB = itensRSC.find((i) => i.id === b.item_rsc_id);
+    const numA = itemA?.numero ?? 0;
+    const numB = itemB?.numero ?? 0;
+    if (numA !== numB) return numA - numB;
+    return a.id.localeCompare(b.id);
+  });
+
+  for (const l of sortedLancamentosForTags) {
+    const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+    if (!item) continue;
+
+    const docItem = l.documento_id ? documentos.find((d) => d.id === l.documento_id) : undefined;
+    const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
+    const range = docRefKey && documentPageRanges ? documentPageRanges[docRefKey] : undefined;
+
+    const startPage = range ? range.startPage : 0;
+    const endPage = range ? range.endPage : 0;
+    const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
+    const incisoRomano = item.inciso;
+    const pontosStr = formatPointValue(l.pontos_calculados);
+
+    writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  }
+
+  writer.text(`[RSC:END]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
 
   return doc.save();
 }
