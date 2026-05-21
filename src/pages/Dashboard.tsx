@@ -84,7 +84,7 @@ export default function Dashboard() {
     { key: 'lotacao', label: 'Lotação' },
     { key: 'cargo', label: 'Cargo' },
     { key: 'nivel_classificacao', label: 'Classe' },
-    { key: 'data_ingresso_ife', label: 'Ingresso' },
+    { key: 'data_ingresso_ife', label: 'Início do Efetivo Exercício' },
     { key: 'escolaridade_atual', label: 'Formação' },
   ];
   const missingProfileFields = profileFields.filter(f => !servidor[f.key as keyof typeof servidor]);
@@ -181,7 +181,7 @@ export default function Dashboard() {
             <CardContent className="flex items-start gap-3 p-4 text-amber-900 sm:p-5">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
               <div>
-                <p className="text-sm font-bold">Estágio probatório identificado pela data de ingresso</p>
+                <p className="text-sm font-bold">Estágio probatório identificado pela data de início do efetivo exercício</p>
                 <p className="mt-1 text-sm leading-relaxed">
                   O servidor pode usar o sistema para organizar informações, documentos e pontuação
                   {probationEndDate ? `, mas só poderá solicitar o RSC após ${probationEndDate}` : ', mas não pode solicitar o RSC neste momento'}.

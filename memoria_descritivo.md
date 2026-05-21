@@ -10,7 +10,7 @@ Este memorial descritivo integra o dossiê documental do servidor e tem por obje
 - SIAPE
 - Cargo
 - Lotação
-- Data de ingresso em IFE
+- Data de Início do Efetivo Exercício
 - Nível de classificação
 
 ### 2. Síntese do Pedido

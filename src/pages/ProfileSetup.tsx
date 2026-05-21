@@ -36,7 +36,7 @@ export default function ProfileSetup() {
     situacao_funcional: servidor?.situacao_funcional ?? 'Ativo',
     cargo: servidor?.cargo ?? '',
     nivel_classificacao: servidor?.nivel_classificacao ?? '',
-    data_ingresso_ife: servidor?.data_ingresso_ife ?? servidor?.data_ingresso ?? '',
+    data_ingresso_ife: (servidor?.data_ingresso_ife ?? servidor?.data_ingresso ?? '').split('T')[0],
     funcao_encargo: servidor?.funcao_encargo ?? '',
     telefone: servidor?.telefone ?? '',
   });
@@ -266,6 +266,9 @@ export default function ProfileSetup() {
                 value={form.data_ingresso_ife}
                 onChange={set('data_ingresso_ife')}
               />
+              <p className="text-[11px] text-amber-600 font-medium leading-normal mt-1">
+                ⚠️ <strong>Atenção:</strong> Insira a data de início do <strong>efetivo exercício</strong> (início das atividades), e não a data de posse ou nomeação.
+              </p>
             </div>
 
             {probationaryStatus.inProbation && (
@@ -273,7 +276,7 @@ export default function ProfileSetup() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                   <p className="leading-relaxed">
-                    Pela data de ingresso informada, o servidor ainda está em estágio probatório
+                    Pela data de início do efetivo exercício informada, o servidor ainda está em estágio probatório
                     {probationEndDate ? ` até ${probationEndDate}` : ''}. Ele pode usar o sistema para organizar informações e documentos, mas não pode solicitar o RSC neste momento.
                   </p>
                 </div>
