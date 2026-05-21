@@ -1,13 +1,16 @@
 import JSZip from 'jszip';
+import { PDFDocument } from 'pdf-lib';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
+import { getDocumentBlob } from './documentStorage';
 import { sumPointValues } from './points';
 import {
+  generateComprovacaoResumoItem,
+  generateComprovacoesIndice,
   generateMemorialDescritivo,
   generateRequerimentoFormal,
   type ComprovacaoItemResumo,
   type NivelRsc,
 } from './pdfGenerator';
-import { unificarComprovantes } from './pdfUnificator';
 
 export type { NivelRsc };
 
@@ -20,6 +23,47 @@ function triggerDownload(blob: Blob, filename: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+function sanitizeFileName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 80);
+}
+
+async function appendPdfBytes(target: PDFDocument, bytes: Uint8Array | ArrayBuffer) {
+  const source = await PDFDocument.load(bytes, { ignoreEncryption: true });
+  const pages = await target.copyPages(source, source.getPageIndices());
+  pages.forEach((page) => target.addPage(page));
+}
+
+async function buildComprovacaoItemPdf(
+  servidor: Servidor,
+  grupo: ComprovacaoItemResumo,
+): Promise<Uint8Array> {
+  const merged = await PDFDocument.create();
+  const summaryBytes = await generateComprovacaoResumoItem(servidor, grupo);
+  await appendPdfBytes(merged, summaryBytes);
+
+  const physicalDocs = grupo.documentos.filter(
+    (doc) => doc.caminho_storage && !doc.nome_arquivo.endsWith('.ref') && !doc.autodeclaracao,
+  );
+
+  for (const doc of physicalDocs) {
+    const blob = await getDocumentBlob(doc.id);
+    if (!blob) continue;
+    try {
+      const bytes = await blob.arrayBuffer();
+      await appendPdfBytes(merged, bytes);
+    } catch {
+      // Skip corrupted files and keep the summary page for traceability.
+    }
+  }
+
+  return merged.save();
 }
 
 function sortDocuments(documents: Documento[]) {
@@ -45,16 +89,14 @@ function buildComprovacaoGroups(
       const item = itensRSC.find((candidate) => candidate.id === itemId);
       if (!item) return null;
 
-      const documentosDoItem = sortDocuments(
-        Array.from(
-          new Map(
-            itemLancamentos
-              .map((entry) => entry.documento_id ? docsById.get(entry.documento_id) : undefined)
-              .filter((doc): doc is Documento => !!doc)
-              .map((doc) => [doc.id, doc]),
-          ).values(),
-        ),
-      );
+      const documentosDoItem = sortDocuments(Array.from(
+        new Map(
+          itemLancamentos
+            .map((entry) => docsById.get(entry.documento_id))
+            .filter((doc): doc is Documento => !!doc)
+            .map((doc) => [doc.id, doc]),
+        ).values(),
+      ));
 
       return {
         item,
@@ -76,12 +118,10 @@ export async function exportPacoteRSC(params: {
 }): Promise<void> {
   const { servidor, nivelElegivel, lancamentos, itensRSC, documentos, processo } = params;
 
+  const zip = new JSZip();
   const groups = buildComprovacaoGroups(lancamentos, itensRSC, documentos);
-  const totalPontos = sumPointValues(lancamentos.map((l) => l.pontos_calculados));
-  const itensDistintos = new Set(lancamentos.map((l) => l.item_rsc_id)).size;
-
-  // Unify comprovantes first to obtain page ranges for the memorial metadata page.
-  const { bytes: comprovantesBytes, pageRanges } = await unificarComprovantes(groups);
+  const totalPontos = sumPointValues(lancamentos.map((lancamento) => lancamento.pontos_calculados));
+  const itensDistintos = new Set(lancamentos.map((lancamento) => lancamento.item_rsc_id)).size;
 
   const requerimentoBytes = await generateRequerimentoFormal(
     servidor,
@@ -90,6 +130,7 @@ export async function exportPacoteRSC(params: {
     totalPontos,
     itensDistintos,
   );
+  zip.file('00_Requerimento_RSC_PCCTAE.pdf', requerimentoBytes);
 
   const memorialBytes = await generateMemorialDescritivo(
     servidor,
@@ -98,13 +139,43 @@ export async function exportPacoteRSC(params: {
     itensRSC,
     documentos,
     processo,
-    pageRanges,
   );
+  zip.file('01_Memorial_RSC_PCCTAE.pdf', memorialBytes);
 
-  const zip = new JSZip();
-  zip.file('01_Requerimento_RSC.pdf', requerimentoBytes);
-  zip.file('02_Memorial_Descritivo_RSC.pdf', memorialBytes);
-  zip.file('03_Documentos_Comprobatorios_Unificados.pdf', comprovantesBytes);
+  const comprovacoesFolder = zip.folder('03_Comprovacoes');
+  if (comprovacoesFolder) {
+    const indiceBytes = await generateComprovacoesIndice(servidor, groups);
+    comprovacoesFolder.file('00_Indice_Comprovacoes.pdf', indiceBytes);
+
+    for (const group of groups) {
+      const baseName = sanitizeFileName(`Item_${group.item.numero}_${group.item.descricao}`);
+      const itemFolder = comprovacoesFolder.folder(baseName);
+      if (!itemFolder) continue;
+
+      const itemPdfBytes = await buildComprovacaoItemPdf(servidor, group);
+      itemFolder.file(`00_Resumo_${baseName}.pdf`, itemPdfBytes);
+
+      const documentsFolder = itemFolder.folder('Documentos_Anexados');
+      if (!documentsFolder) continue;
+
+      for (const doc of sortDocuments(group.documentos)) {
+        if (doc.gedoc_links?.length) {
+          const linksContent = doc.gedoc_links.join('\n');
+          documentsFolder.file(`${sanitizeFileName(doc.nome_arquivo)}.txt`, linksContent);
+          continue;
+        }
+
+        if (!doc.caminho_storage) {
+          documentsFolder.file(`${sanitizeFileName(doc.nome_arquivo)}.txt`, 'Registro documental sem arquivo físico anexado.');
+          continue;
+        }
+
+        const blob = await getDocumentBlob(doc.id);
+        if (!blob) continue;
+        documentsFolder.file(sanitizeFileName(doc.nome_arquivo), blob);
+      }
+    }
+  }
 
   const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   const siape = servidor.siape.replace(/\D/g, '');
