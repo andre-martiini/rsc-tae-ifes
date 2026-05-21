@@ -41,7 +41,7 @@ export interface Servidor {
   cargo?: string;
   /** Data de ingresso em Instituição Federal de Ensino (ISO date string) */
   data_ingresso?: string;
-  /** Data de ingresso na IFE atual — exibida no campo oficial do ANEXO IV */
+  /** Data de Início do Efetivo Exercício atual — exibida no campo oficial do ANEXO IV */
   data_ingresso_ife?: string;
   /** Função ou encargo comissionado, se houver */
   funcao_encargo?: string;

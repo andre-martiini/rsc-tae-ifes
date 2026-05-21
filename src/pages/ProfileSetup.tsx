@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { AlertCircle, Save, UserCircle } from 'lucide-react';
+import { AlertCircle, Save, UserCircle, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import MainLayout from '../components/MainLayout';
 import { Button } from '../components/ui/button';
@@ -249,27 +249,24 @@ export default function ProfileSetup() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor="data_ingresso_ife">
-                  Data de ingresso na IFE <span className="text-red-500">*</span>
-                </Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="data_ingresso_ife">
+                    Data de Início do Efetivo Exercício <span className="text-red-500">*</span>
+                  </Label>
+                  <div className="group relative flex items-center justify-center">
+                    <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                    <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-lg text-center font-normal leading-relaxed">
+                      Informe a data exata em que você efetivamente começou a trabalhar. Para fins de concessão do RSC-PCCTAE e contagem de interstício na carreira, a legislação determina que as atividades e experiências profissionais (inclusive aquelas realizadas durante o período de estágio probatório) só são válidas para pontuação desde que tenham sido cumpridas no efetivo exercício do cargo. Atenção: não preencha com a data da sua nomeação ou posse, mas sim com o dia do início das suas atividades.
+                      <div className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
+                    </div>
+                  </div>
+                </div>
                 <Input
                   id="data_ingresso_ife"
                   type="date"
                   value={form.data_ingresso_ife}
                   onChange={set('data_ingresso_ife')}
                 />
-              </div>
-
-              <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-600">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-                  <div>
-                    <p className="font-medium text-gray-900">Verificação automática do estágio probatório</p>
-                    <p className="mt-1 text-xs leading-relaxed">
-                      O sistema usa a data de ingresso para avisar quando o período probatório ainda não foi concluído.
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
 
