@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Info, LayoutGrid, List, Wand2, Bot, ScrollText, UserCircle, ExternalLink } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Info, LayoutGrid, List, Wand2, Bot, ScrollText, UserCircle, ExternalLink, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -48,6 +48,26 @@ export default function Dashboard() {
   if (!servidor) {
     return <Navigate to="/" replace />;
   }
+
+  const [isWizardHidden, setIsWizardHidden] = useState(() => {
+    return localStorage.getItem(`rsc-tae-${servidor.id}-wizard-hidden`) === 'true';
+  });
+
+  const handleHideWizard = () => {
+    localStorage.setItem(`rsc-tae-${servidor.id}-wizard-hidden`, 'true');
+    setIsWizardHidden(true);
+    toast.success('Mapeamento ocultado. Você pode reexibi-lo a qualquer momento nas Ferramentas de Apoio.');
+  };
+
+  const handleShowWizard = () => {
+    localStorage.removeItem(`rsc-tae-${servidor.id}-wizard-hidden`);
+    setIsWizardHidden(false);
+  };
+
+  const handleClearSuggestions = () => {
+    setWizardRecommendedIds([]);
+    toast.success('Sugestões limpas com sucesso! O mapeamento foi reiniciado.');
+  };
 
   const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
   const totalPontos = sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados));
@@ -406,52 +426,85 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 px-1">
             <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Ferramentas de Apoio</h2>
             <div className="h-px flex-1 bg-gray-100" />
+            {isWizardHidden && (
+              <button
+                type="button"
+                onClick={handleShowWizard}
+                className="text-xs font-bold text-violet-600 hover:text-violet-700 hover:underline transition-colors"
+              >
+                Reexibir Wizard
+              </button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className={cn(
+            "grid grid-cols-1 gap-4",
+            isWizardHidden ? "lg:grid-cols-1" : "lg:grid-cols-2"
+          )}>
             {/* Card 1: Wizard */}
-            <Card className={cn(
-              "overflow-hidden border-none shadow-sm transition-all hover:shadow-md",
-              wizardRecommendedIds.length > 0 ? "bg-violet-50/50 ring-1 ring-inset ring-violet-100" : "bg-white"
-            )}>
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className={cn(
-                    "rounded-2xl p-3.5",
-                    wizardRecommendedIds.length > 0 ? "bg-violet-100 text-violet-600" : "bg-gray-100 text-gray-400"
-                  )}>
-                    <Wand2 className="h-6 w-6" />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-gray-900">Mapeamento Objetivado (Wizard)</h3>
-                      {wizardRecommendedIds.length > 0 && (
-                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-700">Mapeado</span>
-                      )}
+            {!isWizardHidden && (
+              <Card className={cn(
+                "relative overflow-hidden border-none shadow-sm transition-all hover:shadow-md",
+                wizardRecommendedIds.length > 0 ? "bg-violet-50/50 ring-1 ring-inset ring-violet-100" : "bg-white"
+              )}>
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={handleHideWizard}
+                  className="absolute right-4 top-4 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                  title="Ocultar Mapeamento"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-4 pr-6">
+                    <div className={cn(
+                      "rounded-2xl p-3.5",
+                      wizardRecommendedIds.length > 0 ? "bg-violet-100 text-violet-600" : "bg-gray-100 text-gray-400"
+                    )}>
+                      <Wand2 className="h-6 w-6" />
                     </div>
-                    <p className="text-[13px] leading-relaxed text-gray-500">
-                      Responda a perguntas objetivas sobre sua trajetória para filtrar automaticamente quais itens do catálogo você possui para pontuação.
-                    </p>
-                    <div className="flex flex-col gap-3 pt-3 sm:flex-row">
-                      <button
-                        onClick={() => setWizardOpen(true)}
-                        className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700 hover:shadow-lg hover:shadow-violet-200"
-                      >
-                        {wizardRecommendedIds.length > 0 ? 'Refazer Mapeamento' : 'Iniciar Wizard'}
-                      </button>
-                      {wizardRecommendedIds.length > 0 && (
+                    <div className="flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-bold text-gray-900">Mapeamento Objetivado (Wizard)</h3>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-gray-500">Opcional</span>
+                        {wizardRecommendedIds.length > 0 && (
+                          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-700">Mapeado</span>
+                        )}
+                      </div>
+                      <p className="text-[13px] leading-relaxed text-gray-500">
+                        Responda a perguntas objetivas sobre sua trajetória para filtrar automaticamente quais itens do catálogo você possui para pontuação.
+                      </p>
+                      <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:flex-wrap">
                         <button
-                          onClick={() => navigate('/itens')}
-                          className="flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-5 py-2 text-xs font-bold text-violet-700 transition-all hover:bg-violet-50"
+                          onClick={() => setWizardOpen(true)}
+                          className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700 hover:shadow-lg hover:shadow-violet-200"
                         >
-                          Ver Sugestões
+                          {wizardRecommendedIds.length > 0 ? 'Refazer Mapeamento' : 'Iniciar Wizard'}
                         </button>
-                      )}
+                        {wizardRecommendedIds.length > 0 && (
+                          <>
+                            <button
+                              onClick={() => navigate('/itens')}
+                              className="flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-5 py-2 text-xs font-bold text-violet-700 transition-all hover:bg-violet-50"
+                            >
+                              Ver Sugestões
+                            </button>
+                            <button
+                              onClick={handleClearSuggestions}
+                              className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-2 text-xs font-bold text-red-600 transition-all hover:bg-red-50 hover:border-red-300"
+                            >
+                              Limpar Sugestões
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Card 2: NotebookLM */}
             <Card className="overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
