@@ -37,3 +37,14 @@ export function parseLocalDate(dateString: string): Date {
   }
   return new Date(dateString);
 }
+
+/**
+ * Limpa strings dinâmicas substituindo todos os espaços por underscores e removendo acentos.
+ */
+export function sanitizeForTag(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '_');
+}
+
