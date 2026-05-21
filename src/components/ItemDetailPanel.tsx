@@ -151,11 +151,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       const originalHash = await computeDocumentHash(incoming);
       const normalized = await normalizeUploadToPdf(incoming);
       toast.dismiss(toastId);
-      if (normalized.file.size > 5 * 1024 * 1024) {
+      if (normalized.file.size > 20 * 1024 * 1024) {
         setFile(null);
         setUploadMeta(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setUploadFeedback('O arquivo preparado em PDF excede 5MB. Envie um documento menor.');
+        setUploadFeedback('O arquivo excede o limite de 20 MB. Compacte o PDF em ilovepdf.com ou smallpdf.com e tente novamente.');
         setIsPreparingUpload(false);
         return;
       }
@@ -224,8 +224,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
       const mergedBytes = await merged.save();
       const mergedFile = new File([mergedBytes as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
-      if (mergedFile.size > 5 * 1024 * 1024) {
-        setUploadFeedback('O PDF consolidado excede 5MB. Tente reduzir a resolução ou o número de páginas.');
+      if (mergedFile.size > 20 * 1024 * 1024) {
+        setUploadFeedback('O PDF consolidado excede 20 MB. Reduza a resolução das imagens ou o número de páginas. Use ilovepdf.com para compactar cada arquivo antes de enviar.');
         setIsPreparingUpload(false);
         return;
       }
@@ -647,7 +647,18 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} disabled={isPreparingUpload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                     {file && !isPreparingUpload && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
                     <p className="mb-3 pr-10 text-xs text-gray-500">
-                      Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.
+                      Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.{' '}
+                      <span className="font-semibold text-gray-700">Limite: 20 MB.</span>{' '}
+                      Arquivo grande?{' '}
+                      <a
+                        href="https://www.ilovepdf.com/pt/comprimir_pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline hover:text-primary/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Compactar PDF gratuitamente
+                      </a>.
                     </p>
                     <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${isPreparingUpload ? 'border-blue-300 text-blue-800' : file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
                       <div className="mr-2 rounded-full bg-white/80 p-1">
