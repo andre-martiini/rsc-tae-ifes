@@ -7,6 +7,7 @@ import {
   RSC_LEVELS,
   type Servidor,
 } from '../data/mock';
+import { parseLocalDate } from './utils';
 
 export type RscLevelId = (typeof RSC_LEVELS)[number]['id'];
 
@@ -141,13 +142,7 @@ export function getServidorProbationaryStatus(
     return { inProbation: false };
   }
 
-  let ingressoDate: Date;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(ingresso)) {
-    const [year, month, day] = ingresso.split('-').map(Number);
-    ingressoDate = new Date(year, month - 1, day);
-  } else {
-    ingressoDate = new Date(`${ingresso}T00:00:00`);
-  }
+  const ingressoDate = parseLocalDate(ingresso);
 
   if (Number.isNaN(ingressoDate.getTime())) {
     return { inProbation: false };
@@ -173,7 +168,7 @@ export function getServidorFunctionalEligibility(
   }
 
   if (probationaryStatus.inProbation) {
-    reasons.push('A data de ingresso indica estágio probatório em andamento; o servidor pode organizar informações no sistema, mas não pode solicitar o RSC neste momento.');
+    reasons.push('A data de início do efetivo exercício indica estágio probatório em andamento; o servidor pode organizar informações no sistema, mas não pode solicitar o RSC neste momento.');
   }
 
   return {

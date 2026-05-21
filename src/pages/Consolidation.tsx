@@ -64,7 +64,7 @@ export default function Consolidation() {
     processo.numero_processo_anterior ?? '',
   );
   const [dataUltimaConcessao, setDataUltimaConcessao] = useState(
-    processo.data_ultima_concessao ?? '',
+    (processo.data_ultima_concessao ?? '').split('T')[0],
   );
   const [temConcessaoAnterior, setTemConcessaoAnterior] = useState(
     !!(processo.saldo_concessao_anterior || processo.numero_processo_anterior || processo.data_ultima_concessao)
@@ -680,7 +680,19 @@ export default function Consolidation() {
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Nome:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.nome_completo}</p></div>
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">SIAPE:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.siape}</p></div>
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Cargo:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.cargo}</p></div>
-                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Data de ingresso em IFE:</span> <p className="border-b border-gray-300 min-h-[20px]">{formatarDataSegura(servidor.data_ingresso_ife)}</p></div>
+                      <div>
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <span className="font-bold uppercase text-[10px] text-gray-500">Data de Início do Efetivo Exercício:</span>
+                          <div className="group relative flex items-center justify-center">
+                            <Info className="h-3 w-3 text-gray-400 hover:text-gray-600 cursor-help" />
+                            <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-[10px] rounded-md py-1.5 px-2.5 shadow-lg text-center font-normal normal-case leading-relaxed">
+                              Esta data corresponde ao Início do Efetivo Exercício no cargo (quando você efetivamente começou a trabalhar) e não a data de posse ou ingresso geral. A legislação do RSC-PCCTAE e o desenvolvimento na carreira determinam que os interstícios e requisitos válidos devem obrigatoriamente ser cumpridos no efetivo exercício do cargo.
+                              <div className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="border-b border-gray-300 min-h-[20px]">{formatarDataSegura(servidor.data_ingresso_ife)}</p>
+                      </div>
 
                       <div className="md:col-span-2">
                         <span className="font-bold uppercase text-[10px] text-gray-500 block mb-1">Nível de Classificação:</span>

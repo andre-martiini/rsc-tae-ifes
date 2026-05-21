@@ -695,7 +695,7 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Nome:', sanitize(servidor.nome_completo));
   writer.keyValue('SIAPE:', sanitize(servidor.siape));
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
-  writer.keyValue('Data de ingresso em IFE:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
+  writer.keyValue('Data de Início do Efetivo Exercício:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lota??o:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Fun??o/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
@@ -763,7 +763,7 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Nome:', sanitize(servidor.nome_completo));
   writer.keyValue('SIAPE:', sanitize(servidor.siape));
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
-  writer.keyValue('Data de ingresso em IFE:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
+  writer.keyValue('Data de Início do Efetivo Exercício:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lota??o:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Fun??o/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
