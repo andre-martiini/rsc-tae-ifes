@@ -18,7 +18,7 @@ import {
   getServidorFunctionalEligibility,
   validateLevelConstraints,
 } from '../lib/rsc';
-import { cn } from '../lib/utils';
+import { cn, formatarDataSegura } from '../lib/utils';
 
 export default function Consolidation() {
   const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso } = useAppContext();
@@ -680,7 +680,7 @@ export default function Consolidation() {
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Nome:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.nome_completo}</p></div>
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">SIAPE:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.siape}</p></div>
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Cargo:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.cargo}</p></div>
-                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Data de ingresso em IFE:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.data_ingresso_ife ? new Date(servidor.data_ingresso_ife).toLocaleDateString('pt-BR') : '—'}</p></div>
+                      <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Data de ingresso em IFE:</span> <p className="border-b border-gray-300 min-h-[20px]">{formatarDataSegura(servidor.data_ingresso_ife)}</p></div>
 
                       <div className="md:col-span-2">
                         <span className="font-bold uppercase text-[10px] text-gray-500 block mb-1">Nível de Classificação:</span>

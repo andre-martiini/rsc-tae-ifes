@@ -247,27 +247,25 @@ export default function ProfileSetup() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  <Label htmlFor="data_ingresso_ife">
-                    Data de Início do Efetivo Exercício <span className="text-red-500">*</span>
-                  </Label>
-                  <div className="group relative flex items-center justify-center">
-                    <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
-                    <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-lg text-center font-normal leading-relaxed">
-                      Informe a data exata em que você efetivamente começou a trabalhar. Para fins de concessão do RSC-PCCTAE e contagem de interstício na carreira, a legislação determina que as atividades e experiências profissionais (inclusive aquelas realizadas durante o período de estágio probatório) só são válidas para pontuação desde que tenham sido cumpridas no efetivo exercício do cargo. Atenção: não preencha com a data da sua nomeação ou posse, mas sim com o dia do início das suas atividades.
-                      <div className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
-                    </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="data_ingresso_ife">
+                  Data de Início do Efetivo Exercício <span className="text-red-500">*</span>
+                </Label>
+                <div className="group relative flex items-center justify-center">
+                  <Info className="h-4 w-4 text-gray-400 hover:text-gray-600 cursor-help" />
+                  <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-lg text-center font-normal leading-relaxed">
+                    Informe a data exata em que você efetivamente começou a trabalhar. Para fins de concessão do RSC-PCCTAE e contagem de interstício na carreira, a legislação determina que as atividades e experiências profissionais (inclusive aquelas realizadas durante o período de estágio probatório) só são válidas para pontuação desde que tenham sido cumpridas no efetivo exercício do cargo. Atenção: não preencha com a data da sua nomeação ou posse, mas sim com o dia do início das suas atividades.
+                    <div className="absolute left-1/2 top-full -mt-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
                   </div>
                 </div>
-                <Input
-                  id="data_ingresso_ife"
-                  type="date"
-                  value={form.data_ingresso_ife}
-                  onChange={set('data_ingresso_ife')}
-                />
               </div>
+              <Input
+                id="data_ingresso_ife"
+                type="date"
+                value={form.data_ingresso_ife}
+                onChange={set('data_ingresso_ife')}
+              />
             </div>
 
             {probationaryStatus.inProbation && (

@@ -26,7 +26,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeUploadToPdf, toPdfFile, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
 import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
-import { cn } from '../lib/utils';
+import { cn, formatarDataSegura } from '../lib/utils';
 import { downloadFileFromUrl } from '../lib/urlDownloader';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -155,7 +155,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         setFile(null);
         setUploadMeta(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        setUploadFeedback('O arquivo excede o limite de 20 MB. Compacte o PDF em ilovepdf.com ou smallpdf.com e tente novamente.');
+        setUploadFeedback('O arquivo excede o limite de 20 MB. Reduza o tamanho ou otimize o PDF e tente novamente.');
         setIsPreparingUpload(false);
         return;
       }
@@ -225,7 +225,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       const mergedBytes = await merged.save();
       const mergedFile = new File([mergedBytes as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
       if (mergedFile.size > 20 * 1024 * 1024) {
-        setUploadFeedback('O PDF consolidado excede 20 MB. Reduza a resolução das imagens ou o número de páginas. Use ilovepdf.com para compactar cada arquivo antes de enviar.');
+        setUploadFeedback('O PDF consolidado excede 20 MB. Reduza a resolução das imagens, diminua o número de páginas ou otimize os arquivos individuais antes de enviar.');
         setIsPreparingUpload(false);
         return;
       }
@@ -646,20 +646,26 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   <div className={`relative rounded-xl border p-4 transition-all ${isPreparingUpload ? 'border-blue-300 bg-blue-50/70' : file ? 'border-emerald-300 bg-emerald-50/60' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); if (!isPreparingUpload) setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (!isPreparingUpload) void mergeAndAcceptFiles(e.dataTransfer.files); }}>
                     <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} disabled={isPreparingUpload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                     {file && !isPreparingUpload && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
-                    <p className="mb-3 pr-10 text-xs text-gray-500">
-                      Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.{' '}
-                      <span className="font-semibold text-gray-700">Limite: 20 MB.</span>{' '}
-                      Arquivo grande?{' '}
-                      <a
-                        href="https://www.ilovepdf.com/pt/comprimir_pdf"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary underline hover:text-primary/80"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Compactar PDF gratuitamente
-                      </a>.
-                    </p>
+                    <div className="mb-3 pr-10 text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
+                      <span>Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.</span>
+                      <span className="font-semibold text-gray-700">Limite: 20 MB.</span>
+                      <div className="inline-flex items-center gap-1">
+                        <span>Arquivo grande?</span>
+                        <div className="group relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                          <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+                          <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-lg text-left font-normal leading-relaxed">
+                            <p className="font-semibold mb-1">Como reduzir o tamanho do PDF:</p>
+                            <ul className="list-disc pl-3 space-y-1">
+                              <li>Utilize ferramentas ou compressores de PDF da sua preferência.</li>
+                              <li>Ao salvar o documento original (Word ou Docs), exporte no formato otimizado para web.</li>
+                              <li>Divida o PDF em partes menores ou anexe apenas as páginas essenciais da comprovação.</li>
+                              <li>Diminua a resolução de imagens e prints antes de adicioná-los ao documento.</li>
+                            </ul>
+                            <div className="absolute left-1/2 bottom-full -mb-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${isPreparingUpload ? 'border-blue-300 text-blue-800' : file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
                       <div className="mr-2 rounded-full bg-white/80 p-1">
                         {isPreparingUpload ? <LoaderCircle className="h-4 w-4 animate-spin text-blue-500" /> : <UploadCloud className="h-4 w-4 text-gray-400" />}
@@ -743,7 +749,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
               return (
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${new Date(lancamento.data_inicio).toLocaleDateString('pt-BR')} a ${new Date(lancamento.data_fim).toLocaleDateString('pt-BR')}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
+                    <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
                     <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => remove(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">

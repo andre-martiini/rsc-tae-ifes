@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Wand2, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { X, Wand2, ChevronDown, ChevronUp, CheckCircle2, Copy } from 'lucide-react';
 import { Button } from './ui/button';
 import { cn } from '../lib/utils';
+import { toast } from 'sonner';
 
 const SPARKLE_ANGLES = Array.from({ length: 10 }, (_, i) => (i / 10) * 2 * Math.PI);
 
@@ -173,6 +174,19 @@ export default function WizardModal({ onClose, onConfirm, initialIds = [] }: Wiz
     setConfirmed(true);
   };
 
+  const handleCopyEixo = (eixo: WizardEixo) => {
+    const textToCopy = `Eixo ${eixo.numero}: ${eixo.titulo}\n\n` +
+      eixo.itens.map(item => `- ${item.label}`).join('\n');
+
+    navigator.clipboard.writeText(textToCopy)
+      .then(() => {
+        toast.success('Itens do eixo copiados para a área de transferência!');
+      })
+      .catch(() => {
+        toast.error('Erro ao copiar itens.');
+      });
+  };
+
   useEffect(() => {
     if (!confirmed) return;
     const timer = setTimeout(() => onClose(), 2400);
@@ -256,7 +270,7 @@ export default function WizardModal({ onClose, onConfirm, initialIds = [] }: Wiz
                   <div className="flex flex-col gap-2">
                     <div className="inline-flex items-center gap-2 self-start rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-700">
                       <Wand2 className="h-3 w-3" />
-                      Inteligência de Mapeamento
+                      Inteligência de Mapeamento (Opcional)
                     </div>
                     <h2 className="text-3xl font-black tracking-tight text-gray-900">Quais atividades você já realizou?</h2>
                     <p className="text-sm text-gray-500 max-w-2xl">
@@ -318,13 +332,21 @@ export default function WizardModal({ onClose, onConfirm, initialIds = [] }: Wiz
                       <p className="text-sm font-medium text-gray-500 italic">"{currentEixo.pergunta}"</p>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-between gap-4">
                       <button
                         type="button"
                         onClick={() => (allInEixo(currentEixo) ? deselectAll(currentEixo) : selectAll(currentEixo))}
                         className="text-xs font-bold text-violet-600 hover:underline"
                       >
                         {allInEixo(currentEixo) ? 'Desmarcar todos deste eixo' : 'Marcar todos deste eixo'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyEixo(currentEixo)}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3.5 py-2 text-xs font-bold text-gray-600 shadow-sm hover:bg-gray-50 hover:text-violet-600 transition-colors"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        Copiar itens do eixo
                       </button>
                     </div>
 

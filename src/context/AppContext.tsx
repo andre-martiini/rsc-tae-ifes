@@ -271,6 +271,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(`rsc-tae-${activeSessionId}-wizard-ids`, JSON.stringify(wizardRecommendedIds));
   }, [wizardRecommendedIds, activeSessionId]);
 
+  // Sincronização reativa: adiciona itens lançados à lista de sugestões do Wizard
+  useEffect(() => {
+    if (!activeSessionId || !servidor) return;
+    const lancadosIds = lancamentos
+      .filter((l) => l.servidor_id === servidor.id)
+      .map((l) => l.item_rsc_id);
+
+    if (lancadosIds.length > 0) {
+      setWizardRecommendedIds((prev) => {
+        const hasMissing = lancadosIds.some((id) => !prev.includes(id));
+        if (!hasMissing) return prev;
+        return Array.from(new Set([...prev, ...lancadosIds]));
+      });
+    }
+  }, [lancamentos, activeSessionId, servidor]);
+
   // ── Session actions ─────────────────────────────────────────────────────────
 
   const createSession = (perfil: Servidor) => {

@@ -9,6 +9,7 @@ import {
 import { institutionConfig } from '../config/institution';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { addPointValues, formatPointValue, sumPointValues } from './points';
+import { formatarDataSegura } from './utils';
 
 export type NivelRsc = {
   label: string;
@@ -60,9 +61,8 @@ function sanitize(value: unknown): string {
 
 function formatDate(value?: string): string {
   if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return sanitize(value);
-  return date.toLocaleDateString('pt-BR');
+  const safe = formatarDataSegura(value, '-');
+  return sanitize(safe);
 }
 
 function todayLabel(): string {
