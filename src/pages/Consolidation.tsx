@@ -92,7 +92,7 @@ export default function Consolidation() {
     incisoViolations.length === 0;
 
   const resumoItens = useMemo(() => {
-    const map = new Map<string, { itemId: string; numero: number; inciso: string; descricao: string; pontos: number; docCount: number }>();
+    const map = new Map<string, { itemId: string; numero: number; inciso: string; descricao: string; unidade_medida: string; pontos_por_unidade: number; pontos: number; docCount: number; quantidadeTotal: number }>();
     lancamentosDoServidor.forEach((l) => {
       const item = itensRSC.find((i) => i.id === l.item_rsc_id);
       if (!item) return;
@@ -102,8 +102,12 @@ export default function Consolidation() {
         numero: item.numero,
         inciso: item.inciso,
         descricao: item.descricao,
+        unidade_medida: item.unidade_medida,
+        pontos_por_unidade: item.pontos_por_unidade,
         pontos: addPointValues(cur?.pontos ?? 0, l.pontos_calculados),
         docCount: (cur?.docCount ?? 0) + 1,
+        // Soma real das quantidades informadas pelo servidor (ex: 17 eventos, 3 anos etc.)
+        quantidadeTotal: (cur?.quantidadeTotal ?? 0) + (l.quantidade_informada ?? 1),
       });
     });
     return Array.from(map.values()).sort((a, b) => a.numero - b.numero);
@@ -827,13 +831,12 @@ export default function Consolidation() {
                             <tbody>
                               {items.map((item) => {
                                 const itemLancamentos = lancamentosDoServidor.filter(l => l.item_rsc_id === item.itemId);
-                                const basePoints = item.docCount > 0 ? (item.pontos / item.docCount) : item.pontos;
                                 return (
                                   <tr key={item.itemId}>
                                     <td className="border border-gray-900 px-2 py-2 text-center font-bold text-sm">{item.numero}</td>
                                     <td className="border border-gray-900 px-2 py-2 leading-tight">{item.descricao}</td>
-                                    <td className="border border-gray-900 px-2 py-2 text-center">{item.docCount} unid.</td>
-                                    <td className="border border-gray-900 px-2 py-2 text-center">{formatPointValue(basePoints)}</td>
+                                    <td className="border border-gray-900 px-2 py-2 text-center">{item.quantidadeTotal} {item.unidade_medida ? `(${item.unidade_medida})` : 'unid.'}</td>
+                                    <td className="border border-gray-900 px-2 py-2 text-center">{formatPointValue(item.pontos_por_unidade)}</td>
                                     <td className="border border-gray-900 px-2 py-2 text-center font-black bg-gray-50/50">{formatPointValue(item.pontos)}</td>
                                     <td className="border border-gray-900 px-2 py-2 align-top">
                                       <div className="flex flex-col gap-1.5">

@@ -23,15 +23,6 @@ export type ComprovacaoItemResumo = {
   documentos: Documento[];
 };
 
-export type ItemPageRange = {
-  itemId: string;
-  itemNumero: number;
-  inciso: string;
-  docRef: string;
-  pageStart: number;
-  pageEnd: number;
-};
-
 const PAGE_W = 595.28;
 const PAGE_H = 841.89;
 const MARGIN_TOP = 20;
@@ -54,13 +45,6 @@ const COLORS = {
 
 
 let logoBytesPromise: Promise<Uint8Array | null> | null = null;
-
-function sanitizeTag(value: string): string {
-  return String(value ?? '')
-    .normalize('NFKC')
-    .replace(/\s+/g, '_')
-    .replace(/[^ -~]/g, '?');
-}
 
 function sanitize(value: unknown): string {
   return String(value ?? '')
@@ -544,25 +528,6 @@ class Writer {
     });
   }
 
-  metaTags(lines: string[]) {
-    const size = 6;
-    const color = rgb(0.85, 0.85, 0.85);
-    const lineH = 7;
-    for (const line of lines) {
-      if (this.y - lineH < MARGIN_BOTTOM + FOOTER_H) {
-        this.addPage();
-      }
-      this.page.drawText(line, {
-        x: MARGIN_X,
-        y: this.y,
-        size,
-        font: this.regular,
-        color,
-      });
-      this.y -= lineH;
-    }
-  }
-
   /** Renders a full-width header row with a darker background for a criteria block (ANEXO IV). */
   criterioHeader(label: string) {
     const size = 7.5;
@@ -761,14 +726,6 @@ export async function generateRequerimentoFormal(
   writer.gap(6);
   writer.text('Data: ______ / ______ / __________', { size: 9 });
 
-  writer.gap(10);
-  writer.metaTags([
-    '[RSC:DOC_TIPO:REQUERIMENTO]',
-    `[RSC:SIAPE:${sanitizeTag(servidor.siape)}]`,
-    `[RSC:NOME:${sanitizeTag(servidor.nome_completo)}]`,
-    `[RSC:NIVEL_PRETENDIDO:${sanitizeTag(nivelPleiteado?.label ?? 'NAO_DEFINIDO')}]`,
-  ]);
-
   return doc.save();
 }
 
@@ -780,7 +737,6 @@ export async function generateMemorialDescritivo(
   itensRSC: ItemRSC[],
   documentos: Documento[],
   processo?: ProcessoRSC,
-  pageRanges?: ItemPageRange[],
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const writer = new Writer({
@@ -895,44 +851,6 @@ export async function generateMemorialDescritivo(
   writer.text(`À vista das informações apresentadas, este memorial consolida ${formatPointValue(totalPontos)} pontos para instrução documental do pedido de RSC-PCCTAE.`, { size: 9 });
   writer.gap(22);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
-
-  // Isolated page exclusively for Sistema 2 structured data extraction.
-  // Placed after the conclusion so SIPAC digital signature stamps appended
-  // at the end of the process do not overwrite the metadata tags.
-  writer.addPage();
-  writer.metaTags([
-    '[RSC:DOC_TIPO:MEMORIAL]',
-    '[RSC:START]',
-    `[RSC:SIAPE:${sanitizeTag(servidor.siape)}]`,
-  ]);
-
-  const itemPontosMap = new Map<string, number>();
-  for (const l of lancamentos) {
-    const current = itemPontosMap.get(l.item_rsc_id) ?? 0;
-    itemPontosMap.set(l.item_rsc_id, addPointValues(current, l.pontos_calculados));
-  }
-  const sortedItemEntries = Array.from(itemPontosMap.entries()).sort((a, b) => {
-    const numA = itensRSC.find((i) => i.id === a[0])?.numero ?? 0;
-    const numB = itensRSC.find((i) => i.id === b[0])?.numero ?? 0;
-    return numA - numB;
-  });
-
-  for (const [itemId, pontos] of sortedItemEntries) {
-    const item = itensRSC.find((i) => i.id === itemId);
-    if (!item) continue;
-    const range = pageRanges?.find((r) => r.itemId === itemId);
-    writer.metaTags([
-      `[RSC:ITEM_START:${item.numero}]`,
-      `[RSC:INCISO:${item.inciso}]`,
-      `[RSC:PONTOS:${String(pontos)}]`,
-      `[RSC:PAGINA_INICIO:${range?.pageStart ?? 0}]`,
-      `[RSC:PAGINA_FIM:${range?.pageEnd ?? 0}]`,
-      `[RSC:DOC_REF:${range?.docRef ?? 'sem_comprovante'}]`,
-      `[RSC:ITEM_END:${item.numero}]`,
-    ]);
-  }
-
-  writer.metaTags(['[RSC:END]']);
 
   return doc.save();
 }
