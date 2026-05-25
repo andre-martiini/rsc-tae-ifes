@@ -13,6 +13,7 @@ import {
   Link,
   LoaderCircle,
   Plus,
+  CirclePlay,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -20,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { institutionConfig, isValidInstitutionDocumentLink, normalizeInstitutionDocumentLink } from '../config/institution';
-import type { Documento, ItemRSC } from '../data/mock';
+import type { Documento, ItemRSC, Lancamento } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeUploadToPdf, toPdfFile, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
@@ -44,7 +45,7 @@ type UploadMeta = {
 };
 
 export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSaved: () => void }) {
-  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo, updateDocumento } = useAppContext();
+  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
   const [docMode, setDocMode] = useState<'upload' | 'reference'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -62,9 +63,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [quantidade, setQuantidade] = useState('');
   const [saving, setSaving] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [deleteChoiceLancamento, setDeleteChoiceLancamento] = useState<Lancamento | null>(null);
+  const [isDeletingLancamento, setIsDeletingLancamento] = useState(false);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
+  const [uploadHelpOpen, setUploadHelpOpen] = useState(false);
+  const [linksHelpOpen, setLinksHelpOpen] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{
     doc: Documento;
     lancamentoParaPrompt: any;
@@ -83,6 +88,20 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const docsById = useMemo(() => new Map(documentos.map((doc) => [doc.id, doc])), [documentos]);
 
   useEffect(() => () => Object.values<string>(blobUrls).forEach((url) => URL.revokeObjectURL(url)), [blobUrls]);
+
+  useEffect(() => {
+    if (!uploadHelpOpen && !linksHelpOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setUploadHelpOpen(false);
+        setLinksHelpOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [uploadHelpOpen, linksHelpOpen]);
 
   const resetUpload = useCallback(() => {
     setFile(null);
@@ -537,6 +556,56 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     toast.success('Lançamento removido.');
   };
 
+  const removeWithDocumentChoice = (lancamentoId: string) => {
+    if (pendingDeleteId !== lancamentoId) {
+      setPendingDeleteId(lancamentoId);
+      return void toast.warning('Clique novamente para confirmar a exclusão.');
+    }
+
+    const lancamento = lancamentos.find((entry) => entry.id === lancamentoId);
+    const documentoId = lancamento?.documento_id;
+    const documentStillUsedElsewhere = documentoId
+      ? lancamentos.some((entry) => entry.id !== lancamentoId && entry.documento_id === documentoId)
+      : false;
+
+    if (lancamento && documentoId && !documentStillUsedElsewhere) {
+      setDeleteChoiceLancamento(lancamento);
+      return;
+    }
+
+    if (!removeLancamento(lancamentoId)) return void toast.error('Não foi possível remover este lançamento.');
+    setPendingDeleteId(null);
+    toast.success(documentStillUsedElsewhere ? 'Lançamento removido. O documento foi mantido porque ainda está vinculado a outro lançamento.' : 'Lançamento removido.');
+  };
+
+  const confirmRemoveLancamento = async (deleteLinkedDocument: boolean) => {
+    if (!deleteChoiceLancamento) return;
+    const lancamento = deleteChoiceLancamento;
+    const documentoId = lancamento.documento_id;
+
+    try {
+      setIsDeletingLancamento(true);
+      if (!removeLancamento(lancamento.id)) {
+        toast.error('Não foi possível remover este lançamento.');
+        return;
+      }
+
+      if (deleteLinkedDocument && documentoId) {
+        await deleteDocumento(documentoId);
+        toast.success('Lançamento e documento removidos.');
+      } else {
+        toast.success('Lançamento removido. O documento foi mantido no inventário.');
+      }
+
+      setPendingDeleteId(null);
+      setDeleteChoiceLancamento(null);
+    } catch {
+      toast.error('Não foi possível concluir a remoção.');
+    } finally {
+      setIsDeletingLancamento(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="sticky top-0 z-10 border-b border-gray-100 bg-white px-4 py-4 sm:px-6">
@@ -594,6 +663,17 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   <p className="text-[11px] text-gray-500">
                     Salvar o lançamento por link já registra a comprovação. O botão abaixo é opcional e tenta anexar uma cópia local do PDF quando o portal institucional permitir esse acesso.
                   </p>
+                  <div className="mb-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setLinksHelpOpen(true)}
+                      className="inline-flex shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                      aria-label="Ver exemplo de envio de multiplos links institucionais"
+                    >
+                      <CirclePlay className="h-3.5 w-3.5" />
+                      Ver exemplo
+                    </button>
+                  </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input type="url" value={referenceInput} onChange={(e) => setReferenceInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReference(); } }} placeholder={institutionConfig.documentLinks.inputPlaceholder} className="h-9 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm" />
                     <button
@@ -646,25 +726,39 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   <div className={`relative rounded-xl border p-4 transition-all ${isPreparingUpload ? 'border-blue-300 bg-blue-50/70' : file ? 'border-emerald-300 bg-emerald-50/60' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); if (!isPreparingUpload) setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (!isPreparingUpload) void mergeAndAcceptFiles(e.dataTransfer.files); }}>
                     <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} disabled={isPreparingUpload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
                     {file && !isPreparingUpload && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
-                    <div className="mb-3 pr-10 text-xs text-gray-500 flex items-center gap-1.5 flex-wrap">
-                      <span>Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.</span>
-                      <span className="font-semibold text-gray-700">Limite: 20 MB.</span>
-                      <div className="inline-flex items-center gap-1">
-                        <span>Arquivo grande?</span>
-                        <div className="group relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
-                          <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
-                          <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-lg text-left font-normal leading-relaxed">
-                            <p className="font-semibold mb-1">Como reduzir o tamanho do PDF:</p>
-                            <ul className="list-disc pl-3 space-y-1">
-                              <li>Utilize ferramentas ou compressores de PDF da sua preferência.</li>
-                              <li>Ao salvar o documento original (Word ou Docs), exporte no formato otimizado para web.</li>
-                              <li>Divida o PDF em partes menores ou anexe apenas as páginas essenciais da comprovação.</li>
-                              <li>Diminua a resolução de imagens e prints antes de adicioná-los ao documento.</li>
-                            </ul>
-                            <div className="absolute left-1/2 bottom-full -mb-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
+                    <div className="relative z-10 mb-3 flex items-start justify-between gap-3 pr-10 text-xs text-gray-500">
+                      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <span>Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.</span>
+                        <span className="font-semibold text-gray-700">Limite: 20 MB.</span>
+                        <div className="inline-flex items-center gap-1">
+                          <span>Arquivo grande?</span>
+                          <div className="group relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                            <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+                            <div className="pointer-events-none absolute top-full left-1/2 z-50 mt-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-xs rounded-md py-2 px-3 shadow-lg text-left font-normal leading-relaxed">
+                              <p className="font-semibold mb-1">Como reduzir o tamanho do PDF:</p>
+                              <ul className="list-disc pl-3 space-y-1">
+                                <li>Utilize ferramentas ou compressores de PDF da sua preferência.</li>
+                                <li>Ao salvar o documento original (Word ou Docs), exporte no formato otimizado para web.</li>
+                                <li>Divida o PDF em partes menores ou anexe apenas as páginas essenciais da comprovação.</li>
+                                <li>Diminua a resolução de imagens e prints antes de adicioná-los ao documento.</li>
+                              </ul>
+                              <div className="absolute left-1/2 bottom-full -mb-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-gray-900"></div>
+                            </div>
                           </div>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setUploadHelpOpen(true);
+                        }}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+                        aria-label="Ver exemplo de envio de multiplos arquivos"
+                      >
+                        <CirclePlay className="h-3.5 w-3.5" />
+                        Ver exemplo
+                      </button>
                     </div>
                     <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${isPreparingUpload ? 'border-blue-300 text-blue-800' : file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
                       <div className="mr-2 rounded-full bg-white/80 p-1">
@@ -734,7 +828,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                 </div>
               </div>
             </section>
-            <div className="flex justify-end border-t border-gray-100 pt-4">
+            <div className="flex justify-end border-t border-gray-100 pt-4 pr-28 sm:pr-32">
               <Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">
                 {saving ? 'Salvando...' : 'Salvar lançamento'}
               </Button>
@@ -750,7 +844,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
-                    <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => remove(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
+                    <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => removeWithDocumentChoice(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">{lancamento.status_auditoria}</p>
@@ -868,6 +962,154 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           </div>
         )}
       </div>
+
+      {/* Delete Launch Modal */}
+      {deleteChoiceLancamento && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={isDeletingLancamento ? undefined : () => {
+            setDeleteChoiceLancamento(null);
+            setPendingDeleteId(null);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-launch-title"
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-red-100 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="p-6">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <h3 id="delete-launch-title" className="text-lg font-black tracking-tight text-gray-900">Remover lançamento?</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                Este lançamento possui um documento vinculado. Você pode manter o documento no inventário ou apagar também o documento para que ele não apareça na aba Documentos.
+              </p>
+
+              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Documento vinculado</p>
+                <p className="mt-1 break-words text-sm font-bold text-gray-900">
+                  {documentos.find((doc) => doc.id === deleteChoiceLancamento.documento_id)?.nome_arquivo ?? 'Documento vinculado'}
+                </p>
+              </div>
+
+              <div className="mt-6 flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={() => void confirmRemoveLancamento(true)}
+                  disabled={isDeletingLancamento}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDeletingLancamento && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                  Remover lançamento e documento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void confirmRemoveLancamento(false)}
+                  disabled={isDeletingLancamento}
+                  className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Remover só o lançamento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteChoiceLancamento(null);
+                    setPendingDeleteId(null);
+                  }}
+                  disabled={isDeletingLancamento}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Help Modal */}
+      {uploadHelpOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={() => setUploadHelpOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="upload-help-title"
+        >
+          <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3 id="upload-help-title" className="text-base font-bold text-gray-900">Como enviar múltiplos arquivos</h3>
+                <p className="mt-0.5 text-xs text-gray-500">Exemplo rápido da mesclagem automática no envio.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUploadHelpOpen(false)}
+                className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Fechar exemplo de envio"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <video
+                className="aspect-video w-full rounded-lg border border-gray-200 bg-gray-950 object-contain"
+                src="/arrastar_multiplos.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                controls
+              />
+              <p className="text-sm leading-relaxed text-gray-700">
+                Arraste vários arquivos para a área de envio. O sistema anexará e mesclará os arquivos automaticamente.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Links Help Modal */}
+      {linksHelpOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          onClick={() => setLinksHelpOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="links-help-title"
+        >
+          <div className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+              <div>
+                <h3 id="links-help-title" className="text-base font-bold text-gray-900">Como anexar múltiplos links</h3>
+                <p className="mt-0.5 text-xs text-gray-500">Exemplo rápido da anexação e mesclagem de PDFs institucionais.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLinksHelpOpen(false)}
+                className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label="Fechar exemplo de links"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <video
+                className="aspect-video w-full rounded-lg border border-gray-200 bg-gray-950 object-contain"
+                src="/multiplos_links.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
+                controls
+              />
+              <p className="text-sm leading-relaxed text-gray-700">
+                Informe links institucionais válidos, adicione quantos forem necessários e use a opção de anexar PDFs para que o sistema tente baixar e mesclar os documentos automaticamente.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Prompt Modal */}
       {promptModalText && (
