@@ -7,6 +7,8 @@ if (typeof window !== 'undefined' && 'GlobalWorkerOptions' in pdfjs) {
   (pdfjs as any).GlobalWorkerOptions.workerSrc = pdfjsWorker;
 }
 
+const pdfjsAssetBaseUrl = `${import.meta.env.BASE_URL ?? '/'}pdfjs/`.replace(/\/{2,}/g, '/');
+
 export interface PdfPageTranscriptionDiagnostics {
   pageNumber: number;
   nativeChars: number;
@@ -222,6 +224,9 @@ export async function analyzePdfTranscription(input: File | Blob): Promise<PdfTr
 
   const loadingTask = pdfjs.getDocument({
     data,
+    cMapUrl: `${pdfjsAssetBaseUrl}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${pdfjsAssetBaseUrl}standard_fonts/`,
     useWorkerFetch: false,
     isEvalSupported: false,
     useSystemFonts: true,
