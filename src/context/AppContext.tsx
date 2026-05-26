@@ -132,6 +132,7 @@ interface AppContextType {
   restoreSession: (session: RestoredSession) => void;
   importSessionAsNew: (session: RestoredSession) => void;
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
+  updateLancamento: (lancamentoId: string, updates: Partial<Omit<Lancamento, 'id'>>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
   addDocumento: (doc: Omit<Documento, 'id' | 'data_upload'>) => Documento;
   addDocumentoFromFile: (params: {
@@ -534,6 +535,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return true;
   };
 
+  const updateLancamento = (lancamentoId: string, updates: Partial<Omit<Lancamento, 'id'>>) => {
+    if (!lancamentos.some((lancamento) => lancamento.id === lancamentoId)) return false;
+
+    setLancamentos((current) =>
+      current.map((lancamento) =>
+        lancamento.id === lancamentoId
+          ? { ...lancamento, ...updates, id: lancamento.id }
+          : lancamento,
+      ),
+    );
+    return true;
+  };
+
   const removeLancamento = (lancamentoId: string) => {
     let removed = false;
     setLancamentos((current) => {
@@ -577,6 +591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         restoreSession,
         importSessionAsNew,
         addLancamento,
+        updateLancamento,
         removeLancamento,
         addDocumento,
         addDocumentoFromFile,

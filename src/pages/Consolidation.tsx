@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle, Info } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle, Info, SearchCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
+import AuditPromptModal from '../components/AuditPromptModal';
 import MainLayout from '../components/MainLayout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -21,7 +22,7 @@ import {
 import { cn, formatarDataSegura, parseLocalDate } from '../lib/utils';
 
 export default function Consolidation() {
-  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso, updateDocumento } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -314,6 +315,7 @@ export default function Consolidation() {
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [auditPromptOpen, setAuditPromptOpen] = useState(false);
 
   const handleExport = () => window.print();
 
@@ -360,6 +362,26 @@ export default function Consolidation() {
 
   return (
     <MainLayout activeView="consolidate">
+      <AuditPromptModal
+        open={auditPromptOpen}
+        onClose={() => setAuditPromptOpen(false)}
+        servidor={servidor}
+        nivelPleiteado={nivelPleiteado}
+        processo={{
+          ...processo,
+          nivel_pleiteado_id: nivelPleiteado?.id,
+          saldo_concessao_anterior:
+            saldoConcessaoAnterior.trim() === ''
+              ? undefined
+              : Number.parseFloat(saldoConcessaoAnterior),
+          numero_processo_anterior: numeroProcessoAnterior.trim() || undefined,
+          data_ultima_concessao: dataUltimaConcessao || undefined,
+        }}
+        lancamentos={lancamentosDoServidor}
+        itensRSC={itensRSC}
+        documentos={documentos}
+        updateDocumento={updateDocumento}
+      />
       <main className="mx-auto max-w-4xl px-4 py-6 print:max-w-none print:p-0 sm:py-8">
         {/* Pre-flight checklist — hidden on print */}
         <div className="mb-6 print:hidden">
@@ -641,6 +663,16 @@ export default function Consolidation() {
             </div>
 
             <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setAuditPromptOpen(true)}
+                disabled={lancamentosDoServidor.length === 0}
+                className="h-10 rounded-xl border-violet-200 bg-violet-50 px-4 text-xs font-black uppercase tracking-widest text-violet-700 shadow-sm transition-all hover:bg-violet-100 disabled:opacity-50"
+              >
+                <SearchCheck className="mr-2 h-4 w-4" />
+                Auditoria IA
+              </Button>
               <Button
                 onClick={handleGenerate}
                 disabled={!canGenerate || isGenerating}
