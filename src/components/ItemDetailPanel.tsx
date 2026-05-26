@@ -12,8 +12,10 @@ import {
   Info,
   Link,
   LoaderCircle,
+  PencilLine,
   Plus,
   CirclePlay,
+  Save,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -45,7 +47,7 @@ type UploadMeta = {
 };
 
 export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSaved: () => void }) {
-  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, removeLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
+  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
   const [docMode, setDocMode] = useState<'upload' | 'reference'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -66,6 +68,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteChoiceLancamento, setDeleteChoiceLancamento] = useState<Lancamento | null>(null);
   const [isDeletingLancamento, setIsDeletingLancamento] = useState(false);
+  const [editingObservationId, setEditingObservationId] = useState<string | null>(null);
+  const [editingObservation, setEditingObservation] = useState('');
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
@@ -581,6 +585,28 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     toast.success(documentStillUsedElsewhere ? 'Lançamento removido. O documento foi mantido porque ainda está vinculado a outro lançamento.' : 'Lançamento removido.');
   };
 
+  const startEditingObservation = (lancamento: Lancamento) => {
+    setEditingObservationId(lancamento.id);
+    setEditingObservation(lancamento.observacao ?? '');
+  };
+
+  const cancelEditingObservation = () => {
+    setEditingObservationId(null);
+    setEditingObservation('');
+  };
+
+  const saveObservation = (lancamentoId: string) => {
+    const nextObservation = editingObservation.trim();
+    const updated = updateLancamento(lancamentoId, { observacao: nextObservation || undefined });
+    if (!updated) {
+      toast.error('N\u00e3o foi poss\u00edvel atualizar a observa\u00e7\u00e3o.');
+      return;
+    }
+
+    cancelEditingObservation();
+    toast.success(nextObservation ? 'Observa\u00e7\u00e3o atualizada.' : 'Observa\u00e7\u00e3o removida.');
+  };
+
   const confirmRemoveLancamento = async (deleteLinkedDocument: boolean) => {
     if (!deleteChoiceLancamento) return;
     const lancamento = deleteChoiceLancamento;
@@ -855,13 +881,47 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
             {itemLancamentos.map((lancamento) => {
               const doc = lancamento.documento_id ? docsById.get(lancamento.documento_id) : undefined;
               const isOpen = !!(doc && openDocs.has(doc.id));
+              const isEditingObservation = editingObservationId === lancamento.id;
               return (
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
                     <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => removeWithDocumentChoice(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
                   </div>
-                  {lancamento.observacao && (
+                  {isEditingObservation ? (
+                    <div className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-white p-3">
+                      <Label htmlFor={`observacao-${lancamento.id}`} className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                        {'Observa\u00e7\u00e3o do lan\u00e7amento'}
+                      </Label>
+                      <textarea
+                        id={`observacao-${lancamento.id}`}
+                        value={editingObservation}
+                        onChange={(event) => setEditingObservation(event.target.value)}
+                        placeholder={'Registre uma observa\u00e7\u00e3o complementar para este lan\u00e7amento.'}
+                        className="min-h-[96px] w-full rounded-lg border border-gray-200 bg-white p-2.5 text-sm text-gray-800 focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/5"
+                        rows={4}
+                        autoFocus
+                      />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelEditingObservation}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => saveObservation(lancamento.id)}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary/90"
+                        >
+                          <Save className="h-3.5 w-3.5" />
+                          {'Salvar observa\u00e7\u00e3o'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : lancamento.observacao && (
                     <div className="mt-2.5 rounded-lg border border-gray-200 bg-white p-2.5 text-xs text-gray-700 italic">
                       <strong>Observação:</strong> {lancamento.observacao}
                     </div>
@@ -871,6 +931,15 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     <div className="flex flex-wrap gap-2">
                       {doc?.gedoc_links && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">{doc.gedoc_links.length} link(s) de referência</span>}
                       {doc?.caminho_storage && <button type="button" onClick={() => void toggleViewer(doc)} className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-500">{isOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{isOpen ? 'Ocultar documento' : 'Ver documento'}</button>}
+                      <button
+                        type="button"
+                        onClick={() => startEditingObservation(lancamento)}
+                        disabled={isSubmitted}
+                        className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <PencilLine className="h-3.5 w-3.5" />
+                        {lancamento.observacao ? 'Editar observa\u00e7\u00e3o' : 'Adicionar observa\u00e7\u00e3o'}
+                      </button>
                       <button
                         type="button"
                         onClick={async () => {

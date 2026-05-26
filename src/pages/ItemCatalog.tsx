@@ -325,7 +325,7 @@ export default function ItemCatalog() {
                       key={item.id}
                       type="button"
                       onClick={() => setSelectedItemId(item.id)}
-                      className="group text-left"
+                      className="group min-w-0 text-left"
                     >
                       <Card className={cn(
                         'h-full transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md',
@@ -334,15 +334,15 @@ export default function ItemCatalog() {
                           : 'border-gray-200 bg-white group-hover:border-primary/30',
                       )}>
                         <CardContent className="space-y-4 p-5">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="flex items-start gap-3">
+                          <div className="flex min-w-0 items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-start gap-3">
                               <div className={cn(
                                 'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-sm font-black',
                                 hasLancamentos ? 'bg-emerald-100 text-emerald-700' : 'bg-primary/10 text-primary',
                               )}>
                                 {item.numero}
                               </div>
-                              <div>
+                              <div className="min-w-0">
                                 <div className="mb-2 flex flex-wrap items-center gap-2">
                                   <span className="rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-gray-700">
                                     Inciso {item.inciso}
@@ -373,7 +373,7 @@ export default function ItemCatalog() {
                                     </span>
                                   )}
                                 </div>
-                                <h3 className="text-base font-bold leading-snug text-gray-900">{item.descricao}</h3>
+                                <h3 className="[overflow-wrap:anywhere] text-base font-bold leading-snug text-gray-900">{item.descricao}</h3>
                               </div>
                             </div>
 
