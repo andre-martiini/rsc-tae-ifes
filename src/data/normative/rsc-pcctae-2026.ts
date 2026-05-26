@@ -337,8 +337,8 @@ export const rolItensRSC: ItemRSC[] = [
     descricao: 'Atuação diferenciada em atividades de execução/operação, desenvolvimento, colaboração nos sistemas estruturantes da administração pública.',
     unidade_medida: 'Por Sistema',
     pontos_por_unidade: 4.5,
-    quantidade_automatica: true,
-    modo_calculo: 'auto_ano_fracao',
+    quantidade_automatica: false,
+    modo_calculo: 'manual',
   },
   {
     id: 'item-26',
