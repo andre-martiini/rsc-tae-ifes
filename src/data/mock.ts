@@ -94,6 +94,7 @@ export interface Lancamento {
   justificativa_nao_ordinaria?: string;
   pontos_calculados: number;
   status_auditoria: 'Pendente' | 'Aprovado' | 'Rejeitado';
+  observacao?: string;
 }
 
 export interface ProcessoRSC {

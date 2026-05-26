@@ -879,6 +879,23 @@ export async function generateMemorialDescritivo(
   writer.subtotalRow('TOTAL ACUMULADO', formatNumber(totalPontos), [colSubtotalLabelStart, colSubtotalValueStart], true);
 
   writer.gap(18);
+  writer.section('5. Notas e Observações Complementares');
+  const lancamentosComObs = lancamentos.filter((l) => l.observacao);
+  if (lancamentosComObs.length === 0) {
+    writer.text('Nenhuma observação complementar registrada para os itens deste dossiê.', { size: 9, color: COLORS.muted });
+  } else {
+    lancamentosComObs.forEach((l) => {
+      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+      if (item) {
+        writer.text(`Item ${item.numero} — ${item.descricao}`, { bold: true, size: 8.5 });
+        const periodStr = l.data_inicio && l.data_fim ? ` (Período: ${formatDate(l.data_inicio)} a ${formatDate(l.data_fim)})` : '';
+        writer.text(`Observação${periodStr}: ${l.observacao}`, { indent: 8, size: 8.5 });
+        writer.gap(4);
+      }
+    });
+  }
+
+  writer.gap(18);
   writer.section('6. Conclusão do Servidor');
   writer.text(`À vista das informações apresentadas, este memorial consolida ${formatPointValue(totalPontos)} pontos para instrução documental do pedido de RSC-PCCTAE.`, { size: 9 });
   writer.gap(22);
@@ -930,6 +947,10 @@ export async function generateMemorialDescritivo(
     writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
     writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
     writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    if (l.observacao) {
+      const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+      writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    }
     writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   }
 

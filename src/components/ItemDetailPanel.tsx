@@ -61,6 +61,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [dataFim, setDataFim] = useState('');
   const [ongoing, setOngoing] = useState(false);
   const [quantidade, setQuantidade] = useState('');
+  const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleteChoiceLancamento, setDeleteChoiceLancamento] = useState<Lancamento | null>(null);
@@ -120,6 +121,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setDataFim('');
     setOngoing(false);
     setQuantidade('');
+    setObservacao('');
     resetUpload();
   }, [resetUpload]);
 
@@ -498,6 +500,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         quantidade_informada: quantidadeNumerica,
         declaracao_nao_duplicidade: true,
         pontos_calculados: pontosCalculados,
+        observacao: observacao.trim() || undefined,
       };
 
       if (isDuplicate && newDoc) {
@@ -827,6 +830,18 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   </div>
                 </div>
               </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="observacao" className="text-xs">Observações (opcional)</Label>
+                <textarea
+                  id="observacao"
+                  value={observacao}
+                  onChange={(e) => setObservacao(e.target.value)}
+                  placeholder="Utilize este campo para fornecer uma contextualização detalhada dos documentos comprobatórios (ex.: citar documentos ou página de documentos, portarias relacionadas ou referências adicionais)."
+                  className="w-full min-h-[80px] rounded-lg border border-gray-200 bg-white p-2.5 text-sm focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/5"
+                  rows={3}
+                />
+              </div>
             </section>
             <div className="flex justify-end border-t border-gray-100 pt-4 pr-28 sm:pr-32">
               <Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">
@@ -846,6 +861,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
                     <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => removeWithDocumentChoice(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
                   </div>
+                  {lancamento.observacao && (
+                    <div className="mt-2.5 rounded-lg border border-gray-200 bg-white p-2.5 text-xs text-gray-700 italic">
+                      <strong>Observação:</strong> {lancamento.observacao}
+                    </div>
+                  )}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">{lancamento.status_auditoria}</p>
                     <div className="flex flex-wrap gap-2">
