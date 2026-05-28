@@ -81,6 +81,14 @@ export default function FeedbackWidget() {
     }
   };
 
+  useEffect(() => {
+    const handleOpenFeedback = () => {
+      handleOpen();
+    };
+    window.addEventListener('open-feedback', handleOpenFeedback);
+    return () => window.removeEventListener('open-feedback', handleOpenFeedback);
+  }, []);
+
   const handleClose = () => {
     setStep("closed");
     setMensagem("");
@@ -123,7 +131,7 @@ export default function FeedbackWidget() {
       <button
         onClick={handleOpen}
         title="Enviar feedback"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 print:hidden"
+        className="fixed bottom-6 right-6 z-50 hidden lg:flex items-center gap-2 rounded-full bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow-lg hover:bg-blue-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 print:hidden"
       >
         <MessageSquarePlus size={18} />
         <span className="hidden sm:inline">Feedback</span>

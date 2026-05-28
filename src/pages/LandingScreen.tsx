@@ -12,6 +12,9 @@ import {
   Upload,
   UserCircle,
   Beaker,
+  X,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppFooter from '../components/AppFooter';
@@ -23,6 +26,7 @@ import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
 import type { SessionSummary } from '../context/AppContext';
 import { ESCOLARIDADES, type Servidor } from '../data/mock';
+import { SYSTEM_UPDATES } from '../data/updates';
 
 interface ConflictState {
   existingSession: SessionSummary;
@@ -33,6 +37,7 @@ export default function LandingScreen() {
   const navigate = useNavigate();
   const [isImporting, setIsImporting] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showUpdatesModal, setShowUpdatesModal] = useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const { sessions, createSession, loadSession, deleteSession, importSessionAsNew } = useAppContext();
 
@@ -187,7 +192,7 @@ export default function LandingScreen() {
           </div>
           <h1 className="text-3xl font-black text-gray-900">{institutionConfig.appName}</h1>
           <p className="mt-1.5 text-sm text-gray-500">{institutionConfig.appSubtitle}</p>
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
             <button
               type="button"
               onClick={() => setShowAbout((prev) => !prev)}
@@ -195,6 +200,14 @@ export default function LandingScreen() {
             >
               <CircleHelp className="h-3.5 w-3.5" />
               O que é o Assistente RSC-TAE?
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowUpdatesModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
+            >
+              <Clock className="h-3.5 w-3.5" />
+              Novidades
             </button>
           </div>
           {showAbout && (
@@ -251,7 +264,6 @@ export default function LandingScreen() {
         </div>
 
         {showForm ? (
-          // ... form remains here
           <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
             <div className="mb-6 flex items-center gap-3">
               <button
@@ -450,8 +462,113 @@ export default function LandingScreen() {
         </p>
         </div>
       </div>
+
+      {/* Updates Modal */}
+      {showUpdatesModal && (
+        <div
+          className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/60 p-4 backdrop-blur-sm pt-8 pb-12"
+          onClick={(e) => e.target === e.currentTarget && setShowUpdatesModal(false)}
+        >
+          <div className="w-full max-w-2xl rounded-3xl border border-gray-200 bg-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-gray-100 p-6">
+              <div className="flex items-center gap-2">
+                <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Histórico de Atualizações</h3>
+                  <p className="text-xs text-gray-500">Confira o que mudou recentemente no sistema</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUpdatesModal(false)}
+                className="rounded-xl bg-gray-50 p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scrollable list */}
+            <div className="max-h-[60vh] overflow-y-auto p-6 space-y-6 bg-gray-50/30">
+              {SYSTEM_UPDATES.map((update, idx) => {
+                return (
+                  <div key={idx} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <h4 className="text-sm font-bold text-gray-900">{update.title}</h4>
+                      <span className="text-xs font-semibold text-gray-400">{update.date}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-4">{update.description}</p>
+                    
+                    <div className="space-y-3.5 border-t border-gray-50 pt-3.5">
+                      {update.features && update.features.length > 0 && (
+                        <div>
+                          <div className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-200/50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-violet-700 mb-1.5">
+                            <span>Novidades</span>
+                          </div>
+                          <ul className="space-y-1">
+                            {update.features.map((pt, pIdx) => (
+                              <li key={pIdx} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-violet-500 mt-0.5" />
+                                <span>{pt}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {update.improvements && update.improvements.length > 0 && (
+                        <div>
+                          <div className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200/50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-blue-700 mb-1.5">
+                            <span>Melhorias</span>
+                          </div>
+                          <ul className="space-y-1">
+                            {update.improvements.map((pt, pIdx) => (
+                              <li key={pIdx} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-blue-500 mt-0.5" />
+                                <span>{pt}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {update.fixes && update.fixes.length > 0 && (
+                        <div>
+                          <div className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200/50 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-amber-700 mb-1.5">
+                            <span>Correções</span>
+                          </div>
+                          <ul className="space-y-1">
+                            {update.fixes.map((pt, pIdx) => (
+                              <li key={pIdx} className="flex items-start gap-2 text-xs text-gray-600 leading-relaxed">
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-amber-500 mt-0.5" />
+                                <span>{pt}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-100 p-5 bg-white flex justify-end">
+              <Button
+                onClick={() => setShowUpdatesModal(false)}
+                className="bg-primary text-white hover:bg-primary/95 px-6 rounded-xl font-bold h-10"
+              >
+                Entendi
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AppFooter />
     </div>
   );
 }
-

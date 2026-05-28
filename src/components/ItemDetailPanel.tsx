@@ -869,7 +869,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                 />
               </div>
             </section>
-            <div className="flex justify-end border-t border-gray-100 pt-4 pr-28 sm:pr-32">
+            <div className="flex justify-end border-t border-gray-100 pt-4 px-4 sm:px-6">
               <Button onClick={() => void save()} disabled={saving} className="bg-primary text-white hover:bg-primary/90">
                 {saving ? 'Salvando...' : 'Salvar lançamento'}
               </Button>

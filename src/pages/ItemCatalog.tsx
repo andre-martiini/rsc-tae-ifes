@@ -529,7 +529,7 @@ export default function ItemCatalog() {
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed inset-y-0 right-0 z-50 w-full max-w-2xl border-l border-gray-200 bg-white shadow-2xl lg:relative lg:z-auto lg:h-full lg:min-w-[600px]"
+              className="fixed inset-y-0 right-0 z-[120] w-full max-w-2xl border-l border-gray-200 bg-white shadow-2xl lg:relative lg:z-auto lg:h-full lg:min-w-[600px]"
             >
               <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50/50 px-4 py-3 sm:px-6">

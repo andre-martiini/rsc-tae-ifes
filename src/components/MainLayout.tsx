@@ -6,7 +6,7 @@ import AppFooter from './AppFooter';
 
 interface MainLayoutProps {
     children: React.ReactNode;
-    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'legislation';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'legislation' | 'help';
 }
 
 export default function MainLayout({ children, activeView }: MainLayoutProps) {
@@ -21,6 +21,7 @@ export default function MainLayout({ children, activeView }: MainLayoutProps) {
             case 'documents': navigate('/documentos'); break;
             case 'consolidate': navigate('/consolidar'); break;
             case 'legislation': navigate('/legislacao'); break;
+            case 'help': navigate('/ajuda'); break;
             default: navigate('/dashboard');
         }
         setMobileMenuOpen(false);
@@ -45,7 +46,7 @@ export default function MainLayout({ children, activeView }: MainLayoutProps) {
                     />
                 </div>
 
-                <div className="relative flex-1 overflow-y-auto pb-24 lg:pb-0 print:overflow-visible">
+                <div className="relative flex-1 overflow-y-auto pb-[60px] lg:pb-0 print:overflow-visible">
                     {children}
                 </div>
 
