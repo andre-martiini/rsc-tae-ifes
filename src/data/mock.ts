@@ -47,6 +47,10 @@ export interface Servidor {
   funcao_encargo?: string;
   /** Telefone de contato do servidor */
   telefone?: string;
+  database_siape_prefix?: string;
+  database_cargo?: string;
+  database_classe?: string;
+  database_situacao?: string;
 }
 
 export interface Documento {

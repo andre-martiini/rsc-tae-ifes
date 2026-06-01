@@ -14,6 +14,18 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '01 de junho de 2026',
+    title: 'Autocompletar de Nome e Validações de Apoio',
+    description: 'O sistema agora auxilia no preenchimento de seus dados funcionais e avisa sobre possíveis inconsistências de forma automática, garantindo que você tenha total controle para avançar.',
+    features: [
+      'Busca inteligente por Nome: Ao iniciar a digitação do Nome Completo, o assistente pesquisa em uma base de dados pública de servidores para preencher automaticamente seu cargo, unidade de lotação e situação funcional.',
+      'Uso opcional e não bloqueante: A base de dados serve apenas como apoio. Se você não encontrar seu nome na lista ou se houver divergências, poderá digitar seus dados manualmente e continuar o processo normalmente sem qualquer impedimento.',
+      'Aumento do limite de dígitos do SIAPE: O campo agora aceita até 9 caracteres, permitindo a inserção de SIAPEs mais recentes com 8 dígitos e outras formatações.',
+      'Correção de perfil descomplicada: Você agora pode salvar alterações no seu nome ou SIAPE sem ser obrigado a preencher todos os outros dados adicionais (como e-mail, cargo e data de início) imediatamente. A validação total só é exigida no momento de gerar o PDF final.',
+      'Novo fluxo visual: O formulário foi reordenado de forma mais lógica e natural, solicitando o Nome Completo primeiro, seguido do SIAPE e da Escolaridade Atual.',
+    ],
+  },
+  {
     date: '28 de maio de 2026',
     title: 'Central de Ajuda e Otimização para Dispositivos Móveis',
     description: 'Implementação de suporte integrado e reestruturação completa da interface responsiva para celulares.',
