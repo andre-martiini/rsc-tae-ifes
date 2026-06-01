@@ -27,6 +27,13 @@ import { useAppContext } from '../context/AppContext';
 import type { SessionSummary } from '../context/AppContext';
 import { ESCOLARIDADES, type Servidor } from '../data/mock';
 import { SYSTEM_UPDATES } from '../data/updates';
+import {
+  clearDatabase,
+  getServidoresCount,
+  saveServidoresBatch,
+  searchServidorByName,
+  type ServidorBase,
+} from '../lib/servidoresStorage';
 
 interface ConflictState {
   existingSession: SessionSummary;
@@ -40,6 +47,96 @@ export default function LandingScreen() {
   const [showUpdatesModal, setShowUpdatesModal] = useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const { sessions, createSession, loadSession, deleteSession, importSessionAsNew } = useAppContext();
+
+  const [selectedServidorBase, setSelectedServidorBase] = useState<ServidorBase | null>(null);
+  const [suggestions, setSuggestions] = useState<ServidorBase[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
+  React.useEffect(() => {
+    getServidoresCount().then(async (count) => {
+      if (count === 0) {
+        try {
+          const response = await fetch('/cadastro_base.csv');
+          if (response.ok) {
+            const text = await response.text();
+            const lines = text.split(/\r?\n/);
+            if (lines.length > 0) {
+              const headerLine = lines[0];
+              let separator = ';';
+              if (headerLine.includes('\t')) {
+                separator = '\t';
+              } else if (headerLine.includes(',')) {
+                separator = ',';
+              }
+              const headers = headerLine.split(separator).map((h) => h.trim().replace(/^"|"$/g, ''));
+              const parsedRecords: any[] = [];
+
+              for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                let parts: string[] = [];
+                if (line.includes('"')) {
+                  const regex = new RegExp(`\\s*${separator}\\s*(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)`, 'g');
+                  parts = line.split(regex).map((p) => p.trim().replace(/^"|"$/g, ''));
+                } else {
+                  parts = line.split(separator).map((p) => p.trim());
+                }
+
+                if (parts.length >= headers.length) {
+                  const obj: any = {};
+                  headers.forEach((header, index) => {
+                    obj[header] = parts[index] || '';
+                  });
+                  parsedRecords.push(obj);
+                }
+              }
+
+              if (parsedRecords.length > 0) {
+                await saveServidoresBatch(parsedRecords);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Falha ao inicializar base de servidores:', err);
+        }
+      }
+    });
+  }, []);
+
+  const handleNameChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setForm((prev) => ({ ...prev, nome_completo: val }));
+    setSelectedServidorBase(null);
+
+    if (val.trim().length >= 3) {
+      try {
+        const matches = await searchServidorByName(val, 8);
+        setSuggestions(matches);
+        setShowSuggestions(true);
+      } catch (err) {
+        console.error(err);
+      }
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleSelectSuggestion = (item: ServidorBase) => {
+    setForm((prev) => {
+      const currentSiape = prev.siape.trim();
+      const prefix = item.matricula.replace(/\D/g, '');
+      return {
+        ...prev,
+        nome_completo: item.nome,
+        siape: currentSiape === '' ? prefix : prev.siape,
+      };
+    });
+    setSelectedServidorBase(item);
+    setSuggestions([]);
+    setShowSuggestions(false);
+  };
 
   const handleImportSession = async (file: File) => {
     setIsImporting(true);
@@ -80,11 +177,16 @@ export default function LandingScreen() {
     siape: form.siape.trim(),
     nome_completo: form.nome_completo.trim(),
     email_institucional: '',
-    instituicao: '',
-    lotacao: '',
-    cargo: '',
+    instituicao: selectedServidorBase?.org_lotacao || '',
+    lotacao: selectedServidorBase?.org_lotacao || '',
+    cargo: selectedServidorBase?.descricao_cargo || '',
+    nivel_classificacao: (selectedServidorBase?.classe_cargo as any) || undefined,
     escolaridade_atual: form.escolaridade_atual,
-    situacao_funcional: 'Ativo',
+    situacao_funcional: selectedServidorBase?.situacao_vinculo?.toLowerCase().includes('ativo') ? 'Ativo' : 'Inativo',
+    database_siape_prefix: selectedServidorBase?.matricula || undefined,
+    database_cargo: selectedServidorBase?.descricao_cargo || undefined,
+    database_classe: selectedServidorBase?.classe_cargo || undefined,
+    database_situacao: selectedServidorBase?.situacao_vinculo || undefined,
   });
 
   const handleCreateSubmit = (e: React.FormEvent) => {
@@ -281,51 +383,7 @@ export default function LandingScreen() {
             </p>
 
             <form onSubmit={handleCreateSubmit} className="space-y-5">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="siape">
-                    SIAPE <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    id="siape"
-                    placeholder="1234567"
-                    value={form.siape}
-                    onChange={set('siape')}
-                    maxLength={7}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="escolaridade_atual">
-                    Escolaridade Atual <span className="text-red-500">*</span>
-                  </Label>
-                  <select
-                    id="escolaridade_atual"
-                    value={form.escolaridade_atual}
-                    onChange={set('escolaridade_atual')}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  >
-                    <option value="">Selecione...</option>
-                    {ESCOLARIDADES.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {hasDoctorate && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <p className="leading-relaxed">
-                      Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponde à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 relative">
                 <Label htmlFor="nome_completo">
                   Nome Completo <span className="text-red-500">*</span>
                 </Label>
@@ -333,9 +391,78 @@ export default function LandingScreen() {
                   id="nome_completo"
                   placeholder="Ex.: Joao da Silva"
                   value={form.nome_completo}
-                  onChange={set('nome_completo')}
+                  onChange={handleNameChange}
+                  onFocus={() => form.nome_completo.trim().length >= 3 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
+                  autoComplete="off"
                 />
+                {showSuggestions && suggestions.length > 0 && (
+                  <ul className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg divide-y divide-gray-50">
+                    {suggestions.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          onClick={() => handleSelectSuggestion(item)}
+                          className="flex w-full flex-col px-4 py-2 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="text-sm font-semibold text-gray-900">{item.nome}</span>
+                          <span className="text-[10px] text-gray-500 uppercase font-medium">
+                            {item.descricao_cargo} · {item.org_lotacao} · Prefixo: {item.matricula}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="siape">
+                  SIAPE <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="siape"
+                  placeholder="1234567"
+                  value={form.siape}
+                  onChange={set('siape')}
+                  maxLength={9}
+                />
+                {selectedServidorBase && !form.siape.trim().startsWith(selectedServidorBase.matricula.replace(/\D/g, '')) && (
+                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                    ⚠️ O SIAPE não coincide com o prefixo da base pública (esperado: {selectedServidorBase.matricula.replace(/\D/g, '')}).
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="escolaridade_atual">
+                  Escolaridade Atual <span className="text-red-500">*</span>
+                </Label>
+                <select
+                  id="escolaridade_atual"
+                  value={form.escolaridade_atual}
+                  onChange={set('escolaridade_atual')}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="">Selecione...</option>
+                  {ESCOLARIDADES.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {hasDoctorate && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                    <p className="leading-relaxed">
+                      Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponds à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-2">
                 <Button type="submit" className="w-full bg-primary text-white hover:bg-primary/90">

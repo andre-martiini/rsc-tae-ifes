@@ -15,6 +15,7 @@ import {
 } from '../data/mock';
 import { getServidorProbationaryStatus } from '../lib/rsc';
 import InstituicaoCombobox from '../components/InstituicaoCombobox';
+import { normalizeText } from '../lib/utils';
 
 const NIVEIS_CLASSIFICACAO = ['A', 'B', 'C', 'D', 'E'] as const;
 
@@ -52,16 +53,9 @@ export default function ProfileSetup() {
     if (
       !form.siape.trim() ||
       !form.nome_completo.trim() ||
-      !form.email_institucional.trim() ||
-      !form.instituicao.trim() ||
-      !form.lotacao.trim() ||
-      !form.escolaridade_atual ||
-      !form.situacao_funcional ||
-      !form.cargo.trim() ||
-      !form.nivel_classificacao ||
-      !form.data_ingresso_ife
+      !form.escolaridade_atual
     ) {
-      toast.error('Preencha todos os campos obrigatórios.');
+      toast.error('Preencha os campos obrigatórios principais (SIAPE, Nome Completo e Escolaridade).');
       return;
     }
 
@@ -103,6 +97,18 @@ export default function ProfileSetup() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="nome_completo">
+                Nome Completo <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="nome_completo"
+                placeholder="Ex.: Joao da Silva"
+                value={form.nome_completo}
+                onChange={set('nome_completo')}
+              />
+            </div>
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="siape">
@@ -113,8 +119,13 @@ export default function ProfileSetup() {
                   placeholder="1234567"
                   value={form.siape}
                   onChange={set('siape')}
-                  maxLength={7}
+                  maxLength={9}
                 />
+                {servidor?.database_siape_prefix && !form.siape.trim().startsWith(servidor.database_siape_prefix.replace(/\D/g, '')) && (
+                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                    ⚠️ O SIAPE informado não coincide com o prefixo registrado na base pública para este nome (prefixo esperado: {servidor.database_siape_prefix.replace(/\D/g, '')}).
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="escolaridade_atual">
@@ -134,18 +145,6 @@ export default function ProfileSetup() {
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="nome_completo">
-                Nome Completo <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="nome_completo"
-                placeholder="Ex.: Joao da Silva"
-                value={form.nome_completo}
-                onChange={set('nome_completo')}
-              />
             </div>
 
             {hasDoctorate && (
@@ -187,12 +186,17 @@ export default function ProfileSetup() {
                 <Label htmlFor="cargo">
                   Cargo <span className="text-red-500">*</span>
                 </Label>
-                <Input
+                 <Input
                   id="cargo"
                   placeholder="Ex.: Assistente em Administração"
                   value={form.cargo}
                   onChange={set('cargo')}
                 />
+                {servidor?.database_cargo && normalizeText(form.cargo) !== normalizeText(servidor.database_cargo) && (
+                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                    ⚠️ O cargo informado diverge do registro oficial da planilha (oficial: {servidor.database_cargo}).
+                  </p>
+                )}
               </div>
             </div>
 
@@ -225,6 +229,11 @@ export default function ProfileSetup() {
                     </option>
                   ))}
                 </select>
+                {servidor?.database_situacao && !normalizeText(servidor.database_situacao).includes('ativo permanente') && (
+                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                    ℹ️ Vínculo oficial na planilha: {servidor.database_situacao}. O RSC é destinado a servidores em efetivo exercício.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -244,6 +253,11 @@ export default function ProfileSetup() {
                     </option>
                   ))}
                 </select>
+                {servidor?.database_classe && normalizeText(form.nivel_classificacao) !== normalizeText(servidor.database_classe) && (
+                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                    ⚠️ O nível de classificação diverge do registro oficial da planilha (oficial: Classe {servidor.database_classe}).
+                  </p>
+                )}
               </div>
             </div>
 

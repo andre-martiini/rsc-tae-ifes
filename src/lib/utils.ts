@@ -48,3 +48,17 @@ export function sanitizeForTag(value: string): string {
     .replace(/\s+/g, '_');
 }
 
+/**
+ * Normaliza textos para buscas e comparações (remove acentos, caracteres especiais, capitalização e espaços extras).
+ */
+export function normalizeText(text?: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
