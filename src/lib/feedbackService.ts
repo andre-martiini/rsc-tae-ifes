@@ -5,6 +5,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const requiredEnvVars = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -38,6 +39,13 @@ const db = app ? getFirestore(app) : null;
 
 const LOCAL_STORAGE_KEY = "@rsc-feedback-queue";
 
+export interface FeedbackAttachment {
+  url: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+}
+
 export interface FeedbackPayload {
   nome: string;
   email: string;
@@ -47,6 +55,7 @@ export interface FeedbackPayload {
   rota: string;
   resolucao: string;
   navegador: string;
+  attachments?: FeedbackAttachment[];
   createdAt?: ReturnType<typeof serverTimestamp>;
 }
 
@@ -63,6 +72,23 @@ function readQueue(): QueuedItem[] {
 function writeQueue(items: QueuedItem[]): void {
   localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
 }
+
+export const uploadFeedbackAttachments = async (files: File[]): Promise<FeedbackAttachment[]> => {
+  if (!app || !firebaseReady) return [];
+
+  const storage = getStorage(app);
+  const results: FeedbackAttachment[] = [];
+
+  for (const file of files) {
+    const uuid = crypto.randomUUID();
+    const storageRef = ref(storage, `feedbacks/${uuid}/${file.name}`);
+    await uploadBytes(storageRef, file);
+    const url = await getDownloadURL(storageRef);
+    results.push({ url, name: file.name, size: file.size, mimeType: file.type });
+  }
+
+  return results;
+};
 
 export const sendFeedback = async (
   payload: Omit<FeedbackPayload, "createdAt">
@@ -94,8 +120,6 @@ export const processOfflineQueue = async (): Promise<void> => {
   const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
   if (!raw) return;
 
-  // Limpa a fila atomicamente antes de processar para evitar race condition:
-  // novos itens adicionados durante o processamento são preservados no merge final.
   localStorage.removeItem(LOCAL_STORAGE_KEY);
 
   let queue: QueuedItem[];
@@ -121,7 +145,6 @@ export const processOfflineQueue = async (): Promise<void> => {
   }
 
   if (failed.length > 0) {
-    // Mescla falhas com itens que chegaram durante o processamento
     const newItems = readQueue();
     writeQueue([...failed, ...newItems]);
   }
