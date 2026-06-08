@@ -14,6 +14,18 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '08 de junho de 2026',
+    title: 'Feedback com Imagens, Print da Tela e Correções de Layout',
+    description: 'O canal de feedback ganhou suporte a anexo de imagens e captura de tela diretamente pelo widget, além de correções de sobreposição de botões na tela de Itens e na barra lateral.',
+    features: [
+      'Anexo de imagens no feedback: é possível enviar até 3 imagens (máx. 5 MB cada) junto com qualquer mensagem de feedback. As imagens ficam disponíveis para a equipe no painel de análise.',
+      'Print da tela integrado: novo botão "Print da tela" no widget de feedback captura automaticamente o estado atual da tela — excluindo o próprio modal — e anexa a imagem à mensagem, facilitando o reporte visual de bugs e sugestões.',
+    ],
+    fixes: [
+      'O botão de Feedback foi reposicionado para o canto inferior esquerdo da tela, eliminando a sobreposição com botões de ação do sistema.',
+    ],
+  },
+  {
     date: '01 de junho de 2026',
     title: 'Autocompletar de Nome e Validações de Apoio',
     description: 'O sistema agora auxilia no preenchimento de seus dados funcionais e avisa sobre possíveis inconsistências de forma automática, garantindo que você tenha total controle para avançar.',

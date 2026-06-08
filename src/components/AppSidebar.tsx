@@ -132,7 +132,7 @@ export default function AppSidebar({
                 })}
             </nav>
 
-            <div className="border-t border-gray-100 p-4">
+            <div className="border-t border-gray-100 p-4 pb-20">
                 <div className={cn(
                     'flex items-center gap-3 rounded-2xl p-2 transition-colors',
                     (!collapsed || isMobile) && 'bg-gray-50'
