@@ -86,7 +86,10 @@ export interface Lancamento {
   id: string;
   servidor_id: string;
   item_rsc_id: string;
+  /** @deprecated use comprovantes_ids */
   documento_id?: string;
+  /** Lista de IDs de Documento anexados a este lançamento (substitui documento_id) */
+  comprovantes_ids?: string[];
   fato_gerador_id?: string;
   fato_gerador_descricao?: string;
   data_inicio: string;

@@ -47,7 +47,7 @@ type UploadMeta = {
 };
 
 export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSaved: () => void }) {
-  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
+  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, addComprovanteToLancamento, removeComprovanteFromLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
   const [docMode, setDocMode] = useState<'upload' | 'reference'>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -70,6 +70,14 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [isDeletingLancamento, setIsDeletingLancamento] = useState(false);
   const [editingObservationId, setEditingObservationId] = useState<string | null>(null);
   const [editingObservation, setEditingObservation] = useState('');
+  const [editingLancamentoId, setEditingLancamentoId] = useState<string | null>(null);
+  const [editQtd, setEditQtd] = useState('');
+  const [editDataInicio, setEditDataInicio] = useState('');
+  const [editDataFim, setEditDataFim] = useState('');
+  const [editObs, setEditObs] = useState('');
+  const [addingFileToLancId, setAddingFileToLancId] = useState<string | null>(null);
+  const [isAddingFile, setIsAddingFile] = useState(false);
+  const addFileInputRef = useRef<HTMLInputElement | null>(null);
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
@@ -499,6 +507,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         servidor_id: servidor.id,
         item_rsc_id: item.id,
         documento_id: documentoId,
+        comprovantes_ids: documentoId ? [documentoId] : [],
         data_inicio: showDateFields ? dataInicio : '',
         data_fim: showDateFields ? effectiveEndDate : '',
         quantidade_informada: quantidadeNumerica,
@@ -570,19 +579,19 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     }
 
     const lancamento = lancamentos.find((entry) => entry.id === lancamentoId);
-    const documentoId = lancamento?.documento_id;
-    const documentStillUsedElsewhere = documentoId
-      ? lancamentos.some((entry) => entry.id !== lancamentoId && entry.documento_id === documentoId)
-      : false;
+    const comprovantesIds = lancamento?.comprovantes_ids ?? (lancamento?.documento_id ? [lancamento.documento_id] : []);
+    const algumUsadoEmOutro = comprovantesIds.some((docId) =>
+      lancamentos.some((entry) => entry.id !== lancamentoId && (entry.comprovantes_ids ?? []).includes(docId)),
+    );
 
-    if (lancamento && documentoId && !documentStillUsedElsewhere) {
+    if (lancamento && comprovantesIds.length > 0 && !algumUsadoEmOutro) {
       setDeleteChoiceLancamento(lancamento);
       return;
     }
 
     if (!removeLancamento(lancamentoId)) return void toast.error('Não foi possível remover este lançamento.');
     setPendingDeleteId(null);
-    toast.success(documentStillUsedElsewhere ? 'Lançamento removido. O documento foi mantido porque ainda está vinculado a outro lançamento.' : 'Lançamento removido.');
+    toast.success(algumUsadoEmOutro ? 'Lançamento removido. Os documentos foram mantidos porque ainda estão vinculados a outro lançamento.' : 'Lançamento removido.');
   };
 
   const startEditingObservation = (lancamento: Lancamento) => {
@@ -607,10 +616,74 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     toast.success(nextObservation ? 'Observa\u00e7\u00e3o atualizada.' : 'Observa\u00e7\u00e3o removida.');
   };
 
+  const startEditingLancamento = (lancamento: Lancamento) => {
+    setEditingLancamentoId(lancamento.id);
+    setEditQtd(String(lancamento.quantidade_informada));
+    setEditDataInicio(lancamento.data_inicio ?? '');
+    setEditDataFim(lancamento.data_fim ?? '');
+    setEditObs(lancamento.observacao ?? '');
+    setEditingObservationId(null);
+  };
+
+  const cancelEditingLancamento = () => {
+    setEditingLancamentoId(null);
+  };
+
+  const saveEditingLancamento = (lancamento: Lancamento) => {
+    const qtdNum = Number.parseFloat(editQtd);
+    if (!editQtd.trim() || Number.isNaN(qtdNum) || qtdNum <= 0) {
+      return void toast.error('Informe uma quantidade maior que zero.');
+    }
+    if (item.modo_calculo !== 'manual' && (!editDataInicio || !editDataFim)) {
+      return void toast.error('Este item exige datas de início e fim.');
+    }
+    const novos_pontos = calculateLancamentoPoints(qtdNum, item.pontos_por_unidade);
+    updateLancamento(lancamento.id, {
+      quantidade_informada: qtdNum,
+      data_inicio: editDataInicio,
+      data_fim: editDataFim,
+      observacao: editObs.trim() || undefined,
+      pontos_calculados: novos_pontos,
+    });
+    setEditingLancamentoId(null);
+    toast.success(`Lançamento atualizado. ${formatPointValue(novos_pontos)} pts.`);
+    onSaved();
+  };
+
+  const handleAddFileToLancamento = async (e: React.ChangeEvent<HTMLInputElement>, lancamentoId: string) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !servidor) return;
+    setIsAddingFile(true);
+    try {
+      for (const f of Array.from(files) as File[]) {
+        const normalized = await normalizeUploadToPdf(f);
+        const originalHash = await computeDocumentHash(f);
+        const result = await addDocumentoFromFile({
+          servidorId: servidor.id,
+          file: normalized.file,
+          sourceName: normalized.originalName,
+          sourceMimeType: normalized.originalMimeType,
+          convertedToPdf: normalized.converted,
+          transcription: normalized.transcription,
+          componentHashes: [originalHash],
+          componentFiles: [{ nome_arquivo: f.name, hash_arquivo: originalHash }],
+        });
+        addComprovanteToLancamento(lancamentoId, result.doc.id);
+      }
+      toast.success(`${files.length === 1 ? 'Arquivo adicionado' : `${files.length} arquivos adicionados`} ao lançamento.`);
+    } catch {
+      toast.error('Não foi possível adicionar o arquivo.');
+    } finally {
+      setIsAddingFile(false);
+      setAddingFileToLancId(null);
+      if (addFileInputRef.current) addFileInputRef.current.value = '';
+    }
+  };
+
   const confirmRemoveLancamento = async (deleteLinkedDocument: boolean) => {
     if (!deleteChoiceLancamento) return;
     const lancamento = deleteChoiceLancamento;
-    const documentoId = lancamento.documento_id;
+    const comprovantesIds = lancamento.comprovantes_ids ?? (lancamento.documento_id ? [lancamento.documento_id] : []);
 
     try {
       setIsDeletingLancamento(true);
@@ -619,11 +692,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         return;
       }
 
-      if (deleteLinkedDocument && documentoId) {
-        await deleteDocumento(documentoId);
-        toast.success('Lançamento e documento removidos.');
+      if (deleteLinkedDocument && comprovantesIds.length > 0) {
+        for (const docId of comprovantesIds) {
+          await deleteDocumento(docId);
+        }
+        toast.success('Lançamento e documentos removidos.');
       } else {
-        toast.success('Lançamento removido. O documento foi mantido no inventário.');
+        toast.success('Lançamento removido. Os documentos foram mantidos no inventário.');
       }
 
       setPendingDeleteId(null);
@@ -873,46 +948,95 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         ) : (
           <div className="space-y-3">
             {itemLancamentos.length === 0 && <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">Nenhum lançamento registrado para este item ainda.</div>}
+            {/* Input oculto para adicionar arquivo a lançamento existente */}
+            <input
+              ref={addFileInputRef}
+              type="file"
+              accept={SUPPORTED_UPLOAD_ACCEPT}
+              multiple
+              className="hidden"
+              onChange={(e) => addingFileToLancId && void handleAddFileToLancamento(e, addingFileToLancId)}
+            />
             {itemLancamentos.map((lancamento) => {
-              const doc = lancamento.documento_id ? docsById.get(lancamento.documento_id) : undefined;
-              const isOpen = !!(doc && openDocs.has(doc.id));
-              const isEditingObservation = editingObservationId === lancamento.id;
+              const comprovantesIds = lancamento.comprovantes_ids ?? (lancamento.documento_id ? [lancamento.documento_id] : []);
+              const comprovantes = comprovantesIds.map((id) => docsById.get(id)).filter(Boolean) as Documento[];
+              const isEditing = editingLancamentoId === lancamento.id;
+              const primaryDoc = comprovantes[0];
               return (
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
+                  {/* Cabeçalho: dados principais + botão excluir */}
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3"><div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div><div><p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p><p className="text-xs text-gray-500">{lancamento.data_inicio && lancamento.data_fim ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}` : 'Período não informado/exigido'}</p>{doc?.convertido_para_pdf && doc.arquivo_origem_nome && <p className="mt-1 text-[11px] text-gray-500">Origem: {doc.arquivo_origem_nome}</p>}{(doc?.arquivos_componentes?.length ?? 0) > 1 && <p className="mt-1 text-[11px] text-gray-500">{doc?.arquivos_componentes?.length} arquivos mesclados</p>}</div></div>
-                    <div className="flex items-center justify-between gap-2 sm:justify-start"><span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span><button type="button" onClick={() => removeWithDocumentChoice(lancamento.id)} className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}>{pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}</button></div>
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div>
+                      <div>
+                        <p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p>
+                        <p className="text-xs text-gray-500">
+                          {lancamento.data_inicio && lancamento.data_fim
+                            ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}`
+                            : 'Período não informado/exigido'}
+                        </p>
+                        {comprovantes.length > 0 && (
+                          <p className="mt-0.5 text-[11px] text-gray-400">{comprovantes.length} arquivo{comprovantes.length !== 1 ? 's' : ''} anexado{comprovantes.length !== 1 ? 's' : ''}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 sm:justify-start">
+                      <span className="pt-1 text-sm font-black text-gray-900">+{formatPointValue(lancamento.pontos_calculados)} pts</span>
+                      <button
+                        type="button"
+                        onClick={() => removeWithDocumentChoice(lancamento.id)}
+                        className={cn('flex h-8 w-8 items-center justify-center rounded-full border bg-white shadow-sm', pendingDeleteId === lancamento.id ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500')}
+                      >
+                        {pendingDeleteId === lancamento.id ? <AlertCircle className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </div>
-                  {isEditingObservation ? (
-                    <div className="mt-3 space-y-2 rounded-lg border border-primary/20 bg-white p-3">
-                      <Label htmlFor={`observacao-${lancamento.id}`} className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
-                        {'Observa\u00e7\u00e3o do lan\u00e7amento'}
-                      </Label>
-                      <textarea
-                        id={`observacao-${lancamento.id}`}
-                        value={editingObservation}
-                        onChange={(event) => setEditingObservation(event.target.value)}
-                        placeholder={'Registre uma observa\u00e7\u00e3o complementar para este lan\u00e7amento.'}
-                        className="min-h-[96px] w-full rounded-lg border border-gray-200 bg-white p-2.5 text-sm text-gray-800 focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/5"
-                        rows={4}
-                        autoFocus
-                      />
+
+                  {/* Modo de edição completa */}
+                  {isEditing ? (
+                    <div className="mt-3 space-y-3 rounded-xl border border-primary/20 bg-white p-4">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Editar lançamento</p>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Quantidade</Label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step={allowsDecimals ? '0.01' : '1'}
+                            value={editQtd}
+                            onChange={(e) => setEditQtd(e.target.value)}
+                            className="h-9 text-center font-bold"
+                          />
+                        </div>
+                        {item.modo_calculo !== 'manual' && (
+                          <>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Data início</Label>
+                              <Input type="date" value={editDataInicio} onChange={(e) => setEditDataInicio(e.target.value)} className="h-9" />
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Data fim</Label>
+                              <Input type="date" value={editDataFim} onChange={(e) => setEditDataFim(e.target.value)} className="h-9" />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Observação (opcional)</Label>
+                        <textarea
+                          value={editObs}
+                          onChange={(e) => setEditObs(e.target.value)}
+                          placeholder="Observação complementar..."
+                          className="w-full min-h-[72px] rounded-lg border border-gray-200 bg-white p-2.5 text-sm focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/5"
+                          rows={3}
+                        />
+                      </div>
                       <div className="flex flex-wrap justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={cancelEditingObservation}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                          Cancelar
+                        <button type="button" onClick={cancelEditingLancamento} className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50">
+                          <X className="h-3.5 w-3.5" />Cancelar
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => saveObservation(lancamento.id)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary/90"
-                        >
-                          <Save className="h-3.5 w-3.5" />
-                          {'Salvar observa\u00e7\u00e3o'}
+                        <button type="button" onClick={() => saveEditingLancamento(lancamento)} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary/90">
+                          <Save className="h-3.5 w-3.5" />Salvar alterações
                         </button>
                       </div>
                     </div>
@@ -921,79 +1045,104 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       <strong>Observação:</strong> {lancamento.observacao}
                     </div>
                   )}
+
+                  {/* Lista de arquivos anexados */}
+                  {!isEditing && comprovantes.length > 0 && (
+                    <div className="mt-3 space-y-1.5 rounded-xl border border-gray-100 bg-white p-3">
+                      <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-gray-400">Arquivos anexados</p>
+                      {comprovantes.map((doc) => {
+                        const isOpen = openDocs.has(doc.id);
+                        return (
+                          <div key={doc.id}>
+                            <div className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-medium text-gray-700">
+                                    {doc.arquivo_origem_nome ?? doc.nome_arquivo}
+                                  </p>
+                                  {doc.tamanho_bytes && (
+                                    <p className="text-[10px] text-gray-400">{(doc.tamanho_bytes / 1024).toFixed(0)} KB{doc.convertido_para_pdf ? ' · convertido' : ''}</p>
+                                  )}
+                                  {doc.gedoc_links && (
+                                    <p className="text-[10px] text-emerald-600">{doc.gedoc_links.length} link(s) institucional(is)</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-1">
+                                {doc.caminho_storage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void toggleViewer(doc)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-500 hover:bg-gray-100"
+                                    title={isOpen ? 'Ocultar' : 'Visualizar'}
+                                  >
+                                    {isOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                  </button>
+                                )}
+                                {!isSubmitted && comprovantes.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void removeComprovanteFromLancamento(lancamento.id, doc.id)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-full border border-red-100 bg-white text-red-400 hover:bg-red-50"
+                                    title="Remover este arquivo"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            {doc.gedoc_links && (
+                              <ul className="mt-1 space-y-0.5 rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-[10px] text-emerald-900">
+                                {doc.gedoc_links.map((link) => <li key={link} className="truncate font-mono">{link}</li>)}
+                              </ul>
+                            )}
+                            {isOpen && blobUrls[doc.id] && (
+                              <div className="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white">
+                                <iframe src={blobUrls[doc.id]} title={doc.nome_arquivo} className="h-[420px] w-full sm:h-[520px]" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {!isSubmitted && (
+                        <button
+                          type="button"
+                          disabled={isAddingFile && addingFileToLancId === lancamento.id}
+                          onClick={() => {
+                            setAddingFileToLancId(lancamento.id);
+                            addFileInputRef.current?.click();
+                          }}
+                          className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-200 bg-gray-50 py-2 text-xs font-semibold text-gray-500 hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:opacity-60"
+                        >
+                          {isAddingFile && addingFileToLancId === lancamento.id
+                            ? <><LoaderCircle className="h-3.5 w-3.5 animate-spin" />Adicionando...</>
+                            : <><Plus className="h-3.5 w-3.5" />Adicionar arquivo</>
+                          }
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Barra de ações */}
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-green-600">{lancamento.status_auditoria}</p>
                     <div className="flex flex-wrap gap-2">
-                      {doc?.gedoc_links && <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">{doc.gedoc_links.length} link(s) de referência</span>}
-                      {doc?.caminho_storage && <button type="button" onClick={() => void toggleViewer(doc)} className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-500">{isOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}{isOpen ? 'Ocultar documento' : 'Ver documento'}</button>}
-                      <button
-                        type="button"
-                        onClick={() => startEditingObservation(lancamento)}
-                        disabled={isSubmitted}
-                        className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <PencilLine className="h-3.5 w-3.5" />
-                        {lancamento.observacao ? 'Editar observa\u00e7\u00e3o' : 'Adicionar observa\u00e7\u00e3o'}
-                      </button>
+                      {!isEditing && !isSubmitted && (
+                        <button
+                          type="button"
+                          onClick={() => startEditingLancamento(lancamento)}
+                          className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-white px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/5"
+                        >
+                          <PencilLine className="h-3.5 w-3.5" />
+                          Editar lançamento
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={async () => {
-                          let finalDoc = await prepareDocumentForPrompt(doc);
-                          console.log('[ValidarIA] Documento preparado para o prompt.');
+                          const finalDoc = await prepareDocumentForPrompt(primaryDoc);
                           setPromptModalText(generateLLMPrompt({ item, lancamento, documento: finalDoc, servidor }));
-                          return;
-
-                          // Lazy transcription for older or incomplete documents
-                          const needsTranscription = doc && doc.caminho_storage && (
-                            !doc.transcricao ||
-                            (doc.transcricao.includes('--- P?GINA 1') && !doc.transcricao.includes('--- P?GINA 2'))
-                          );
-                          if (needsTranscription) {
-                            const toastId = toast.loading('Transcrevendo documento para análise...');
-                            try {
-                              const blob = await getDocumentBlob(doc.id);
-                              if (blob) {
-                                let text = '';
-                                const fileName = doc.nome_arquivo.toLowerCase();
-                                const isPdf = blob.type === 'application/pdf' || fileName.endsWith('.pdf');
-                                const isImage = /^image\//i.test(blob.type) || /\.(jpg|jpeg|png|gif|bmp|webp)$/i.test(fileName);
-                                const isTextFile = blob.type.startsWith('text/') || /\.(txt|md|json)$/i.test(fileName);
-
-                                console.log(`[LazyTranscription] doc=${doc.id}, blobType="${blob.type}", fileName="${doc.nome_arquivo}", isPdf=${isPdf}, isImage=${isImage}`);
-
-                                if (isPdf) {
-                                  const pdfFile = new File([blob], doc.nome_arquivo, { type: 'application/pdf' });
-                                  text = (await analyzePdfTranscription(pdfFile)).text;
-                                } else if (isImage) {
-                                  const { extractTextFromImage } = await import('../lib/ocr');
-                                  text = await extractTextFromImage(blob);
-                                } else if (isTextFile) {
-                                  text = await blob.text();
-                                }
-
-                                console.log(`[LazyTranscription] Resultado: ${text.length} caracteres extraídos.`);
-
-                                if (text) {
-                                  updateDocumento(doc.id, { transcricao: text });
-                                  finalDoc = { ...doc, transcricao: text };
-                                  toast.success('Transcrição concluída!', { id: toastId });
-                                } else {
-                                  toast.error('Não foi possível extrair texto. O documento pode ser uma imagem escaneada.', { id: toastId });
-                                }
-                              } else {
-                                toast.error('Documento não encontrado no armazenamento local.', { id: toastId });
-                              }
-                            } catch (err) {
-                              console.error('Erro na transcrição tardia:', err);
-                              toast.error('Não foi possível transcrever este documento.', { id: toastId });
-                            }
-                          }
-
-                          const prompt = generateLLMPrompt({ item, lancamento, documento: finalDoc, servidor });
-                          console.log(`[ValidarIA] Prompt gerado: ${prompt.length} caracteres.`);
-
-                          // Open modal so user can copy full text reliably
-                          setPromptModalText(prompt);
                         }}
                         className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100"
                         title="Copiar prompt para testar este lançamento em uma IA"
@@ -1005,13 +1154,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                         <div className="flex items-center justify-center text-gray-400 hover:text-violet-600 cursor-help transition-colors">
                           <Info className="h-4 w-4" />
                         </div>
-
-                        {/* Custom Tooltip - Positioned BELOW to avoid clipping */}
                         <div className="pointer-events-none absolute top-full right-0 mt-3 w-64 origin-top-right scale-95 opacity-0 transition-all duration-200 group-hover/tooltip:scale-100 group-hover/tooltip:opacity-100 z-[999]">
                           <div className="rounded-xl border border-violet-100 bg-white p-3.5 shadow-2xl ring-1 ring-black/5">
-                            {/* Arrow Pointer (now at the TOP) */}
                             <div className="absolute -top-1 right-2 h-2 w-2 rotate-45 border-t border-l border-violet-50 bg-white" />
-
                             <div className="mb-2.5 flex items-center gap-2 border-b border-violet-50 pb-2">
                               <Sparkles className="h-3 w-3 text-violet-500" />
                               <p className="text-[11px] font-black uppercase tracking-wider text-violet-700">Guia de Validação com IA</p>
@@ -1038,8 +1183,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       </div>
                     </div>
                   </div>
-                  {doc?.gedoc_links && <ul className="mt-3 space-y-1 rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-[11px] text-emerald-900">{doc.gedoc_links.map((link) => <li key={link} className="truncate font-mono">{link}</li>)}</ul>}
-                  {doc && isOpen && blobUrls[doc.id] && <div className="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white"><iframe src={blobUrls[doc.id]} title={doc.nome_arquivo} className="h-[420px] w-full sm:h-[520px]" /></div>}
                 </div>
               );
             })}

@@ -75,6 +75,13 @@ function normalizeFileName(value: string): string {
     .trim();
 }
 
+function migrateLancamento(l: Lancamento): Lancamento {
+  if (l.documento_id && !l.comprovantes_ids) {
+    return { ...l, comprovantes_ids: [l.documento_id] };
+  }
+  return l;
+}
+
 // Migrate pre-multi-session data (flat keys) to the new format.
 // Returns a SessionSummary[] to seed the sessions index, or [] if nothing to migrate.
 function migrateOldSession(): SessionSummary[] {
@@ -134,6 +141,8 @@ interface AppContextType {
   addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
   updateLancamento: (lancamentoId: string, updates: Partial<Omit<Lancamento, 'id'>>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
+  addComprovanteToLancamento: (lancamentoId: string, documentoId: string) => void;
+  removeComprovanteFromLancamento: (lancamentoId: string, documentoId: string) => Promise<void>;
   addDocumento: (doc: Omit<Documento, 'id' | 'data_upload'>) => Documento;
   addDocumentoFromFile: (params: {
     servidorId: string;
@@ -192,7 +201,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [lancamentos, setLancamentos] = useState<Lancamento[]>(() => {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
-    return id ? loadJson<Lancamento[]>(`rsc-tae-${id}-lancamentos`, []) : [];
+    const raw = id ? loadJson<Lancamento[]>(`rsc-tae-${id}-lancamentos`, []) : [];
+    return raw.map(migrateLancamento);
   });
 
   const [processo, setProcesso] = useState<ProcessoRSC>(() => {
@@ -325,7 +335,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveSessionId(id);
     setServidor(loadJson<Servidor | null>(keys.perfil, null));
     setDocumentos(loadJson<Documento[]>(keys.documentos, []));
-    setLancamentos(loadJson<Lancamento[]>(keys.lancamentos, []));
+    setLancamentos(loadJson<Lancamento[]>(keys.lancamentos, []).map(migrateLancamento));
     setProcesso(loadJson<ProcessoRSC>(keys.processo, INITIAL_PROCESSO));
     setWizardRecommendedIds(loadJson<string[]>(keys.wizardIds, []));
   };
@@ -369,7 +379,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeSessionId) return;
     setServidor(session.perfil);
     setDocumentos(session.documentos);
-    setLancamentos(session.lancamentos);
+    setLancamentos(session.lancamentos.map(migrateLancamento));
     setProcesso(session.processo ?? INITIAL_PROCESSO);
     setWizardRecommendedIds(session.wizardIds);
   };
@@ -404,7 +414,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveSessionId(id);
     setServidor(restored.perfil);
     setDocumentos(restored.documentos);
-    setLancamentos(restored.lancamentos);
+    setLancamentos(restored.lancamentos.map(migrateLancamento));
     setProcesso(restored.processo ?? INITIAL_PROCESSO);
     setWizardRecommendedIds(restored.wizardIds);
   };
@@ -561,6 +571,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return removed;
   };
 
+  const addComprovanteToLancamento = (lancamentoId: string, documentoId: string) => {
+    setLancamentos((current) =>
+      current.map((l) =>
+        l.id === lancamentoId
+          ? { ...l, comprovantes_ids: [...new Set([...(l.comprovantes_ids ?? []), documentoId])] }
+          : l,
+      ),
+    );
+  };
+
+  const removeComprovanteFromLancamento = async (lancamentoId: string, documentoId: string) => {
+    setLancamentos((current) =>
+      current.map((l) =>
+        l.id === lancamentoId
+          ? { ...l, comprovantes_ids: (l.comprovantes_ids ?? []).filter((id) => id !== documentoId) }
+          : l,
+      ),
+    );
+    const usadoEmOutros = lancamentos.some(
+      (l) => l.id !== lancamentoId && (l.comprovantes_ids ?? []).includes(documentoId),
+    );
+    if (!usadoEmOutros) {
+      await deleteDocumento(documentoId);
+    }
+  };
+
   const updateDocumento = (docId: string, updates: Partial<Documento>) => {
     setDocumentos((current) =>
       current.map((doc) => (doc.id === docId ? { ...doc, ...updates } : doc))
@@ -593,6 +629,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addLancamento,
         updateLancamento,
         removeLancamento,
+        addComprovanteToLancamento,
+        removeComprovanteFromLancamento,
         addDocumento,
         addDocumentoFromFile,
         addDocumentoFromGedocLinks,
