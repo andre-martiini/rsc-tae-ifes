@@ -60,16 +60,18 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
   const { servidor, nivelPleiteado, processo, lancamentos, itensRSC, documentos } = params;
   const docsById = new Map(documentos.map((doc) => [doc.id, doc]));
   const itensById = new Map(itensRSC.map((item) => [item.id, item]));
-  const usedDocumentIds = Array.from(new Set(lancamentos.map((entry) => entry.documento_id).filter(Boolean) as string[]));
+  const getIds = (l: Lancamento) => l.comprovantes_ids ?? (l.documento_id ? [l.documento_id] : []);
+  const usedDocumentIds = Array.from(new Set(lancamentos.flatMap(getIds)));
   const usedDocuments = usedDocumentIds.map((id) => docsById.get(id)).filter((doc): doc is Documento => !!doc);
   const docKeys = new Map(usedDocuments.map((doc, index) => [doc.id, documentKey(index)]));
-  const documentLinksCount = lancamentos.filter((entry) => !!entry.documento_id).length;
+  const documentLinksCount = lancamentos.filter((entry) => getIds(entry).length > 0).length;
   const launchesByDocumentId = new Map<string, Lancamento[]>();
   lancamentos.forEach((entry) => {
-    if (!entry.documento_id) return;
-    const current = launchesByDocumentId.get(entry.documento_id) ?? [];
-    current.push(entry);
-    launchesByDocumentId.set(entry.documento_id, current);
+    for (const docId of getIds(entry)) {
+      const current = launchesByDocumentId.get(docId) ?? [];
+      current.push(entry);
+      launchesByDocumentId.set(docId, current);
+    }
   });
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
   const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
@@ -169,7 +171,8 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     '',
     ...launches.flatMap((entry, index) => {
       const item = itensById.get(entry.item_rsc_id);
-      const doc = entry.documento_id ? docsById.get(entry.documento_id) : undefined;
+      const firstDocId = getIds(entry)[0];
+      const doc = firstDocId ? docsById.get(firstDocId) : undefined;
       return [
         '------------------------------------------------------------',
         `LANCAMENTO ${index + 1}: ${itemCode(item)}`,
