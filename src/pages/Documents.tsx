@@ -179,13 +179,13 @@ function buildInventoryRows(params: {
 
   const usageMap = new Map<string, DocumentUsage[]>();
   lancamentos.forEach((lancamento) => {
-    if (!lancamento.documento_id || !docsById.has(lancamento.documento_id)) return;
-    const current = usageMap.get(lancamento.documento_id) ?? [];
-    current.push({
-      lancamento,
-      item: itemsById.get(lancamento.item_rsc_id),
-    });
-    usageMap.set(lancamento.documento_id, current);
+    const ids = lancamento.comprovantes_ids ?? (lancamento.documento_id ? [lancamento.documento_id] : []);
+    for (const docId of ids) {
+      if (!docsById.has(docId)) continue;
+      const current = usageMap.get(docId) ?? [];
+      current.push({ lancamento, item: itemsById.get(lancamento.item_rsc_id) });
+      usageMap.set(docId, current);
+    }
   });
 
   return docs
@@ -299,9 +299,10 @@ export default function Documents() {
 
   const missingDocumentLaunches = useMemo(() => {
     const docIds = new Set(docsDoServidor.map((doc) => doc.id));
-    return lancamentosDoServidor.filter(
-      (lancamento) => lancamento.documento_id && !docIds.has(lancamento.documento_id),
-    );
+    return lancamentosDoServidor.filter((lancamento) => {
+      const ids = lancamento.comprovantes_ids ?? (lancamento.documento_id ? [lancamento.documento_id] : []);
+      return ids.length > 0 && ids.every((id) => !docIds.has(id));
+    });
   }, [docsDoServidor, lancamentosDoServidor]);
 
   const filteredRows = useMemo(() => {
