@@ -105,7 +105,7 @@ export default function FeedbackWidget() {
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = Array.from(e.target.files ?? []);
+    const selected = Array.from(e.target.files ?? []) as File[];
     if (selected.length === 0) return;
 
     const MAX_SIZE = 5 * 1024 * 1024;
