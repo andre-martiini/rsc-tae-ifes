@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '11 de junho de 2026',
+    title: 'Mais facilidade para ajustar e alterar seus comprovantes salvos',
+    description: 'Agora ficou muito mais simples gerenciar os documentos de cada atividade e fazer ajustes nas informações que você já cadastrou.',
+    features: [
+      'Controle individual de documentos: mesmo após realizar um carregamento em lote para uma atividade, você pode adicionar ou remover comprovantes de forma individual, sem precisar apagar ou refazer todo o lançamento (válido para lançamentos realizados a partir de 11/06/2026).',
+      'Edição simplificada de lançamentos: se você precisar corrigir datas, quantidades ou observações de um item já salvo, basta clicar em "Editar lançamento" diretamente na aba de histórico.',
+    ],
+  },
+  {
     date: '08 de junho de 2026',
     title: 'Feedback com Imagens, Print da Tela e Correções de Layout',
     description: 'O canal de feedback ganhou suporte a anexo de imagens e captura de tela diretamente pelo widget, além de correções de sobreposição de botões na tela de Itens e na barra lateral.',
