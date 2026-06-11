@@ -39,7 +39,7 @@ export default function Consolidation() {
     [lancamentosDoServidor],
   );
   const docUtilizadosSet = useMemo(
-    () => new Set(lancamentosDoServidor.map((l) => l.documento_id).filter(Boolean)),
+    () => new Set(lancamentosDoServidor.flatMap((l) => l.comprovantes_ids ?? (l.documento_id ? [l.documento_id] : []))),
     [lancamentosDoServidor],
   );
 
@@ -125,7 +125,7 @@ export default function Consolidation() {
   }, [resumoItens]);
 
   const documentosUtilizados = useMemo(() => {
-    const ids = new Set(lancamentosDoServidor.map((l) => l.documento_id));
+    const ids = new Set(lancamentosDoServidor.flatMap((l) => l.comprovantes_ids ?? (l.documento_id ? [l.documento_id] : [])));
     return documentos
       .filter((d) => ids.has(d.id))
       .sort((a, b) => (a.data_upload < b.data_upload ? 1 : -1));
@@ -886,7 +886,7 @@ export default function Consolidation() {
                                       <div className="flex flex-col gap-1.5">
                                         {itemLancamentos.map((l, i) => (
                                           <span key={i} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
-                                            [DOC {i + 1}] {documentos.find(d => d.id === l.documento_id)?.nome_arquivo}
+                                            [DOC {i + 1}] {documentos.find(d => d.id === (l.comprovantes_ids?.[0] ?? l.documento_id))?.nome_arquivo}
                                           </span>
                                         ))}
                                       </div>

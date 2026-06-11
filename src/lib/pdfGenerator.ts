@@ -847,7 +847,8 @@ export async function generateMemorialDescritivo(
       if (!item) return;
       const entry = groupedRows.get(item.id) || { item, points: 0, docs: [] };
       entry.points = addPointValues(entry.points, l.pontos_calculados);
-      const doc = l.documento_id ? docsById.get(l.documento_id) : undefined;
+      const firstDocId = l.comprovantes_ids?.[0] ?? l.documento_id;
+      const doc = firstDocId ? docsById.get(firstDocId) : undefined;
       if (doc) {
         const docLabel = `[DOC ${entry.docs.length + 1}] ${doc.nome_arquivo}`;
         entry.docs.push(docLabel);
@@ -931,7 +932,8 @@ export async function generateMemorialDescritivo(
     const item = itensRSC.find((i) => i.id === l.item_rsc_id);
     if (!item) continue;
 
-    const docItem = l.documento_id ? documentos.find((d) => d.id === l.documento_id) : undefined;
+    const firstDocId = l.comprovantes_ids?.[0] ?? l.documento_id;
+    const docItem = firstDocId ? documentos.find((d) => d.id === firstDocId) : undefined;
     const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
     const range = docRefKey && documentPageRanges ? documentPageRanges[docRefKey] : undefined;
 

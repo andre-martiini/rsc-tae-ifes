@@ -50,7 +50,10 @@ function buildComprovacaoGroups(
       const documentosDoItem = sortDocuments(Array.from(
         new Map(
           itemLancamentos
-            .map((entry) => docsById.get(entry.documento_id))
+            .flatMap((entry) => {
+              const ids = entry.comprovantes_ids ?? (entry.documento_id ? [entry.documento_id] : []);
+              return ids.map((id) => docsById.get(id));
+            })
             .filter((doc): doc is Documento => !!doc)
             .map((doc) => [doc.id, doc]),
         ).values(),
