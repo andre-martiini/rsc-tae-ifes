@@ -50,8 +50,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, addComprovanteToLancamento, removeComprovanteFromLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
   const [docMode, setDocMode] = useState<'upload' | 'reference'>('upload');
-  const [file, setFile] = useState<File | null>(null);
-  const [uploadMeta, setUploadMeta] = useState<UploadMeta | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; meta: UploadMeta }>>([]);
   const [uploadFeedback, setUploadFeedback] = useState<string | null>(null);
   const [isPreparingUpload, setIsPreparingUpload] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -117,8 +116,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   }, [uploadHelpOpen, linksHelpOpen]);
 
   const resetUpload = useCallback(() => {
-    setFile(null);
-    setUploadMeta(null);
+    setPendingFiles([]);
     setUploadFeedback(null);
     setIsPreparingUpload(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -185,104 +183,41 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       const normalized = await normalizeUploadToPdf(incoming);
       toast.dismiss(toastId);
       if (normalized.file.size > 20 * 1024 * 1024) {
-        setFile(null);
-        setUploadMeta(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
         setUploadFeedback('O arquivo excede o limite de 20 MB. Reduza o tamanho ou otimize o PDF e tente novamente.');
         setIsPreparingUpload(false);
         return;
       }
-      setFile(normalized.file);
-      setUploadMeta({
+      const meta: UploadMeta = {
         converted: normalized.converted,
         originalName: normalized.originalName,
         originalMimeType: normalized.originalMimeType,
         transcription: normalized.transcription,
         componentHashes: [originalHash],
         componentFiles: [{ nome_arquivo: incoming.name, hash_arquivo: originalHash }],
-      });
-      setUploadFeedback(normalized.converted ? `Convertido para PDF: ${normalized.originalName}` : `PDF pronto: ${normalized.file.name}`);
+      };
+      setPendingFiles((prev) => [...prev, { file: normalized.file, meta }]);
+      setUploadFeedback(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     } catch (error) {
       toast.dismiss();
-      setFile(null);
-      setUploadMeta(null);
       setUploadFeedback(error instanceof Error ? error.message : 'Formato inválido.');
     }
     setIsPreparingUpload(false);
   };
 
-  const mergeAndAcceptFiles = async (fileList: FileList | null) => {
+  const handleFileInput = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
-    if (fileList.length === 1) return void acceptPreparedFile(fileList[0]);
-    try {
-      setIsPreparingUpload(true);
-      setUploadFeedback(`Preparando ${fileList.length} arquivo(s) para consolidacao...`);
-      const selectedFiles = Array.from(fileList);
-      const componentFiles: NonNullable<Documento['arquivos_componentes']> = [];
-      const pdfFiles: File[] = [];
-
-      for (let index = 0; index < selectedFiles.length; index += 1) {
-        const candidate = selectedFiles[index];
-        setUploadFeedback(`Convertendo arquivo ${index + 1}/${selectedFiles.length}: ${candidate.name}`);
-        const hash = await computeDocumentHash(candidate);
-        componentFiles.push({ nome_arquivo: candidate.name, hash_arquivo: hash });
-        // toPdfFile converts format only — skips OCR to avoid memory pressure on large docs
-        pdfFiles.push(await toPdfFile(candidate));
-      }
-
-      setUploadFeedback(`Mesclando ${pdfFiles.length} arquivo(s) em um unico PDF...`);
-      const merged = await PDFDocument.create();
-      let expectedPages = 0;
-
-      for (let i = 0; i < pdfFiles.length; i += 1) {
-        const fileName = selectedFiles[i].name;
-        let src: PDFDocument;
-        try {
-          src = await PDFDocument.load(await pdfFiles[i].arrayBuffer(), { ignoreEncryption: true });
-        } catch {
-          throw new Error(`Não foi possível ler o arquivo "${fileName}". Verifique se ele é um PDF válido.`);
-        }
-        const indices = src.getPageIndices();
-        if (indices.length === 0) {
-          throw new Error(`O arquivo "${fileName}" não contém páginas legíveis ou não pôde ser processado.`);
-        }
-        const pages = await merged.copyPages(src, indices);
-        pages.forEach((page) => merged.addPage(page));
-        expectedPages += indices.length;
-      }
-
-      if (merged.getPageCount() !== expectedPages) {
-        throw new Error(`Erro na consolidação: esperado ${expectedPages} página(s), mas apenas ${merged.getPageCount()} foram incluídas.`);
-      }
-
-      const mergedBytes = await merged.save();
-      const mergedFile = new File([mergedBytes as unknown as BlobPart], `documentos-anexados-${fileList.length}.pdf`, { type: 'application/pdf' });
-      if (mergedFile.size > 20 * 1024 * 1024) {
-        setUploadFeedback('O PDF consolidado excede 20 MB. Reduza a resolução das imagens, diminua o número de páginas ou otimize os arquivos individuais antes de enviar.');
-        setIsPreparingUpload(false);
-        return;
-      }
-      setFile(mergedFile);
-      setUploadMeta({
-        converted: true,
-        originalName: `${fileList.length} arquivo(s) combinados`,
-        originalMimeType: 'application/pdf',
-        transcription: undefined,
-        componentHashes: componentFiles.map((entry) => entry.hash_arquivo),
-        componentFiles,
-      });
-      setUploadFeedback(`${fileList.length} arquivo(s) consolidados em um único PDF (${expectedPages} página(s)).`);
-    } catch (error) {
-      setFile(null);
-      setUploadMeta(null);
-      const message = error instanceof Error ? error.message : 'Não foi possível preparar os arquivos selecionados.';
-      setUploadFeedback(message);
-      toast.error(message);
+    for (const f of Array.from(fileList) as File[]) {
+      await acceptPreparedFile(f);
     }
-    setIsPreparingUpload(false);
   };
 
-  const handleConsolidateLinks = async () => {
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+    const handleConsolidateLinks = async () => {
     if (referenceLinks.length === 0) return;
 
     try {
@@ -330,16 +265,15 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         { type: 'application/pdf' }
       );
 
-      setFile(mergedFile);
-      setUploadMeta({
+      const consolidatedMeta: UploadMeta = {
         converted: true,
         originalName: `${downloadedFiles.length} link(s) consolidados`,
         originalMimeType: 'application/pdf',
         transcription: undefined,
         componentHashes: componentFiles.map((entry) => entry.hash_arquivo),
         componentFiles,
-      });
-
+      };
+      setPendingFiles((prev) => [...prev, { file: mergedFile, meta: consolidatedMeta }]);
       setDocMode('upload'); // Switch to upload mode after consolidation
       toast.success('Links baixados e consolidados em um único PDF!');
       if (failedLinks.length > 0) {
@@ -474,10 +408,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     if (!quantidade.trim() || Number.isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) return void toast.error('Informe uma quantidade maior que zero.');
     if (item.modo_calculo !== 'manual' && (!dataInicio || !effectiveEndDate)) return void toast.error('Este item exige datas de início e fim.');
     if (docMode === 'reference' && referenceLinks.length === 0) return void toast.error(`Adicione ao menos um ${institutionConfig.documentLinks.label}.`);
-    if ((docMode === 'upload') && !file) return void toast.error('Anexe ou baixe um documento comprobatório.');
+    if ((docMode === 'upload') && pendingFiles.length === 0) return void toast.error('Anexe ao menos um documento comprobatório.');
     try {
       setSaving(true);
       let documentoId: string | undefined = undefined;
+      let allComprovanteIds: string[] = [];
       let newDoc: Documento | undefined = undefined;
       let isDuplicate = false;
 
@@ -487,27 +422,33 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           links: referenceLinks,
         });
         documentoId = newDoc.id;
-      } else if (file) {
-        const result = await addDocumentoFromFile({
-          servidorId: servidor.id,
-          file,
-          sourceName: uploadMeta?.originalName,
-          sourceMimeType: uploadMeta?.originalMimeType,
-          convertedToPdf: uploadMeta?.converted,
-          transcription: uploadMeta?.transcription,
-          componentHashes: uploadMeta?.componentHashes,
-          componentFiles: uploadMeta?.componentFiles,
-        });
-        newDoc = result.doc;
-        documentoId = result.doc.id;
-        isDuplicate = result.exists;
+        allComprovanteIds = [newDoc.id];
+      } else if (pendingFiles.length > 0) {
+        const uploadedIds: string[] = [];
+        for (const { file: f, meta } of pendingFiles) {
+          const result = await addDocumentoFromFile({
+            servidorId: servidor.id,
+            file: f,
+            sourceName: meta.originalName,
+            sourceMimeType: meta.originalMimeType,
+            convertedToPdf: meta.converted,
+            transcription: meta.transcription,
+            componentHashes: meta.componentHashes,
+            componentFiles: meta.componentFiles,
+          });
+          uploadedIds.push(result.doc.id);
+          if (!newDoc) newDoc = result.doc;
+        }
+        documentoId = uploadedIds[0];
+        allComprovanteIds = uploadedIds;
+        isDuplicate = false;
       }
       const pontosCalculados = calculateLancamentoPoints(quantidadeNumerica, item.pontos_por_unidade);
       const lancamentoParaPrompt = {
         servidor_id: servidor.id,
         item_rsc_id: item.id,
         documento_id: documentoId,
-        comprovantes_ids: documentoId ? [documentoId] : [],
+        comprovantes_ids: allComprovanteIds.length > 0 ? allComprovanteIds : (documentoId ? [documentoId] : []),
         data_inicio: showDateFields ? dataInicio : '',
         data_fim: showDateFields ? effectiveEndDate : '',
         quantidade_informada: quantidadeNumerica,
@@ -826,14 +767,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   )}
                 </div>
               ) : (
-                <div>
-                  <div className={`relative rounded-xl border p-4 transition-all ${isPreparingUpload ? 'border-blue-300 bg-blue-50/70' : file ? 'border-emerald-300 bg-emerald-50/60' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); if (!isPreparingUpload) setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (!isPreparingUpload) void mergeAndAcceptFiles(e.dataTransfer.files); }}>
-                    <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void mergeAndAcceptFiles(e.target.files)} disabled={isPreparingUpload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
-                    {file && !isPreparingUpload && <button type="button" onClick={(e) => { e.stopPropagation(); resetUpload(); }} className="absolute right-4 top-4 rounded-full border border-emerald-200 bg-white p-1.5 text-emerald-700"><Trash2 className="h-3.5 w-3.5" /></button>}
-                    <div className="relative z-10 mb-3 flex items-start justify-between gap-3 pr-10 text-xs text-gray-500">
+                <div className="space-y-2">
+                  <div className={`relative rounded-xl border p-4 transition-all ${isPreparingUpload ? 'border-blue-300 bg-blue-50/70' : dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 bg-gray-50'}`} onDragOver={(e) => { e.preventDefault(); if (!isPreparingUpload) setDragActive(true); }} onDragLeave={(e) => { e.preventDefault(); if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragActive(false); }} onDrop={(e) => { e.preventDefault(); setDragActive(false); if (!isPreparingUpload) void handleFileInput(e.dataTransfer.files); }}>
+                    <input ref={fileInputRef} type="file" multiple accept={SUPPORTED_UPLOAD_ACCEPT} onChange={(e) => void handleFileInput(e.target.files)} disabled={isPreparingUpload} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait" />
+                    <div className="relative z-10 mb-3 flex items-start justify-between gap-3 pr-2 text-xs text-gray-500">
                       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                        <span>Clique, arraste ou cole um arquivo. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.</span>
-                        <span className="font-semibold text-gray-700">Limite: 20 MB.</span>
+                        <span>Clique, arraste ou cole arquivos. Aceitamos PDF, JPG, PNG, TXT, MD ou JSON.</span>
+                        <span className="font-semibold text-gray-700">Limite: 20 MB por arquivo.</span>
                         <div className="inline-flex items-center gap-1">
                           <span>Arquivo grande?</span>
                           <div className="group relative flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
@@ -853,10 +793,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       </div>
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setUploadHelpOpen(true);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); setUploadHelpOpen(true); }}
                         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-blue-100 bg-white px-2 py-1 text-[11px] font-semibold text-blue-700 shadow-sm hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
                         aria-label="Ver exemplo de envio de multiplos arquivos"
                       >
@@ -864,23 +801,42 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                         Ver exemplo
                       </button>
                     </div>
-                    <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${isPreparingUpload ? 'border-blue-300 text-blue-800' : file ? 'border-emerald-300 text-emerald-800' : 'border-gray-200 text-gray-700'}`}>
+                    <div className={`flex min-h-9 items-center rounded-lg border border-dashed bg-white px-3 text-sm ${isPreparingUpload ? 'border-blue-300 text-blue-800' : 'border-gray-200 text-gray-700'}`}>
                       <div className="mr-2 rounded-full bg-white/80 p-1">
                         {isPreparingUpload ? <LoaderCircle className="h-4 w-4 animate-spin text-blue-500" /> : <UploadCloud className="h-4 w-4 text-gray-400" />}
                       </div>
-                      <p className="flex-1 truncate" title={file?.name}>
+                      <p className="flex-1 truncate">
                         {isPreparingUpload
-                          ? (uploadFeedback ?? 'Preparando arquivos...')
-                          : file
-                            ? file.name
-                            : dragActive
-                              ? 'Solte os arquivos aqui'
-                              : 'Clique para selecionar um arquivo'}
+                          ? (uploadFeedback ?? 'Preparando arquivo...')
+                          : dragActive
+                            ? 'Solte os arquivos aqui'
+                            : 'Clique ou arraste para adicionar arquivos'}
                       </p>
-                      <p className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-400">{isPreparingUpload ? 'Processando' : file ? 'Pronto' : 'Anexar'}</p>
+                      <p className="ml-3 shrink-0 text-[10px] font-bold uppercase tracking-widest text-gray-400">{isPreparingUpload ? 'Processando' : 'Adicionar'}</p>
                     </div>
                   </div>
-                  {uploadFeedback && <p className={`mt-2 text-xs ${isPreparingUpload ? 'text-blue-700' : file ? 'text-emerald-700' : 'text-gray-500'}`}>{uploadFeedback}</p>}
+                  {uploadFeedback && <p className={`text-xs ${isPreparingUpload ? 'text-blue-700' : 'text-red-600'}`}>{uploadFeedback}</p>}
+                  {/* Lista de arquivos pendentes */}
+                  {pendingFiles.length > 0 && (
+                    <div className="space-y-1.5 rounded-xl border border-emerald-100 bg-emerald-50/50 p-3">
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">{pendingFiles.length} arquivo{pendingFiles.length !== 1 ? 's' : ''} prontos para envio</p>
+                      {pendingFiles.map((entry, index) => (
+                        <div key={index} className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-medium text-gray-800">{entry.meta.originalName}</p>
+                              {entry.meta.converted && <p className="text-[10px] text-gray-400">convertido para PDF</p>}
+                              <p className="text-[10px] text-gray-400">{(entry.file.size / 1024).toFixed(0)} KB</p>
+                            </div>
+                          </div>
+                          <button type="button" onClick={() => removePendingFile(index)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-red-100 text-red-400 hover:bg-red-50">
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
