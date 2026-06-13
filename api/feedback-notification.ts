@@ -9,6 +9,12 @@ type FeedbackNotificationPayload = {
     rota?: string;
     resolucao?: string;
     navegador?: string;
+    attachments?: Array<{
+      url?: string;
+      name?: string;
+      size?: number;
+      mimeType?: string;
+    }>;
   };
 };
 
@@ -68,6 +74,38 @@ function truncateTelegramMessage(value: string): string {
   return `${value.slice(0, maxLength - 40)}\n\n[Mensagem truncada no Telegram]`;
 }
 
+function getTipoLabel(tipo?: string): string {
+  const labels: Record<string, string> = {
+    bug: 'Bug / Erro',
+    sugestao: 'Sugestao',
+    elogio: 'Elogio',
+    duvida: 'Duvida',
+    outro: 'Outro',
+  };
+
+  return tipo ? labels[tipo] || tipo : 'nao informado';
+}
+
+function getSeverityLabel(tipo?: string, mensagem?: string): string {
+  const normalizedTipo = (tipo || '').toLowerCase();
+  const normalizedMessage = (mensagem || '').toLowerCase();
+
+  if (
+    normalizedTipo === 'bug' ||
+    ['erro', 'bug', 'trava', 'travou', 'crash', 'nao consigo', 'não consigo'].some((term) =>
+      normalizedMessage.includes(term),
+    )
+  ) {
+    return 'ALTA';
+  }
+
+  if (normalizedTipo === 'duvida' || normalizedTipo === 'sugestao') {
+    return 'MEDIA';
+  }
+
+  return 'BAIXA';
+}
+
 async function sendTelegramNotification(feedbackId: string, feedback: NonNullable<FeedbackNotificationPayload['feedback']>) {
   const config = getTelegramConfig();
   if (!config) {
@@ -75,15 +113,23 @@ async function sendTelegramNotification(feedbackId: string, feedback: NonNullabl
   }
 
   const feedbackUrl = getFeedbackUrl(feedbackId);
+  const attachmentsCount = feedback.attachments?.length || 0;
+  const severityLabel = getSeverityLabel(feedback.tipo, feedback.mensagem);
   const lines = [
-    '<b>Novo feedback recebido</b>',
+    '<b>Sistema RSC-TAE - Novo feedback recebido</b>',
+    '',
+    'Origem: <b>Sistema RSC-TAE</b>',
     '',
     `<b>ID:</b> ${escapeHtml(feedbackId)}`,
     `<b>Nome:</b> ${escapeHtml(feedback.nome || 'Anonimo')}`,
     `<b>E-mail:</b> ${escapeHtml(feedback.email || 'nao informado')}`,
-    `<b>Tipo:</b> ${escapeHtml(feedback.tipo || 'nao informado')}`,
     `<b>Tela:</b> ${escapeHtml(feedback.tela || 'Geral')}`,
+    `<b>Severidade:</b> ${escapeHtml(severityLabel)}`,
+    `<b>Tipo:</b> ${escapeHtml(getTipoLabel(feedback.tipo))}`,
     `<b>Rota:</b> ${escapeHtml(feedback.rota || '/')}`,
+    `<b>Resolucao:</b> ${escapeHtml(feedback.resolucao || 'nao capturada')}`,
+    `<b>Navegador:</b> ${escapeHtml(feedback.navegador || 'nao capturado')}`,
+    `<b>Anexos:</b> ${attachmentsCount}`,
     '',
     '<b>Mensagem:</b>',
     escapeHtml(feedback.mensagem || ''),
