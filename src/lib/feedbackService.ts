@@ -61,6 +61,27 @@ export interface FeedbackPayload {
 
 type QueuedItem = Omit<FeedbackPayload, "createdAt">;
 
+async function notifyFeedbackCreated(feedbackId: string, payload: Omit<FeedbackPayload, "createdAt">): Promise<void> {
+  try {
+    const response = await fetch("/api/feedback-notification", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        feedbackId,
+        feedback: payload,
+      }),
+    });
+
+    if (!response.ok) {
+      console.warn("[feedbackService] Notificacao Telegram nao enviada:", response.status);
+    }
+  } catch (error) {
+    console.warn("[feedbackService] Falha ao chamar notificacao Telegram:", error);
+  }
+}
+
 function readQueue(): QueuedItem[] {
   try {
     return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || "[]");
@@ -101,10 +122,11 @@ export const sendFeedback = async (
   }
 
   try {
-    await addDoc(collection(db, "feedbacks"), {
+    const docRef = await addDoc(collection(db, "feedbacks"), {
       ...payload,
       createdAt: serverTimestamp(),
     });
+    await notifyFeedbackCreated(docRef.id, payload);
     return { success: true };
   } catch (error) {
     console.error("[feedbackService] Falha ao enviar, enfileirando localmente:", error);
@@ -134,11 +156,12 @@ export const processOfflineQueue = async (): Promise<void> => {
   const failed: QueuedItem[] = [];
   for (const item of queue) {
     try {
-      await addDoc(collection(db, "feedbacks"), {
+      const docRef = await addDoc(collection(db, "feedbacks"), {
         ...item,
         createdAt: serverTimestamp(),
         retry: true,
       });
+      await notifyFeedbackCreated(docRef.id, item);
     } catch {
       failed.push(item);
     }
