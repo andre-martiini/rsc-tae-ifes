@@ -1,5 +1,6 @@
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { formatPointValue, sumPointValues } from './points';
+import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura } from './utils';
 
 type NivelResumo = {
@@ -74,7 +75,7 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     }
   });
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
-  const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
+  const itensDistintos = getDistinctRscCriterionCount(lancamentos, itensRSC);
 
   const header = [
     'Voce e um Auditor Juridico de IA especialista em Reconhecimento de Saberes e Competencias (RSC) da Rede Federal de Educacao.',

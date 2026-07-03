@@ -14,6 +14,19 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '03 de julho de 2026',
+    title: 'Alinhamento ao Decreto nº 13.048/2026',
+    description: 'Atualização da base normativa e das telas principais após a publicação do decreto regulamentador do RSC-PCCTAE.',
+    features: [
+      'Página de legislação atualizada com o Decreto nº 13.048/2026 como regulamento vigente.',
+      'Avisos do sistema ajustados para versão beta baseada no decreto publicado, substituindo a comunicação anterior.',
+    ],
+    improvements: [
+      'Declarações do requerimento e do memorial reforçadas com não duplicidade entre critérios, vedação de uso de pontos anteriores e atividades não ordinárias.',
+      'Validação de concessão anterior passou a exigir a data da última concessão para conferir o interstício de 3 anos.',
+    ],
+  },
+  {
     date: '11 de junho de 2026',
     title: 'Mais facilidade para ajustar e alterar seus comprovantes salvos',
     description: 'Agora ficou muito mais simples gerenciar os documentos de cada atividade e fazer ajustes nas informações que você já cadastrou.',

@@ -9,6 +9,7 @@ import {
 import { institutionConfig } from '../config/institution';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { addPointValues, formatPointValue, sumPointValues } from './points';
+import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura, sanitizeForTag } from './utils';
 
 export type NivelRsc = {
@@ -726,17 +727,18 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Pontuação total:', `${formatNumber(totalPontos)} pts`);
   writer.keyValue('Qtd. critérios utilizados:', `${itensDistintos}`);
   writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
-  writer.keyValue('Saldo anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
+  writer.keyValue('Saldo não aproveitado anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
   writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '?'));
+  writer.keyValue('Data da última concessão:', sanitize(formatDate(processo.data_ultima_concessao)));
 
   writer.section('3. Declaração do Servidor');
   writer.text('Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:', { size: 9 });
   writer.bullet('Todos os fatos apresentados ocorreram no exercício da carreira;');
-  writer.bullet('Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;');
-  writer.bullet('A documentação apresentada não foi utilizada em duplicidade no dossiê, vedada a duplicidade entre requisitos;');
-  writer.bullet('As atividades descritas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;');
+  writer.bullet('Nenhuma atividade aqui declarada foi utilizada para pontuação em concessões anteriores;');
+  writer.bullet('Cada atividade foi considerada uma única vez, sem utilização simultânea para mais de um critério específico;');
+  writer.bullet('As atividades descritas não representam exclusivamente atribuições ordinárias do cargo e demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;');
   writer.bullet('A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;');
-  writer.bullet('Tenho ciência de que informações falsas implicam responsabilidade administrativa.');
+  writer.bullet('Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.');
 
   writer.gap(16);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
@@ -784,7 +786,7 @@ export async function generateMemorialDescritivo(
   writer.gap(12);
 
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
-  const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
+  const itensDistintos = getDistinctRscCriterionCount(lancamentos, itensRSC);
 
   writer.section('1. Identificação do Servidor');
   const nivelClass = servidor.nivel_classificacao ?? 'C';
@@ -807,10 +809,11 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Pontuação total apresentada:', `${formatNumber(totalPontos)} pts`);
   writer.keyValue('Quantidade de critérios:', `${itensDistintos}`);
   writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
-  writer.keyValue('Saldo anterior:', processo?.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
+  writer.keyValue('Saldo não aproveitado anterior:', processo?.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
+  writer.keyValue('Data da última concessão:', sanitize(formatDate(processo?.data_ultima_concessao)));
 
   writer.section('3. Declaração do Servidor');
-  writer.text('Este memorial consolida os fatos, atividades e documentos informados pelo servidor para composição do dossiê do pedido de RSC-PCCTAE.', { size: 9 });
+  writer.text('Este memorial consolida os fatos, atividades e documentos informados pelo servidor para composição do dossiê do pedido de RSC-PCCTAE, observadas a não duplicidade entre critérios e a vedação de pontuação de atividades exclusivamente ordinárias do cargo.', { size: 9 });
 
   writer.addPage();
   writer.section('4. Memorial e Descrição das Atividades');
@@ -1098,7 +1101,7 @@ export async function generateRelatorioPontuacao(
   await writer.init();
 
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
-  const itensDistintos = new Set(lancamentos.map((entry) => entry.item_rsc_id)).size;
+  const itensDistintos = getDistinctRscCriterionCount(lancamentos, itensRSC);
 
   writer.section('1. Identificação do Servidor');
   writer.infoGrid(

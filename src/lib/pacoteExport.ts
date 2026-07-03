@@ -3,6 +3,7 @@ import { PDFDocument, StandardFonts, rgb, degrees, PDFPage } from 'pdf-lib';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { getDocumentBlob } from './documentStorage';
 import { sumPointValues } from './points';
+import { getDistinctRscCriterionCount } from './rsc';
 import { sanitizeForTag } from './utils';
 import {
   generateMemorialDescritivo,
@@ -118,7 +119,7 @@ export async function exportPacoteRSC(params: {
   const zip = new JSZip();
   const groups = buildComprovacaoGroups(lancamentos, itensRSC, documentos);
   const totalPontos = sumPointValues(lancamentos.map((lancamento) => lancamento.pontos_calculados));
-  const itensDistintos = new Set(lancamentos.map((lancamento) => lancamento.item_rsc_id)).size;
+  const itensDistintos = getDistinctRscCriterionCount(lancamentos, itensRSC);
 
   // 1. Criar o PDF unificado e rastrear intervalos de páginas para cada documento em cada item
   const unifiedPdf = await PDFDocument.create();

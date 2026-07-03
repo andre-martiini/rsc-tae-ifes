@@ -11,7 +11,6 @@ import {
   Trash2,
   Upload,
   UserCircle,
-  Beaker,
   X,
   Clock,
   CheckCircle2,
@@ -329,16 +328,16 @@ export default function LandingScreen() {
           )}
         </div>
 
-        {/* Banner de Aviso de Testes */}
+        {/* Banner de Aviso Beta */}
         <div className="group relative mb-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 transition-all hover:bg-amber-50 cursor-help">
           <div className="flex items-start gap-3">
             <div className="rounded-xl bg-amber-100 p-2 text-amber-600">
-              <Beaker className="h-5 w-5" />
+              <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Ambiente de Demonstração e Testes</h3>
+              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Versão beta baseada no decreto publicado</h3>
               <p className="mt-1 text-xs leading-relaxed text-amber-800/80">
-                Este sistema é um protótipo em fase de validação técnica e as regras de negócio são preliminares. <span className="font-bold underline decoration-amber-300 underline-offset-2">Saiba mais.</span>
+                O sistema foi ajustado ao Decreto nº 13.048/2026 e continua em evolução com atos complementares e normas internas. <span className="font-bold underline decoration-amber-300 underline-offset-2">Saiba mais.</span>
               </p>
               
               {/* Tooltip (Balão) */}
@@ -352,8 +351,8 @@ export default function LandingScreen() {
                     <div className="border-t border-gray-100 pt-3">
                       <p className="font-bold text-gray-900 mb-1 text-[11px] uppercase tracking-wider">Aviso Importante:</p>
                       <p>
-                        Os cálculos e critérios baseiam-se em interpretações preliminares da legislação do RSC-TAE e ainda não foram formalmente homologados pelas instâncias institucionais. 
-                        As regras de negócio podem sofrer alterações significativas na versão final definitiva.
+                        Os cálculos e critérios refletem a base regulamentar vigente do RSC-PCCTAE, mas a análise oficial é da CRSC-PCCTAE da instituição.
+                        Atos do Ministério da Educação e normas internas podem complementar documentos, fluxos e procedimentos.
                       </p>
                     </div>
                   </div>
