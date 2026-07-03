@@ -9,7 +9,7 @@ import { RSC_LEVELS } from '../data/mock';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
-import { getEligibleRscLevel, getServidorProbationaryStatus, validateLevelConstraints } from '../lib/rsc';
+import { getDistinctRscCriterionCount, getEligibleRscLevel, getServidorProbationaryStatus, validateLevelConstraints } from '../lib/rsc';
 import MainLayout from '../components/MainLayout';
 import WizardModal from '../components/WizardModal';
 
@@ -71,7 +71,7 @@ export default function Dashboard() {
 
   const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
   const totalPontos = sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados));
-  const itensDistintos = new Set(lancamentosDoServidor.map((lancamento) => lancamento.item_rsc_id)).size;
+  const itensDistintos = getDistinctRscCriterionCount(lancamentosDoServidor, itensRSC);
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
   const probationaryStatus = getServidorProbationaryStatus(servidor);
   const probationEndDate = probationaryStatus.probationEndDate?.toLocaleDateString('pt-BR');

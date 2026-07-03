@@ -1,8 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Menu, CheckCircle2, Download, Upload, Loader2, Beaker } from 'lucide-react';
+import { Menu, CheckCircle2, Download, Upload, Loader2 } from 'lucide-react';
 import { formatPointValue, sumPointValues } from '../lib/points';
 import { useAppContext } from '../context/AppContext';
-import { getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
+import { getDistinctRscCriterionCount, getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
 
 import { useBackup } from '../hooks/useBackup';
 
@@ -27,8 +27,8 @@ export default function AppHeader({
   );
 
   const itensDistintos = useMemo(
-    () => new Set(lancamentosDoServidor.map((l) => l.item_rsc_id)).size,
-    [lancamentosDoServidor]
+    () => getDistinctRscCriterionCount(lancamentosDoServidor, itensRSC),
+    [itensRSC, lancamentosDoServidor]
   );
 
   const nivelElegivel = useMemo(
@@ -106,16 +106,16 @@ export default function AppHeader({
                 </div>
               )}
 
-              {/* Aviso de Testes */}
+              {/* Aviso Beta */}
               <div className="group relative flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50/50 px-2.5 py-1 text-[9px] font-bold text-amber-700 shadow-inner cursor-help">
-                <Beaker className="h-3 w-3 text-amber-500" />
-                <span>TESTES</span>
+                <CheckCircle2 className="h-3 w-3 text-amber-500" />
+                <span>BETA</span>
 
                 {/* Tooltip Mobile */}
                 <div className="absolute top-full right-0 mt-2 w-48 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">
                   <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-xl">
                     <p className="text-[10px] leading-relaxed text-gray-600 font-normal normal-case">
-                      Ambiente de testes com regras preliminares. Use o canal de feedback.
+                      Versão beta alinhada ao Decreto nº 13.048/2026. Use o canal de feedback para ajustes.
                     </p>
                   </div>
                 </div>
@@ -164,18 +164,18 @@ export default function AppHeader({
             </div>
           </div>
 
-          {/* Centro: Aviso de Testes */}
+          {/* Centro: Aviso Beta */}
           <div className="flex items-center">
             <div className="group relative flex items-center gap-1.5 rounded-full border border-amber-100 bg-amber-50/50 px-3 py-1 text-[10px] font-bold text-amber-700 shadow-inner cursor-help">
-              <Beaker className="h-3 w-3 text-amber-500" />
-              <span className="uppercase tracking-widest">Ambiente de Testes</span>
+              <CheckCircle2 className="h-3 w-3 text-amber-500" />
+              <span className="uppercase tracking-widest">Beta RSC-PCCTAE</span>
 
               {/* Tooltip Desktop */}
               <div className="absolute top-full left-1/2 mt-2 w-64 -translate-x-1/2 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">
                 <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
                   <p className="text-[11px] leading-relaxed text-gray-600 font-normal normal-case">
-                    <span className="block font-bold text-gray-900 mb-1">Protótipo em Validação</span>
-                    Este sistema utiliza regras preliminares do RSC-TAE que podem sofrer alterações. Sua contribuição via feedback é fundamental.
+                    <span className="block font-bold text-gray-900 mb-1">Decreto nº 13.048/2026</span>
+                    Sistema em versão beta, alinhado ao decreto publicado e sujeito a ajustes por atos complementares e normas internas.
                   </p>
                 </div>
                 {/* Arrow */}

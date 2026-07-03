@@ -122,6 +122,18 @@ export function itemRequiresQualitativeJustification(item: ItemRSC) {
   return !!item;
 }
 
+export function getDistinctRscCriterionCount(lancamentos: Lancamento[], items: ItemRSC[]) {
+  const itemById = new Map(items.map((item) => [item.id, item]));
+  const criterionKeys = new Set<string>();
+
+  for (const lancamento of lancamentos) {
+    const item = itemById.get(lancamento.item_rsc_id);
+    criterionKeys.add(item ? `${item.inciso}:${item.numero}` : lancamento.item_rsc_id);
+  }
+
+  return criterionKeys.size;
+}
+
 export interface FunctionalEligibility {
   ok: boolean;
   reasons: string[];

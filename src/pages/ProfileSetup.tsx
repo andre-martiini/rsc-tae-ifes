@@ -152,7 +152,7 @@ export default function ProfileSetup() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                   <p className="leading-relaxed">
-                    Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponde à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
+                    Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-PCCTAE VI corresponde à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
                   </p>
                 </div>
               </div>

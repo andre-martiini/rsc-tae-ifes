@@ -16,6 +16,7 @@ import { addPointValues, formatPointValue, sumPointValues } from '../lib/points'
 import {
   getEligibleRscLevel,
   getEligibleRscLevels,
+  getDistinctRscCriterionCount,
   getServidorFunctionalEligibility,
   validateLevelConstraints,
 } from '../lib/rsc';
@@ -44,8 +45,8 @@ export default function Consolidation() {
   );
 
   const itensDistintos = useMemo(
-    () => new Set(lancamentosDoServidor.map((l) => l.item_rsc_id)).size,
-    [lancamentosDoServidor],
+    () => getDistinctRscCriterionCount(lancamentosDoServidor, itensRSC),
+    [itensRSC, lancamentosDoServidor],
   );
 
   const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
@@ -164,7 +165,8 @@ export default function Consolidation() {
     );
 
   const intersticioOk = useMemo(() => {
-    if (!temConcessaoAnterior || !dataUltimaConcessao) return true;
+    if (!temConcessaoAnterior) return true;
+    if (!dataUltimaConcessao) return false;
     const ultimaConcessao = parseLocalDate(dataUltimaConcessao);
     if (Number.isNaN(ultimaConcessao.getTime())) return false;
     const hoje = new Date();
@@ -260,7 +262,9 @@ export default function Consolidation() {
           ? (intersticioOk
             ? 'Data da última concessão compatível com novo requerimento.'
             : 'A data informada da última concessão ainda não completa 3 anos.')
-          : 'Sem concessão anterior informada.',
+          : temConcessaoAnterior
+            ? 'Informe a data da última concessão para validar o interstício.'
+            : 'Sem concessão anterior informada.',
       },
       {
         ok: autodeclaracaoGeral,
@@ -280,10 +284,10 @@ export default function Consolidation() {
       },
       {
         ok: declaracaoExcedeAtribuicoes,
-        label: 'Atividade Extraordinária',
+        label: 'Atividade não ordinária',
         detail: declaracaoExcedeAtribuicoes
-          ? 'Confirmação de atividade extraordinária registrada.'
-          : 'Falta confirmar que atividades excedem as atribuições ordinárias.',
+          ? 'Confirmação de atividade não ordinária registrada.'
+          : 'Falta confirmar que atividades não se limitam às atribuições ordinárias.',
         action: declaracaoExcedeAtribuicoes ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
     ];
@@ -302,15 +306,17 @@ export default function Consolidation() {
     if (!functionalEligibility.ok)
       issues.push(...functionalEligibility.reasons);
     if (!intersticioOk)
-      issues.push('A data informada da última concessão ainda não completa o interstício de 3 anos.');
+      issues.push(temConcessaoAnterior && !dataUltimaConcessao
+        ? 'Informe a data da última concessão para validar o interstício de 3 anos.'
+        : 'A data informada da última concessão ainda não completa o interstício de 3 anos.');
     if (!autodeclaracaoGeral)
       issues.push('Você precisa concordar com a Autodeclaração de veracidade das informações.');
     if (!declaracaoNaoDuplicidade)
       issues.push('Você precisa confirmar a declaração de não-duplicidade de itens.');
     if (!declaracaoExcedeAtribuicoes)
-      issues.push('Você precisa confirmar a declaração de atividade extraordinária.');
+      issues.push('Você precisa confirmar a declaração de atividade não ordinária.');
     return issues;
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, totalPontos]);
+  }, [autodeclaracaoGeral, dataUltimaConcessao, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, temConcessaoAnterior, totalPontos]);
 
   const canGenerate = checks.every((c) => c.ok);
   const today = new Date().toLocaleDateString('pt-BR');
@@ -507,7 +513,7 @@ export default function Consolidation() {
                   />
                   <div className="space-y-0.5">
                     <span className="text-[13px] font-black text-gray-900 uppercase">Possuo concessão anterior de RSC-PCCTAE</span>
-                    <p className="text-[11px] text-gray-500">Marque se você já recebeu algum nível de RSC anteriormente e possui saldo ou processo vinculado.</p>
+                    <p className="text-[11px] text-gray-500">Marque se você já recebeu algum nível de RSC anteriormente. O decreto exige interstício de 3 anos contado da última concessão.</p>
                   </div>
                 </label>
               </div>
@@ -523,7 +529,7 @@ export default function Consolidation() {
                   >
                     <div className="grid gap-6 pt-2 md:grid-cols-2">
                       <div className="space-y-1.5">
-                        <Label htmlFor="saldo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Saldo Concessão Anterior (pts)</Label>
+                        <Label htmlFor="saldo-anterior" className="text-xs font-bold uppercase tracking-widest text-gray-400">Saldo não aproveitado anterior (pts)</Label>
                         <Input
                           id="saldo-anterior"
                           type="number"
@@ -567,7 +573,9 @@ export default function Consolidation() {
                       <p className="text-[11px] font-bold">
                         {intersticioOk
                           ? 'Interstício válido: os dados da concessão anterior serão incluídos no dossiê.'
-                          : 'Atenção: A data informada indica que o interstício de 3 anos ainda não foi cumprido.'}
+                          : dataUltimaConcessao
+                            ? 'Atenção: a data informada indica que o interstício de 3 anos ainda não foi cumprido.'
+                            : 'Informe a data da última concessão para validar o interstício de 3 anos.'}
                       </p>
                     </div>
                   </motion.div>
@@ -609,7 +617,7 @@ export default function Consolidation() {
                 <div className="space-y-1">
                   <p className="text-[13px] font-bold text-gray-900">Não-Duplicidade de Itens</p>
                   <p className="text-[11px] leading-relaxed text-gray-600">
-                    Confirmo que a documentação apresentada não está sendo utilizada em duplicidade e que os fatos declarados não foram usados em concessões anteriores.
+                    Confirmo que cada fato ou atividade foi lançado uma única vez, sem uso simultâneo em mais de um critério específico, e que os pontos declarados não foram usados em concessões anteriores.
                   </p>
                 </div>
               </label>
@@ -622,9 +630,9 @@ export default function Consolidation() {
                   onChange={(e) => setDeclaracaoExcedeAtribuicoes(e.target.checked)}
                 />
                 <div className="space-y-1">
-                  <p className="text-[13px] font-bold text-gray-900">Atividades Extraordinárias</p>
+                  <p className="text-[13px] font-bold text-gray-900">Atividades não ordinárias</p>
                   <p className="text-[11px] leading-relaxed text-gray-600">
-                    As atividades informadas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes.
+                    As atividades informadas não representam exclusivamente atribuições ordinárias do cargo e demonstram saberes, competências, inovação, ampliação de responsabilidades ou resultados institucionais relevantes.
                   </p>
                 </div>
               </label>
@@ -785,12 +793,16 @@ export default function Consolidation() {
                           <span className="font-bold">{nivelPleiteado ? formatPointValue(Math.max(0, totalPontos - nivelPleiteado.pontosMinimos)) : '—'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
-                          <span className="text-gray-600">Saldo de pontuação de concessão anterior:</span>
+                          <span className="text-gray-600">Saldo não aproveitado de concessão anterior:</span>
                           <span className="font-bold">{saldoConcessaoAnterior || '0'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
                           <span className="text-gray-600">Número do processo relativo à concessão anterior do RSC-PCCTAE:</span>
                           <span className="font-bold">{numeroProcessoAnterior || '—'}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
+                          <span className="text-gray-600">Data da última concessão do RSC-PCCTAE:</span>
+                          <span className="font-bold">{formatarDataSegura(dataUltimaConcessao)}</span>
                         </div>
                       </div>
                     </div>
@@ -803,9 +815,9 @@ export default function Consolidation() {
                       <p>Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:</p>
                       <ul className="list-disc pl-5 space-y-1">
                         <li>Todos os fatos apresentados ocorreram no exercício da carreira;</li>
-                        <li>Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;</li>
-                        <li>A documentação apresentada não foi utilizada em duplicidade neste dossiê;</li>
-                        <li>As atividades descritas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;</li>
+                        <li>Nenhuma atividade aqui declarada foi utilizada para pontuação em concessões anteriores;</li>
+                        <li>Cada atividade foi considerada uma única vez, sem utilização simultânea para mais de um critério específico;</li>
+                        <li>As atividades descritas não representam exclusivamente atribuições ordinárias do cargo e demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;</li>
                         <li>A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;</li>
                         <li>Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.</li>
                       </ul>

@@ -43,7 +43,7 @@ export default function HelpAndUpdates() {
     },
     {
       q: 'O cálculo do sistema garante a homologação do meu RSC?',
-      a: 'Não. Este sistema funciona como um assistente de organização documental e simulação preliminar de pontuações de acordo com as regras estabelecidas na minuta. A análise oficial e a concessão definitiva do RSC são de responsabilidade exclusiva das comissões avaliadoras competentes instituídas na sua instituição de ensino.',
+      a: 'Não. Este sistema funciona como um assistente de organização documental e simulação orientativa de pontuações de acordo com o Decreto nº 13.048/2026. A análise oficial, a decisão fundamentada e a concessão definitiva do RSC são de responsabilidade da CRSC-PCCTAE instituída na sua instituição de ensino.',
     },
     {
       q: 'O que devo anexar como comprovação em cada item?',

@@ -30,19 +30,19 @@ const LEGISLATIONS: Array<{
     color: 'emerald',
   },
   {
-    title: 'Minuta de Decreto (MEC - 2026)',
+    title: 'Decreto Nº 13.048/2026',
     description:
       'Regulamenta os critérios e procedimentos para a concessão do RSC-PCCTAE aos servidores Técnico-Administrativos em Educação.',
-    category: 'Minuta de Decreto',
-    date: 'Maio de 2026',
-    status: 'referencial',
-    statusLabel: 'Minuta em análise',
+    category: 'Decreto Federal',
+    date: '3 de julho de 2026',
+    status: 'vigente',
+    statusLabel: 'Regulamento vigente',
     notes:
-      'Documento de orientação normativa (EMI nº 8/2026/SEI/ASTEC/GM/GM). Os critérios de pontuação e níveis do sistema já estão alinhados a esta minuta.',
-    url: '/minuta_decreto_rsc_pcctae_2026.pdf',
-    download: 'minuta_decreto_rsc_pcctae_2026.pdf',
+      'Base regulamentar vigente adotada pelo sistema para níveis, pontuação mínima, critérios específicos, não duplicidade, interstício, documentação e procedimentos gerais.',
+    url: '/decreto_13048_rsc_pcctae_2026.pdf',
+    download: 'decreto_13048_rsc_pcctae_2026.pdf',
     icon: FileText,
-    color: 'amber',
+    color: 'emerald',
   },
 ];
 
@@ -56,14 +56,33 @@ const SYSTEM_BASIS: {
   title: 'Base normativa utilizada pelo sistema',
   summary:
     'O sistema utiliza uma base normativa estruturada para organizar itens, cálculos, memorial, requerimento e dossiê exportado.',
-  status: 'referencial',
-  statusLabel: 'Referencial do sistema',
+  status: 'vigente',
+  statusLabel: 'Alinhado ao decreto vigente',
   details: [
     'A aplicação organiza a documentação do pedido, mas não executa análise institucional, decisão ou tramitação posterior.',
     'Os textos, cálculos e rótulos exibidos devem ser lidos como apoio à preparação documental do servidor.',
-    'Sempre que houver atualização normativa relevante, a base interna do sistema deve ser revisada para manter aderência.',
+    'O decreto prevê análise pela CRSC-PCCTAE e pode ser complementado por ato do Ministério da Educação e por regras internas da Instituição Federal de Ensino.',
   ],
 };
+
+const DECREE_RULES = [
+  {
+    title: 'Análise e decisão',
+    text: 'A CRSC-PCCTAE analisa o mérito do memorial em até 120 dias, contados do protocolo ou da complementação documental solicitada.',
+  },
+  {
+    title: 'Efeitos financeiros',
+    text: 'Os efeitos financeiros contam do deferimento e não retroagem ao requerimento, salvo quando a concessão ultrapassar o prazo regulamentar.',
+  },
+  {
+    title: 'Recurso',
+    text: 'O servidor pode recorrer à instância deliberativa máxima da instituição em até 30 dias da ciência ou divulgação oficial da decisão.',
+  },
+  {
+    title: 'Normas complementares',
+    text: 'As instituições devem instituir a CRSC-PCCTAE e normas internas, e o Ministério da Educação pode editar atos complementares para uniformização.',
+  },
+];
 
 function getStatusStyle(status: 'vigente' | 'referencial') {
   if (status === 'vigente') {
@@ -175,6 +194,28 @@ export default function Legislation() {
             );
           })}
         </div>
+
+        <section className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-start gap-4">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <Gavel className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Pontos procedimentais do Decreto nº 13.048/2026</h2>
+              <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                O sistema prepara o dossiê; a tramitação, a decisão, os efeitos financeiros e eventual recurso seguem o fluxo institucional.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {DECREE_RULES.map((rule) => (
+              <div key={rule.title} className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+                <h3 className="text-sm font-bold text-gray-900">{rule.title}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-gray-600">{rule.text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
         <section className="mt-8 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <div className="flex items-start gap-4">

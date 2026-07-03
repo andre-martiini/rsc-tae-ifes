@@ -10,7 +10,7 @@ import ItemDetailPanel from '../components/ItemDetailPanel';
 import MainLayout from '../components/MainLayout';
 import { useAppContext } from '../context/AppContext';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
-import { getEligibleRscLevel, isItemJuridicallyFragile } from '../lib/rsc';
+import { getDistinctRscCriterionCount, getEligibleRscLevel, isItemJuridicallyFragile } from '../lib/rsc';
 import { cn } from '../lib/utils';
 import type { Inciso } from '../data/mock';
 
@@ -72,8 +72,8 @@ export default function ItemCatalog() {
   );
 
   const itensDistintos = useMemo(
-    () => new Set(lancamentosDoServidor.map((l) => l.item_rsc_id)).size,
-    [lancamentosDoServidor],
+    () => getDistinctRscCriterionCount(lancamentosDoServidor, itensRSC),
+    [itensRSC, lancamentosDoServidor],
   );
 
   const metasAtingidas =
