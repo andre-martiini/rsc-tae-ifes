@@ -19,12 +19,13 @@ import {
   Building2,
   UserCheck,
   Mail,
+  X,
 } from 'lucide-react';
 import MainLayout from '../components/MainLayout';
 import { SYSTEM_UPDATES, type UpdateEntry } from '../data/updates';
 
 export default function HelpAndUpdates() {
-  const [activeTab, setActiveTab] = useState<'info' | 'updates'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'updates' | 'comparison'>('info');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -71,8 +72,9 @@ export default function HelpAndUpdates() {
         </header>
 
         {/* Tabs Navigation */}
-        <div className="mb-8 flex border-b border-gray-200">
+        <div className="mb-8 flex border-b border-gray-200 flex-wrap gap-y-2">
           <button
+            type="button"
             onClick={() => setActiveTab('info')}
             className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-all ${
               activeTab === 'info'
@@ -84,6 +86,7 @@ export default function HelpAndUpdates() {
             Guia e Informações
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('updates')}
             className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-all ${
               activeTab === 'updates'
@@ -97,11 +100,23 @@ export default function HelpAndUpdates() {
               {SYSTEM_UPDATES.length}
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('comparison')}
+            className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-all ${
+              activeTab === 'comparison'
+                ? 'border-primary text-primary font-black'
+                : 'border-transparent text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <GitBranch className="h-4 w-4" />
+            Mudanças do Decreto 13.048
+          </button>
         </div>
 
         {/* Tab Content */}
         <div>
-          {activeTab === 'info' ? (
+          {activeTab === 'info' && (
             <div className="space-y-8">
               
               {/* About developers & IFES */}
@@ -198,6 +213,7 @@ export default function HelpAndUpdates() {
                     return (
                       <div key={index} className="py-4 first:pt-0 last:pb-0">
                         <button
+                          type="button"
                           onClick={() => toggleFaq(index)}
                           className="flex w-full items-center justify-between gap-4 text-left font-bold text-gray-950 hover:text-primary"
                         >
@@ -233,7 +249,9 @@ export default function HelpAndUpdates() {
               </div>
 
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'updates' && (
             <div className="space-y-8">
               
               {/* Timeline list */}
@@ -314,6 +332,185 @@ export default function HelpAndUpdates() {
                     </div>
                   );
                 })}
+              </div>
+
+            </div>
+          )}
+
+          {activeTab === 'comparison' && (
+            <div className="space-y-8">
+              {/* Introduction Banner */}
+              <div className="rounded-3xl border border-primary/20 bg-emerald-50/30 p-6 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                    <Info className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">Alinhamento ao Decreto nº 13.048/2026</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                      O regulamento oficial trouxe ajustes importantes para o catálogo de pontuação de RSC-TAE, 
+                      readequando redações para exigir relevância institucional, restringindo acúmulo de gratificações 
+                      e alterando valores de pontos. Veja abaixo o comparativo direto "Antes vs Agora" de forma simples.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Score Reductions Section */}
+              <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+                <h3 className="mb-6 text-lg font-bold text-gray-900 flex items-center gap-2">
+                  Alterações de Pontuação (Pontos Reduzidos)
+                </h3>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso I · Item 4</span>
+                      <span className="text-xs text-gray-400">Membro de comissões/GTs</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Participação em comissões ou grupos de trabalho designados por portaria.</p>
+                    <div className="flex items-center gap-4 text-xs pt-1">
+                      <span className="text-red-500 font-bold line-through">Antes: 15 pts/ano</span>
+                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Agora: 3 pts/ano</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso II · Item 9</span>
+                      <span className="text-xs text-gray-400">Capacitações</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Capacitação e ações formativas continuadas (desenvolvimento de pessoas).</p>
+                    <div className="flex items-center gap-4 text-xs pt-1">
+                      <span className="text-red-500 font-bold line-through">Antes: 3 pts/curso</span>
+                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Agora: 1 pt/curso</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso VI · Item 17</span>
+                      <span className="text-xs text-gray-400">Coordenação de Eventos</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Atuação na coordenação de congresso, simpósio ou seminário de interesse institucional.</p>
+                    <div className="flex items-center gap-4 text-xs pt-1">
+                      <span className="text-red-500 font-bold line-through">Antes: 4.5 pts</span>
+                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Agora: 3.5 pts</span>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso VI · Item 18</span>
+                      <span className="text-xs text-gray-400">Coorientação de TCC</span>
+                    </div>
+                    <p className="text-sm font-semibold text-gray-900">Exercício de coorientação de trabalhos de conclusão de cursos e monografias.</p>
+                    <div className="flex items-center gap-4 text-xs pt-1">
+                      <span className="text-red-500 font-bold line-through">Antes: 7.5 pts</span>
+                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Agora: 4.5 pts</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Excluded Item Section */}
+              <div className="rounded-3xl border border-red-100 bg-red-50/30 p-6 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-red-100 text-red-700">
+                    <X className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-red-950">Item Excluído do Catálogo</h3>
+                    <p className="mt-2 text-sm font-semibold text-red-900">Antigo Item 6 do Inciso VI (Certificação Profissional)</p>
+                    <p className="mt-1 text-xs leading-relaxed text-red-800/80">
+                      A certificação profissional de competência técnica sem vínculo direto com curso formal foi <strong>removida</strong> do rol oficial de critérios. 
+                      Lançamentos que usavam este item anteriormente passam a pontuar <strong>0 pontos</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Description & Criteria Alterations */}
+              <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+                <h3 className="mb-6 text-lg font-bold text-gray-900">
+                  Principais Alterações de Redação e Requisitos
+                </h3>
+                <div className="space-y-4">
+                  <div className="border-b border-gray-100 pb-4 space-y-2">
+                    <h4 className="text-sm font-bold text-gray-900">1. Carga Horária Mínima de Capacitações (Inciso II, Item 11)</h4>
+                    <p className="text-xs text-gray-500">Participação em congressos, simpósios, fóruns, workshops e oficinas.</p>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
+                      <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
+                        <strong className="block text-[10px] uppercase tracking-wider text-red-600 mb-1">Antes:</strong>
+                        Exigia apenas carga horária mínima de <strong>4 horas</strong>.
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-3 text-emerald-950">
+                        <strong className="block text-[10px] uppercase tracking-wider text-emerald-600 mb-1">Agora (Decreto):</strong>
+                        Exige carga horária mínima de <strong>10 horas</strong> e vínculo explícito de interesse com a instituição.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-100 pb-4 space-y-2">
+                    <h4 className="text-sm font-bold text-gray-900">2. Responsabilidade Sem Função Gratificada (Inciso IV, Item 12)</h4>
+                    <p className="text-xs text-gray-500">Atuação como responsável formal por setor ou unidade, formalmente designado.</p>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
+                      <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
+                        <strong className="block text-[10px] uppercase tracking-wider text-red-600 mb-1">Antes:</strong>
+                        Permitia lançar qualquer cargo de coordenação/chefia.
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-3 text-emerald-950">
+                        <strong className="block text-[10px] uppercase tracking-wider text-emerald-600 mb-1">Agora (Decreto):</strong>
+                        Apenas é pontuado se a designação de chefia/setor <strong>não gerar remuneração</strong> (ex.: sem receber FG ou CD).
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-100 pb-4 space-y-2">
+                    <h4 className="text-sm font-bold text-gray-900">3. Atividades Não Habituais (Inciso IV, Item 11)</h4>
+                    <p className="text-xs text-gray-500">Atuação em sistemas ou processos de trabalho institucionais em ensino, pesquisa, extensão, gestão e inovação.</p>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
+                      <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
+                        <strong className="block text-[10px] uppercase tracking-wider text-red-600 mb-1">Antes:</strong>
+                        Permitia listar rotinas de trabalho rotineiras.
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-3 text-emerald-950">
+                        <strong className="block text-[10px] uppercase tracking-wider text-emerald-600 mb-1">Agora (Decreto):</strong>
+                        Obrigatório que a atividade <strong>não constitua rotina habitual ou atribuição ordinária</strong> do cargo do servidor.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-b border-gray-100 pb-4 space-y-2">
+                    <h4 className="text-sm font-bold text-gray-900">4. Orientação vs Coorientação (Inciso VI, Item 18)</h4>
+                    <p className="text-xs text-gray-500">Exercício de orientação ou coorientação de trabalhos acadêmicos.</p>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
+                      <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
+                        <strong className="block text-[10px] uppercase tracking-wider text-red-600 mb-1">Antes:</strong>
+                        Englobava tanto orientação titular quanto coorientação na mesma pontuação de 7.5 pts.
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-3 text-emerald-950">
+                        <strong className="block text-[10px] uppercase tracking-wider text-emerald-600 mb-1">Agora (Decreto):</strong>
+                        Este item passou a contemplar <strong>apenas coorientação (4.5 pts)</strong>. A orientação principal é contada em outros critérios acadêmicos específicos.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-bold text-gray-900">5. Interesse Institucional em Produções (Inciso VI, Itens 10 a 16)</h4>
+                    <p className="text-xs text-gray-500">Livros com ISBN, capítulos de livros, artigos, produções artísticas, etc.</p>
+                    <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
+                      <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
+                        <strong className="block text-[10px] uppercase tracking-wider text-red-600 mb-1">Antes:</strong>
+                        Qualquer publicação com registro ISBN/ISSN era aceita.
+                      </div>
+                      <div className="rounded-xl bg-emerald-50/50 border border-emerald-100 p-3 text-emerald-950">
+                        <strong className="block text-[10px] uppercase tracking-wider text-emerald-600 mb-1">Agora (Decreto):</strong>
+                        Toda produção intelectual deve comprovar ter <strong>contribuição, repercussão ou relacionamento explícito com os interesses da IFE</strong>.
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
               </div>
 
             </div>
