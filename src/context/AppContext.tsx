@@ -18,6 +18,8 @@ import {
   computeDocumentHash,
 } from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
+import { normalizePointValue } from '../lib/points';
+
 
 // ── Session types ─────────────────────────────────────────────────────────────
 
@@ -76,11 +78,28 @@ function normalizeFileName(value: string): string {
 }
 
 function migrateLancamento(l: Lancamento): Lancamento {
+  let updated = l;
   if (l.documento_id && !l.comprovantes_ids) {
-    return { ...l, comprovantes_ids: [l.documento_id] };
+    updated = { ...updated, comprovantes_ids: [l.documento_id] };
   }
-  return l;
+
+  // Recalculate points based on current active items
+  const item = mockItensRSC.find((i) => i.id === l.item_rsc_id);
+  if (item) {
+    const correctPoints = normalizePointValue(l.quantidade_informada * item.pontos_por_unidade);
+    if (updated.pontos_calculados !== correctPoints) {
+      updated = { ...updated, pontos_calculados: correctPoints };
+    }
+  } else {
+    // If the item doesn't exist in the current database (e.g. removed item-42), set points to 0
+    if (updated.pontos_calculados !== 0) {
+      updated = { ...updated, pontos_calculados: 0 };
+    }
+  }
+
+  return updated;
 }
+
 
 // Migrate pre-multi-session data (flat keys) to the new format.
 // Returns a SessionSummary[] to seed the sessions index, or [] if nothing to migrate.

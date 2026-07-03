@@ -16,7 +16,6 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import AppFooter from '../components/AppFooter';
 import AppLogo from '../components/AppLogo';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -284,310 +283,353 @@ export default function LandingScreen() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <div className="flex flex-1 items-center justify-center px-4 py-12">
-        <div className="w-full max-w-xl">
-        <div className="mb-8 text-center">
-          <div className="mb-4 inline-flex items-center justify-center rounded-2xl bg-primary/10 p-4">
-            <AppLogo className="h-10 w-10 object-contain" />
-          </div>
-          <h1 className="text-3xl font-black text-gray-900">{institutionConfig.appName}</h1>
-          <p className="mt-1.5 text-sm text-gray-500">{institutionConfig.appSubtitle}</p>
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setShowAbout((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
-            >
-              <CircleHelp className="h-3.5 w-3.5" />
-              O que é o Assistente RSC-TAE?
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowUpdatesModal(true)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary"
-            >
-              <Clock className="h-3.5 w-3.5" />
-              Novidades
-            </button>
-          </div>
-          {showAbout && (
-            <div className="mt-4 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm">
-              <p className="text-sm font-semibold text-gray-900">Sobre o assistente</p>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                O Assistente RSC-TAE é uma ferramenta de apoio para organizar evidências,
-                registrar lançamentos por item, calcular pontuações e montar o dossiê
-                documental do pedido de RSC-TAE com mais clareza e segurança.
-              </p>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600">
-                Ele não substitui a análise institucional, mas ajuda você a reunir
-                informações e documentos de forma estruturada ao longo da preparação
-                do pedido.
-              </p>
-            </div>
-          )}
-        </div>
+    <div
+      className="relative min-h-screen w-full flex flex-col text-on-background antialiased"
+      style={{ background: 'linear-gradient(to top, rgba(0, 107, 31, 0.14) 0%, rgba(0, 107, 31, 0.05) 45%, rgb(255, 255, 255) 100%)' }}
+    >
+      {/* Animated waves at the base */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 bottom-0 z-0 h-[120px] md:h-[200px] overflow-hidden">
+        <svg className="wave-layer wave-slow" viewBox="0 0 2880 320" preserveAspectRatio="none">
+          <path
+            fill="#006b1f"
+            fillOpacity="0.06"
+            d="M0,120 C240,180 480,60 720,120 C960,180 1200,60 1440,120 C1680,180 1920,60 2160,120 C2400,180 2640,60 2880,120 L2880,320 L0,320 Z"
+          />
+        </svg>
+        <svg className="wave-layer wave-mid" viewBox="0 0 2880 320" preserveAspectRatio="none">
+          <path
+            fill="#006b1f"
+            fillOpacity="0.08"
+            d="M0,180 C240,230 480,130 720,180 C960,230 1200,130 1440,180 C1680,230 1920,130 2160,180 C2400,230 2640,130 2880,180 L2880,320 L0,320 Z"
+          />
+        </svg>
+        <svg className="wave-layer wave-fast" viewBox="0 0 2880 320" preserveAspectRatio="none">
+          <path
+            fill="#006b1f"
+            fillOpacity="0.1"
+            d="M0,240 C240,280 480,200 720,240 C960,280 1200,200 1440,240 C1680,280 1920,200 2160,240 C2400,280 2640,200 2880,240 L2880,320 L0,320 Z"
+          />
+        </svg>
+      </div>
 
-        {/* Banner de Aviso Beta */}
-        <div className="group relative mb-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 transition-all hover:bg-amber-50 cursor-help">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-amber-100 p-2 text-amber-600">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-amber-900 uppercase tracking-wide">Versão beta baseada no decreto publicado</h3>
-              <p className="mt-1 text-xs leading-relaxed text-amber-800/80">
-                O sistema foi ajustado ao Decreto nº 13.048/2026 e continua em evolução com atos complementares e normas internas. <span className="font-bold underline decoration-amber-300 underline-offset-2">Saiba mais.</span>
-              </p>
-              
-              {/* Tooltip (Balão) */}
-              <div className="absolute left-1/2 top-full z-50 mt-3 w-80 -translate-x-1/2 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none">
-                <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-2xl">
-                  <div className="space-y-3 text-xs leading-relaxed text-gray-600">
-                    <p>
-                      Sua colaboração é fundamental: utilize o canal de feedback para enviar críticas, sugestões ou dúvidas. 
-                      Nos ajude a construir uma ferramenta de apoio ao RSC cada vez melhor.
-                    </p>
-                    <div className="border-t border-gray-100 pt-3">
-                      <p className="font-bold text-gray-900 mb-1 text-[11px] uppercase tracking-wider">Aviso Importante:</p>
-                      <p>
-                        Os cálculos e critérios refletem a base regulamentar vigente do RSC-PCCTAE, mas a análise oficial é da CRSC-PCCTAE da instituição.
-                        Atos do Ministério da Educação e normas internas podem complementar documentos, fluxos e procedimentos.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                {/* Seta do Balão */}
-                <div className="absolute -top-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 border-l border-t border-gray-200 bg-white"></div>
-              </div>
-            </div>
-          </div>
-        </div>
+      <main className="max-w-7xl mx-auto px-6 py-8 md:py-10 relative z-10 w-full flex-1 flex items-center justify-center">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-8 items-center w-full">
+            
+            {/* Left Column: Hero & Actions */}
+            <div className="xl:col-span-7 flex flex-col gap-6 md:gap-8">
 
-        {showForm ? (
-          <div className="mb-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-8">
-            <div className="mb-6 flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <UserCircle className="h-5 w-5 text-primary" />
-              <h2 className="text-base font-bold text-gray-900">Criar Perfil</h2>
-            </div>
-            <p className="mb-6 text-sm text-gray-500">
-              Preencha seus dados de identificação para criar a sessão. Eles ficam salvos apenas neste navegador.
-            </p>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-5">
-              <div className="space-y-1.5 relative">
-                <Label htmlFor="nome_completo">
-                  Nome Completo <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="nome_completo"
-                  placeholder="Ex.: Joao da Silva"
-                  value={form.nome_completo}
-                  onChange={handleNameChange}
-                  onFocus={() => form.nome_completo.trim().length >= 3 && setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
-                  autoComplete="off"
-                />
-                {showSuggestions && suggestions.length > 0 && (
-                  <ul className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg divide-y divide-gray-50">
-                    {suggestions.map((item) => (
-                      <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => handleSelectSuggestion(item)}
-                          className="flex w-full flex-col px-4 py-2 text-left hover:bg-gray-50 transition-colors"
-                        >
-                          <span className="text-sm font-semibold text-gray-900">{item.nome}</span>
-                          <span className="text-[10px] text-gray-500 uppercase font-medium">
-                            {item.descricao_cargo} · {item.org_lotacao} · Prefixo: {item.matricula}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="siape">
-                  SIAPE <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="siape"
-                  placeholder="1234567"
-                  value={form.siape}
-                  onChange={set('siape')}
-                  maxLength={9}
-                />
-                {selectedServidorBase && !form.siape.trim().startsWith(selectedServidorBase.matricula.replace(/\D/g, '')) && (
-                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
-                    ⚠️ O SIAPE não coincide com o prefixo da base pública (esperado: {selectedServidorBase.matricula.replace(/\D/g, '')}).
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="escolaridade_atual">
-                  Escolaridade Atual <span className="text-red-500">*</span>
-                </Label>
-                <select
-                  id="escolaridade_atual"
-                  value={form.escolaridade_atual}
-                  onChange={set('escolaridade_atual')}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              {/* Hero Section */}
+              <section className="flex flex-col items-start">
+                <button
+                  type="button"
+                  onClick={() => setShowAbout((prev) => !prev)}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant shadow-sm mb-6 hover:bg-surface-container hover:text-primary transition-colors cursor-pointer text-xs font-semibold"
                 >
-                  <option value="">Selecione...</option>
-                  {ESCOLARIDADES.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <span className="material-symbols-outlined text-[16px]">help</span>
+                  O que é o Assistente RSC-TAE?
+                </button>
+                
+                <h1 className="text-4xl md:text-5xl lg:text-6xl leading-[1.1] text-on-surface mb-6 font-bold tracking-tight font-headline">
+                  Assistente <span className="text-primary">RSC-TAE</span>
+                </h1>
+                
+                <p className="text-base md:text-lg text-on-surface-variant max-w-xl leading-relaxed mb-8">
+                  {institutionConfig.appSubtitle}
+                </p>
 
-              {hasDoctorate && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <p className="leading-relaxed">
-                      Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponds à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
-                    </p>
-                  </div>
+                <button
+                  type="button"
+                  onClick={() => setShowUpdatesModal(true)}
+                  className="px-5 py-2.5 rounded-full border-2 border-primary/20 text-primary hover:bg-primary/5 transition-colors flex items-center gap-2 text-xs font-semibold"
+                >
+                  <span className="material-symbols-outlined text-[18px]">schedule</span>
+                  Ver Novidades do Sistema
+                </button>
+              </section>
+
+              {showAbout && (
+                <div className="rounded-3xl border border-outline-variant/40 bg-surface/80 p-6 shadow-md max-w-xl transition-all">
+                  <p className="text-sm font-semibold text-gray-900">Sobre o assistente</p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                    O Assistente RSC-TAE é uma ferramenta de apoio para organizar evidências,
+                    registrar lançamentos por item, calcular pontuações e montar o dossiê
+                    documental do pedido de RSC-TAE com mais clareza e segurança.
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                    Ele não substitui a análise institucional, mas ajuda você a reunir
+                    informações e documentos de forma estruturada ao longo da preparação
+                    do pedido.
+                  </p>
                 </div>
               )}
 
-              <div className="pt-2">
-                <Button type="submit" className="w-full bg-primary text-white hover:bg-primary/90">
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Criar sessão e começar
-                </Button>
-              </div>
-            </form>
-          </div>
-        ) : (
-          <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <button
-              type="button"
-              onClick={() => setShowForm(true)}
-              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-primary/40 bg-primary/5 px-5 py-6 text-left transition-all hover:border-primary/60 hover:bg-primary/10"
-            >
-              <div className="space-y-3">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                  <PlusCircle className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-gray-900">Nova Sessão</p>
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Começar do zero</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-primary/60" />
-            </button>
+              {/* Action Area (Form or Action Grid) */}
+              {showForm ? (
+                <div className="rounded-3xl border border-outline-variant/40 bg-white/95 p-6 shadow-xl max-w-xl backdrop-blur-xl w-full">
+                  <div className="mb-6 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowForm(false)}
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                    </button>
+                    <span className="material-symbols-outlined text-primary text-[20px]">person</span>
+                    <h2 className="text-base font-bold text-gray-900">Criar Perfil</h2>
+                  </div>
+                  <p className="mb-6 text-xs text-gray-500">
+                    Preencha seus dados de identificação para criar a sessão. Eles ficam salvos apenas neste navegador.
+                  </p>
 
-            <button
-              type="button"
-              onClick={() => importInputRef.current?.click()}
-              disabled={isImporting}
-              className="flex w-full items-center justify-between gap-3 rounded-2xl border border-dashed border-gray-200 bg-white px-5 py-6 text-left transition-all hover:border-primary/40 hover:bg-gray-50 disabled:opacity-50"
-            >
-              <div className="space-y-3">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-500">
-                  {isImporting ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
-                </div>
-                <div>
-                  <p className="text-sm font-black text-gray-900">Restaurar Sessão</p>
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Carregar backup .zip</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 text-gray-300" />
-            </button>
-            <input
-              type="file"
-              ref={importInputRef}
-              onChange={(e) => e.target.files?.[0] && handleImportSession(e.target.files[0])}
-              accept=".zip"
-              className="hidden"
-            />
-          </div>
-        )}
+                  <form onSubmit={handleCreateSubmit} className="space-y-5">
+                    <div className="space-y-1.5 relative">
+                      <Label htmlFor="nome_completo">
+                        Nome Completo <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="nome_completo"
+                        placeholder="Ex.: Joao da Silva"
+                        value={form.nome_completo}
+                        onChange={handleNameChange}
+                        onFocus={() => form.nome_completo.trim().length >= 3 && setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
+                        autoComplete="off"
+                      />
+                      {showSuggestions && suggestions.length > 0 && (
+                        <ul className="absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg divide-y divide-gray-50">
+                          {suggestions.map((item) => (
+                            <li key={item.id}>
+                              <button
+                                type="button"
+                                onClick={() => handleSelectSuggestion(item)}
+                                className="flex w-full flex-col px-4 py-2 text-left hover:bg-gray-50 transition-colors"
+                              >
+                                <span className="text-sm font-semibold text-gray-900">{item.nome}</span>
+                                <span className="text-[10px] text-gray-500 uppercase font-medium">
+                                  {item.descricao_cargo} · {item.org_lotacao} · Prefixo: {item.matricula}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
 
-        {sessions.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-3">
-              <p className="text-[11px] font-black uppercase tracking-widest text-gray-400">Sessões salvas</p>
-              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-500">
-                {sessions.length}
-              </span>
-            </div>
-            <ul className="divide-y divide-gray-100">
-              {sessions.map((session) => (
-                <li key={session.id} className="relative flex items-center gap-3 px-4 py-4 pr-16 sm:flex-row sm:items-center sm:gap-4 sm:px-5 sm:py-3.5 sm:pr-5">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="siape">
+                        SIAPE <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="siape"
+                        placeholder="1234567"
+                        value={form.siape}
+                        onChange={set('siape')}
+                        maxLength={9}
+                      />
+                      {selectedServidorBase && !form.siape.trim().startsWith(selectedServidorBase.matricula.replace(/\D/g, '')) && (
+                        <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                          ⚠️ O SIAPE não coincide com o prefixo da base pública (esperado: {selectedServidorBase.matricula.replace(/\D/g, '')}).
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="escolaridade_atual">
+                        Escolaridade Atual <span className="text-red-500">*</span>
+                      </Label>
+                      <select
+                        id="escolaridade_atual"
+                        value={form.escolaridade_atual}
+                        onChange={set('escolaridade_atual')}
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <option value="">Selecione...</option>
+                        {ESCOLARIDADES.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {hasDoctorate && (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                          <p className="leading-relaxed">
+                            Pela escolaridade informada, não há nível de RSC a pleitear, pois o RSC-VI corresponde à equivalência de doutorado. O sistema pode ser usado para consulta ou organização, sem geração de pedido de RSC.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-2">
+                      <Button type="submit" className="w-full bg-primary text-white hover:bg-primary/90">
+                        <PlusCircle className="mr-2 h-4 w-4" />
+                        Criar sessão e começar
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl w-full">
+                  {/* Nova Sessão Card */}
                   <button
                     type="button"
-                    disabled={deletingId === session.id}
-                    onClick={() => handleDeleteSession(session.id)}
-                    className="absolute right-4 top-4 rounded-lg p-1.5 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 sm:hidden"
-                    title="Remover sessão"
+                    onClick={() => setShowForm(true)}
+                    className="group relative p-6 md:p-8 rounded-3xl text-left overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-white/70 backdrop-blur-xl border border-outline-variant/40 hover:border-primary/40 shadow-sm flex flex-col justify-between min-h-[160px] md:min-h-[190px] w-full"
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <UserCircle className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1 sm:pr-0">
-                    <p className="truncate text-sm font-semibold text-gray-900">{session.nome_completo}</p>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                      <span>SIAPE {session.siape}</span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(session.updated_at)}
-                      </span>
+                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="relative z-10 flex flex-col h-full justify-between">
+                      <div className="w-14 h-14 bg-surface rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-center text-primary mb-10 group-hover:scale-110 group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
+                        <span className="material-symbols-outlined text-[28px]">add</span>
+                      </div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-on-surface mb-1 group-hover:text-primary transition-colors font-headline">Nova Sessão</h3>
+                        <p className="text-[11px] md:text-xs text-on-surface-variant uppercase tracking-widest font-semibold">Começar do Zero</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex shrink-0 items-center justify-end gap-2 self-center sm:w-auto">
-                    <button
-                      type="button"
-                      disabled={deletingId === session.id}
-                      onClick={() => handleDeleteSession(session.id)}
-                      className="hidden rounded-lg p-2 text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 disabled:opacity-40 sm:inline-flex"
-                      title="Remover sessão"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleContinue(session.id)}
-                      className="hidden items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90 sm:flex"
-                    >
-                      Continuar
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleContinue(session.id)}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary text-white transition-colors hover:bg-primary/90 sm:hidden"
-                      title={`Continuar sessão de ${session.nome_completo}`}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+                    <div className="absolute right-6 bottom-6 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                        <span className="material-symbols-outlined">arrow_forward</span>
+                      </div>
+                    </div>
+                  </button>
 
-        <p className="mt-6 text-center text-xs text-gray-400">
-          Todos os dados são armazenados exclusivamente neste navegador. Nenhuma informação é enviada a servidores externos.
-        </p>
+                  {/* Restaurar Sessão Card */}
+                  <button
+                    type="button"
+                    onClick={() => importInputRef.current?.click()}
+                    disabled={isImporting}
+                    className="group relative p-6 md:p-8 rounded-3xl text-left overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-white/70 backdrop-blur-xl border border-outline-variant/40 hover:border-secondary/40 shadow-sm disabled:opacity-50 flex flex-col justify-between min-h-[160px] md:min-h-[190px] w-full"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                    <div className="relative z-10 flex flex-col h-full justify-between">
+                      <div className="w-14 h-14 bg-surface rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-center text-on-surface-variant mb-10 group-hover:scale-110 group-hover:bg-secondary group-hover:text-on-secondary transition-all duration-300">
+                        {isImporting ? (
+                          <span className="material-symbols-outlined text-[28px] animate-spin">sync</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[28px]">upload</span>
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-on-surface mb-1 group-hover:text-secondary transition-colors font-headline">Restaurar Sessão</h3>
+                        <p className="text-[11px] md:text-xs text-on-surface-variant uppercase tracking-widest font-semibold">Carregar Backup .zip</p>
+                      </div>
+                    </div>
+                    <div className="absolute right-6 bottom-6 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
+                      <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
+                        <span className="material-symbols-outlined">arrow_upward</span>
+                      </div>
+                    </div>
+                  </button>
+                  <input
+                    type="file"
+                    ref={importInputRef}
+                    onChange={(e) => e.target.files?.[0] && handleImportSession(e.target.files[0])}
+                    accept=".zip"
+                    className="hidden"
+                  />
+                </section>
+              )}
+            </div>
+
+            {/* Right Column: Context & History */}
+            <div className="xl:col-span-5 flex flex-col gap-6 xl:pt-8 w-full">
+              
+              {/* Version Alert */}
+              <section className="w-full">
+                <div className="bg-white/80 backdrop-blur-md border border-primary/20 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row gap-4 items-start shadow-sm relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                  <div className="w-10 h-10 bg-primary/10 rounded-full text-primary flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xs md:text-sm font-bold text-on-surface mb-1 uppercase tracking-wider font-sans">Versão Beta Baseada no Decreto</h3>
+                    <p className="text-xs md:text-sm leading-relaxed text-on-surface-variant font-sans">
+                      O sistema foi ajustado ao Decreto nº 13.048/2026 e continua em evolução com atos complementares e normas internas.
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Saved Sessions Panel */}
+              <section className="flex-1 flex flex-col w-full">
+                <div className="bg-white/80 backdrop-blur-xl border border-outline-variant/60 rounded-3xl overflow-hidden shadow-lg shadow-on-surface/5 flex flex-col h-full w-full">
+                  
+                  <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between bg-surface-container-lowest/50">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-[20px]">history</span>
+                      <h2 className="text-xs font-bold text-on-surface uppercase tracking-widest font-sans">Sessões Salvas</h2>
+                    </div>
+                    <span className="bg-primary text-on-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">{sessions.length}</span>
+                  </div>
+                  
+                  <div className="p-2 flex-1 overflow-y-auto max-h-[350px]">
+                    {sessions.length === 0 ? (
+                      <div className="p-8 text-center text-gray-400">
+                        <span className="material-symbols-outlined text-[48px] block mb-2 opacity-50">hourglass_empty</span>
+                        <p className="text-sm">Nenhuma sessão salva neste navegador.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        {sessions.map((session) => (
+                          <div
+                            key={session.id}
+                            className="p-4 md:p-6 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-surface-container-low transition-all duration-200 group border border-transparent hover:border-outline-variant/30"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-surface border border-outline-variant/50 text-primary rounded-full flex items-center justify-center flex-shrink-0 shadow-sm group-hover:bg-primary group-hover:text-on-primary transition-colors">
+                                <span className="material-symbols-outlined text-[22px]">person</span>
+                              </div>
+                              <div>
+                                <h4 className="text-sm md:text-base font-bold text-on-surface group-hover:text-primary transition-colors font-sans">{session.nome_completo}</h4>
+                                <div className="flex items-center gap-2 mt-1 text-on-surface-variant text-[11px] font-sans font-medium">
+                                  <span className="bg-surface-container px-2 py-0.5 rounded text-on-surface">SIAPE {session.siape}</span>
+                                  <span className="w-1 h-1 bg-outline-variant rounded-full"></span>
+                                  <span className="flex items-center gap-1">
+                                    <span className="material-symbols-outlined text-[12px]">calendar_today</span> 
+                                    {formatDate(session.updated_at)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                              <button
+                                type="button"
+                                disabled={deletingId === session.id}
+                                onClick={() => handleDeleteSession(session.id)}
+                                className="text-outline hover:text-error transition-colors p-2 rounded-full hover:bg-error-container/50 opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-40"
+                                title="Remover sessão"
+                              >
+                                <span className="material-symbols-outlined text-[20px]">delete</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleContinue(session.id)}
+                                className="bg-surface border border-outline-variant text-on-surface px-4 py-2 rounded-xl text-xs md:text-sm font-semibold group-hover:bg-primary group-hover:text-on-primary group-hover:border-primary transition-all flex items-center gap-1 shadow-sm font-sans"
+                              >
+                                Continuar <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-4 py-2 bg-surface-container-lowest/80 border-t border-outline-variant/40">
+                    <p className="text-center text-[11px] text-outline font-medium flex items-center justify-center gap-1.5 font-sans">
+                      <span className="material-symbols-outlined text-[14px]">lock</span>
+                      Todos os dados são armazenados exclusivamente neste navegador. Nenhuma informação é enviada a servidores externos.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            </div>
+
         </div>
-      </div>
+      </main>
 
       {/* Updates Modal */}
       {showUpdatesModal && (
@@ -694,7 +736,6 @@ export default function LandingScreen() {
         </div>
       )}
 
-      <AppFooter />
     </div>
   );
 }
