@@ -58,20 +58,27 @@ export function getEligibleRscLevelId(escolaridade: string): RscLevelId | null {
     return 'RSC-III';
   }
 
-  if (normalized.includes('graduacao')) {
-    return 'RSC-IV';
-  }
-
-  if (normalized.includes('especializacao')) {
-    return 'RSC-V';
+  // Títulos mais altos primeiro: "pós-graduação" contém "graduacao" e seria
+  // capturada indevidamente pela checagem de graduação.
+  if (normalized.includes('doutorado')) {
+    return null;
   }
 
   if (normalized.includes('mestrado')) {
     return 'RSC-VI';
   }
 
-  if (normalized.includes('doutorado')) {
-    return null;
+  if (
+    normalized.includes('especializacao') ||
+    normalized.includes('lato sensu') ||
+    normalized.includes('pos-graduacao') ||
+    normalized.includes('pos graduacao')
+  ) {
+    return 'RSC-V';
+  }
+
+  if (normalized.includes('graduacao')) {
+    return 'RSC-IV';
   }
 
   return null;
@@ -128,7 +135,10 @@ export function getDistinctRscCriterionCount(lancamentos: Lancamento[], items: I
 
   for (const lancamento of lancamentos) {
     const item = itemById.get(lancamento.item_rsc_id);
-    criterionKeys.add(item ? `${item.inciso}:${item.numero}` : lancamento.item_rsc_id);
+    // Lançamentos de itens que não existem mais no rol vigente (ex.: itens
+    // excluídos pelo decreto) valem 0 pontos e não contam como critério.
+    if (!item) continue;
+    criterionKeys.add(`${item.inciso}:${item.numero}`);
   }
 
   return criterionKeys.size;

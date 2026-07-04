@@ -22,7 +22,7 @@ export function generateLLMPrompt(params: {
         : '- Documento de referência: (Verifique o arquivo anexo)';
 
     const transcricaoInfo = documento?.transcricao
-        ? `\n--- CONTEÚDO TRANSCRITO DO DOCUMENTO ---\n${documento.transcricao}\n--- FIM DA TRANSCRIÇÍO ---\n`
+        ? `\n--- CONTEÚDO TRANSCRITO DO DOCUMENTO ---\n${documento.transcricao}\n--- FIM DA TRANSCRIÇÃO ---\n`
         : `\n(Nota: A transcrição detalhada do documento não está disponível neste prompt. Por favor, analise o arquivo PDF anexo para realizar a avaliação de mérito.)\n`;
 
     return `Contexto e Papel da IA: Você atua como um assistente técnico de apoio ao servidor na preparação documental do pedido de RSC-PCCTAE. Sua função é revisar a aderência do documento em anexo ao item informado, sem substituir análise institucional posterior.

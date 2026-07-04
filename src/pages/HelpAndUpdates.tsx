@@ -365,12 +365,12 @@ export default function HelpAndUpdates() {
                   <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
                     <div className="flex justify-between items-start">
                       <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso I · Item 4</span>
-                      <span className="text-xs text-gray-400">Membro de comissões/GTs</span>
+                      <span className="text-xs text-gray-400">Sindicância, PAD e TCE</span>
                     </div>
-                    <p className="text-sm font-semibold text-gray-900">Participação em comissões ou grupos de trabalho designados por portaria.</p>
+                    <p className="text-sm font-semibold text-gray-900">Participação como defensor dativo ou membro de equipe em processos de apuração (sindicância, PAD, tomada de contas especial).</p>
                     <div className="flex items-center gap-4 text-xs pt-1">
-                      <span className="text-red-500 font-bold line-through">Antes: 15 pts/ano</span>
-                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Agora: 3 pts/ano</span>
+                      <span className="text-red-500 font-bold line-through">Antes: 15 pts/designação</span>
+                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">Agora: 3 pts/designação</span>
                     </div>
                   </div>
 
@@ -388,7 +388,7 @@ export default function HelpAndUpdates() {
 
                   <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
                     <div className="flex justify-between items-start">
-                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso VI · Item 17</span>
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso VI · Item 16</span>
                       <span className="text-xs text-gray-400">Coordenação de Eventos</span>
                     </div>
                     <p className="text-sm font-semibold text-gray-900">Atuação na coordenação de congresso, simpósio ou seminário de interesse institucional.</p>
@@ -400,7 +400,7 @@ export default function HelpAndUpdates() {
 
                   <div className="rounded-2xl border border-gray-100 bg-gray-50/50 p-5 space-y-3">
                     <div className="flex justify-between items-start">
-                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso VI · Item 18</span>
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Inciso VI · Item 17</span>
                       <span className="text-xs text-gray-400">Coorientação de TCC</span>
                     </div>
                     <p className="text-sm font-semibold text-gray-900">Exercício de coorientação de trabalhos de conclusão de cursos e monografias.</p>
@@ -451,7 +451,7 @@ export default function HelpAndUpdates() {
                   </div>
 
                   <div className="border-b border-gray-100 pb-4 space-y-2">
-                    <h4 className="text-sm font-bold text-gray-900">2. Responsabilidade Sem Função Gratificada (Inciso IV, Item 12)</h4>
+                    <h4 className="text-sm font-bold text-gray-900">2. Responsabilidade Sem Função Gratificada (Inciso IV, Item 8)</h4>
                     <p className="text-xs text-gray-500">Atuação como responsável formal por setor ou unidade, formalmente designado.</p>
                     <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
                       <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
@@ -466,7 +466,7 @@ export default function HelpAndUpdates() {
                   </div>
 
                   <div className="border-b border-gray-100 pb-4 space-y-2">
-                    <h4 className="text-sm font-bold text-gray-900">3. Atividades Não Habituais (Inciso IV, Item 11)</h4>
+                    <h4 className="text-sm font-bold text-gray-900">3. Atividades Não Habituais (Inciso IV, Item 7)</h4>
                     <p className="text-xs text-gray-500">Atuação em sistemas ou processos de trabalho institucionais em ensino, pesquisa, extensão, gestão e inovação.</p>
                     <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
                       <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
@@ -481,7 +481,7 @@ export default function HelpAndUpdates() {
                   </div>
 
                   <div className="border-b border-gray-100 pb-4 space-y-2">
-                    <h4 className="text-sm font-bold text-gray-900">4. Orientação vs Coorientação (Inciso VI, Item 18)</h4>
+                    <h4 className="text-sm font-bold text-gray-900">4. Orientação vs Coorientação (Inciso VI, Item 17)</h4>
                     <p className="text-xs text-gray-500">Exercício de orientação ou coorientação de trabalhos acadêmicos.</p>
                     <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
                       <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">
@@ -496,7 +496,7 @@ export default function HelpAndUpdates() {
                   </div>
 
                   <div className="space-y-2">
-                    <h4 className="text-sm font-bold text-gray-900">5. Interesse Institucional em Produções (Inciso VI, Itens 10 a 16)</h4>
+                    <h4 className="text-sm font-bold text-gray-900">5. Interesse Institucional em Produções (Inciso VI, Itens 9 a 18)</h4>
                     <p className="text-xs text-gray-500">Livros com ISBN, capítulos de livros, artigos, produções artísticas, etc.</p>
                     <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
                       <div className="rounded-xl bg-red-50/50 border border-red-100 p-3 text-red-900">

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode, useCallback } from 'react';
+import { toast } from 'sonner';
 import {
   Servidor,
   ItemRSC,
@@ -77,7 +78,12 @@ function normalizeFileName(value: string): string {
     .trim();
 }
 
-function migrateLancamento(l: Lancamento): Lancamento {
+interface MigrationStats {
+  repontuados: number;
+  zerados: number;
+}
+
+function migrateLancamento(l: Lancamento, stats?: MigrationStats): Lancamento {
   let updated = l;
   if (l.documento_id && !l.comprovantes_ids) {
     updated = { ...updated, comprovantes_ids: [l.documento_id] };
@@ -88,16 +94,40 @@ function migrateLancamento(l: Lancamento): Lancamento {
   if (item) {
     const correctPoints = normalizePointValue(l.quantidade_informada * item.pontos_por_unidade);
     if (updated.pontos_calculados !== correctPoints) {
+      if (stats) stats.repontuados += 1;
       updated = { ...updated, pontos_calculados: correctPoints };
     }
   } else {
     // If the item doesn't exist in the current database (e.g. removed item-42), set points to 0
     if (updated.pontos_calculados !== 0) {
+      if (stats) stats.zerados += 1;
       updated = { ...updated, pontos_calculados: 0 };
     }
   }
 
   return updated;
+}
+
+function migrateLancamentos(list: Lancamento[]): { list: Lancamento[]; stats: MigrationStats } {
+  const stats: MigrationStats = { repontuados: 0, zerados: 0 };
+  return { list: list.map((l) => migrateLancamento(l, stats)), stats };
+}
+
+// Transparência para quem lançou dados na versão anterior (minuta):
+// avisa quando pontos foram recalculados ou zerados sob o Decreto nº 13.048/2026.
+function notifyMigration(stats: MigrationStats) {
+  if (stats.repontuados > 0) {
+    toast.info(
+      `${stats.repontuados} lançamento(s) tiveram a pontuação recalculada conforme o Decreto nº 13.048/2026.`,
+      { id: 'migracao-repontuados', duration: 10000 },
+    );
+  }
+  if (stats.zerados > 0) {
+    toast.warning(
+      `${stats.zerados} lançamento(s) referem-se a itens excluídos pelo Decreto nº 13.048/2026 e agora valem 0 pontos. Revise-os no catálogo de itens.`,
+      { id: 'migracao-zerados', duration: 12000 },
+    );
+  }
 }
 
 
@@ -218,11 +248,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return id ? loadJson<Documento[]>(`rsc-tae-${id}-documentos`, []) : [];
   });
 
+  const initialMigrationStats = useRef<MigrationStats | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>(() => {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
     const raw = id ? loadJson<Lancamento[]>(`rsc-tae-${id}-lancamentos`, []) : [];
-    return raw.map(migrateLancamento);
+    const { list, stats } = migrateLancamentos(raw);
+    initialMigrationStats.current = stats;
+    return list;
   });
+
+  useEffect(() => {
+    const stats = initialMigrationStats.current;
+    if (stats) {
+      initialMigrationStats.current = null;
+      notifyMigration(stats);
+    }
+  }, []);
 
   const [processo, setProcesso] = useState<ProcessoRSC>(() => {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
@@ -354,7 +395,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveSessionId(id);
     setServidor(loadJson<Servidor | null>(keys.perfil, null));
     setDocumentos(loadJson<Documento[]>(keys.documentos, []));
-    setLancamentos(loadJson<Lancamento[]>(keys.lancamentos, []).map(migrateLancamento));
+    const { list: migratedLancamentos, stats } = migrateLancamentos(loadJson<Lancamento[]>(keys.lancamentos, []));
+    notifyMigration(stats);
+    setLancamentos(migratedLancamentos);
     setProcesso(loadJson<ProcessoRSC>(keys.processo, INITIAL_PROCESSO));
     setWizardRecommendedIds(loadJson<string[]>(keys.wizardIds, []));
   };
@@ -398,7 +441,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!activeSessionId) return;
     setServidor(session.perfil);
     setDocumentos(session.documentos);
-    setLancamentos(session.lancamentos.map(migrateLancamento));
+    const { list: migratedLancamentos, stats } = migrateLancamentos(session.lancamentos);
+    notifyMigration(stats);
+    setLancamentos(migratedLancamentos);
     setProcesso(session.processo ?? INITIAL_PROCESSO);
     setWizardRecommendedIds(session.wizardIds);
   };
@@ -433,7 +478,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setActiveSessionId(id);
     setServidor(restored.perfil);
     setDocumentos(restored.documentos);
-    setLancamentos(restored.lancamentos.map(migrateLancamento));
+    const { list: migratedLancamentos, stats } = migrateLancamentos(restored.lancamentos);
+    notifyMigration(stats);
+    setLancamentos(migratedLancamentos);
     setProcesso(restored.processo ?? INITIAL_PROCESSO);
     setWizardRecommendedIds(restored.wizardIds);
   };
