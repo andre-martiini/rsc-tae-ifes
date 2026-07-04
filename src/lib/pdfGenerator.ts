@@ -715,8 +715,8 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
   writer.keyValue('Data de Início do Efetivo Exercício:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
-  writer.keyValue('Lota??o:', sanitize(servidor.lotacao ?? '-'));
-  writer.keyValue('Fun??o/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
+  writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
   writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
 
   const excedente = nivelPleiteado ? Math.max(0, totalPontos - nivelPleiteado.pontosMinimos) : 0;
@@ -728,7 +728,7 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Qtd. critérios utilizados:', `${itensDistintos}`);
   writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
   writer.keyValue('Saldo não aproveitado anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
-  writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '?'));
+  writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '-'));
   writer.keyValue('Data da última concessão:', sanitize(formatDate(processo.data_ultima_concessao)));
 
   writer.section('3. Declaração do Servidor');
@@ -799,8 +799,8 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
   writer.keyValue('Data de Início do Efetivo Exercício:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
-  writer.keyValue('Lota??o:', sanitize(servidor.lotacao ?? '-'));
-  writer.keyValue('Fun??o/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
+  writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
   writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
 
   writer.section('2. Informações do Requerimento');
@@ -823,7 +823,7 @@ export async function generateMemorialDescritivo(
   const CRITERIO_LABELS: Record<string, string> = {
     I: 'Participação em grupos, comissões, comitês, núcleos ou representações',
     II: 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência',
-    III: 'Premiações e reconhecimentos públicos',
+    III: 'Premiação em evento de reconhecimento público',
     IV: 'Responsabilidades técnico-administrativas e/ou especializadas',
     V: 'Funções ou cargos de direção e assessoramento institucional',
     VI: 'Produção, prospecção e difusão de conhecimento',
@@ -844,12 +844,13 @@ export async function generateMemorialDescritivo(
 
     writer.criterioHeader(`Critério ${inciso} - ${CRITERIO_LABELS[inciso]}`);
 
-    const groupedRows = new Map<string, { item: ItemRSC; points: number; docs: string[] }>();
+    const groupedRows = new Map<string, { item: ItemRSC; points: number; quantidadeTotal: number; docs: string[] }>();
     incisoLancamentos.forEach((l) => {
       const item = itensRSC.find((i) => i.id === l.item_rsc_id);
       if (!item) return;
-      const entry = groupedRows.get(item.id) || { item, points: 0, docs: [] };
+      const entry = groupedRows.get(item.id) || { item, points: 0, quantidadeTotal: 0, docs: [] };
       entry.points = addPointValues(entry.points, l.pontos_calculados);
+      entry.quantidadeTotal += l.quantidade_informada ?? 1;
       const firstDocId = l.comprovantes_ids?.[0] ?? l.documento_id;
       const doc = firstDocId ? docsById.get(firstDocId) : undefined;
       if (doc) {
@@ -863,7 +864,7 @@ export async function generateMemorialDescritivo(
     const tableRows = sortedGroups.map((g) => [
       `${g.item.numero}`,
       g.item.descricao,
-      `${g.docs.length} unid.`,
+      `${formatNumber(g.quantidadeTotal)} ${g.item.unidade_medida ? `(${g.item.unidade_medida})` : 'unid.'}`,
       formatNumber(g.item.pontos_por_unidade),
       formatNumber(g.points),
       g.docs.join('\n'),
