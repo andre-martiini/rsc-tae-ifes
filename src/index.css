@@ -36,11 +36,6 @@
   --color-on-error-container:       #93000a;
 }
 
-/* Material Symbols */
-.material-symbols-outlined {
-  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-
 /* Elevation helpers */
 .ghost-lift {
   box-shadow: 0 10px 40px rgba(25, 28, 29, 0.04);
