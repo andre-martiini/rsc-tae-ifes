@@ -112,9 +112,9 @@ const EIXOS: WizardEixo[] = [
     pergunta: 'Possui educação formal extra, prêmios ou atuou em áreas de saúde, inclusão, ambientes de risco ou enfrentamento de pandemias?',
     itens: [
       { id: 'item-20', label: 'Desempenho de atividade técnica especializada, formalmente reconhecida pela Instituição Federal de Ensino, com domínio técnico diferenciado e contribuição institucional relevante. A pontuação é calculada por ano completo ou fração superior a 6 meses.' },
-      { id: 'item-22', label: 'Recebimento de premiação ou distinção de âmbito internacional, concedida em reconhecimento a projetos implementados ou a contribuições relevantes na administração pública.' },
-      { id: 'item-23', label: 'Recebimento de premiação ou distinção de âmbito nacional, concedida em reconhecimento a projetos implementados ou a contribuições relevantes na administração pública.' },
-      { id: 'item-24', label: 'Recebimento de reconhecimento formal, menção honrosa ou premiação de âmbito local ou institucional, concedida em reconhecimento a projetos implementados ou a contribuições relevantes na administração pública.' },
+      { id: 'item-22', label: 'Recebimento de premiação de âmbito internacional por projeto implementado na administração pública.' },
+      { id: 'item-23', label: 'Recebimento de premiação de âmbito nacional por projeto implementado na administração pública.' },
+      { id: 'item-24', label: 'Recebimento de premiação de âmbito local ou institucional, formalmente instituído, por projeto implementado na administração pública.' },
       { id: 'item-29', label: 'Participação em atividades de apoio técnico especializado em ações na área de saúde, acessibilidade ou diversidade no âmbito da IFE. A pontuação é calculada por ano completo ou fração superior a 6 meses de exercício.' },
       { id: 'item-30', label: 'Atuação tecnicamente qualificada em ambientes ou processos que demandem condições especiais de segurança, cuidado ou conformidade, desde que não receba adicional de periculosidade ou insalubridade pelas mesmas condições.' },
       { id: 'item-40', label: 'Conclusão de curso de educação formal em nível superior ao exigido para o ingresso no cargo de que é titular, e que não esteja sendo utilizado para percepção do atual nível de Incentivo à Qualificação (IQ).' },

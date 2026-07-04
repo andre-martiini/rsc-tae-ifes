@@ -3,11 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   Calendar,
   ChevronRight,
   CircleHelp,
+  History,
+  Inbox,
   Loader2,
+  Lock,
+  Plus,
   PlusCircle,
+  ShieldCheck,
   Trash2,
   Upload,
   UserCircle,
@@ -312,37 +319,40 @@ export default function LandingScreen() {
         </svg>
       </div>
 
-      <main className="max-w-7xl mx-auto px-6 py-8 md:py-10 relative z-10 w-full flex-1 flex items-center justify-center">
-        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 md:gap-8 items-center w-full">
-            
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 md:py-10 relative z-10 w-full flex-1 flex items-center justify-center">
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 md:gap-8 items-center w-full">
+
             {/* Left Column: Hero & Actions */}
-            <div className="xl:col-span-7 flex flex-col gap-6 md:gap-8">
+            <div className="xl:col-span-7 flex flex-col gap-5 md:gap-8">
 
               {/* Hero Section */}
               <section className="flex flex-col items-start">
-                <button
-                  type="button"
-                  onClick={() => setShowAbout((prev) => !prev)}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant shadow-sm mb-6 hover:bg-surface-container hover:text-primary transition-colors cursor-pointer text-xs font-semibold"
-                >
-                  <span className="material-symbols-outlined text-[16px]">help</span>
-                  O que é o Assistente RSC-TAE?
-                </button>
-                
-                <h1 className="text-4xl md:text-5xl lg:text-6xl leading-[1.1] text-on-surface mb-6 font-bold tracking-tight font-headline">
+                <div className="mb-4 md:mb-6 flex w-full items-center justify-between gap-3">
+                  <AppLogo className="h-10 w-10 md:h-12 md:w-12 shrink-0 drop-shadow-sm" />
+                  <button
+                    type="button"
+                    onClick={() => setShowAbout((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant shadow-sm hover:bg-surface-container hover:text-primary transition-colors cursor-pointer text-[11px] sm:text-xs font-semibold"
+                  >
+                    <CircleHelp className="h-3.5 w-3.5 shrink-0" />
+                    O que é o Assistente RSC-TAE?
+                  </button>
+                </div>
+
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl leading-[1.1] text-on-surface mb-3 md:mb-6 font-bold tracking-tight font-headline">
                   Assistente <span className="text-primary">RSC-TAE</span>
                 </h1>
-                
-                <p className="text-base md:text-lg text-on-surface-variant max-w-xl leading-relaxed mb-8">
+
+                <p className="text-sm md:text-lg text-on-surface-variant max-w-xl leading-relaxed mb-5 md:mb-8">
                   {institutionConfig.appSubtitle}
                 </p>
 
                 <button
                   type="button"
                   onClick={() => setShowUpdatesModal(true)}
-                  className="px-5 py-2.5 rounded-full border-2 border-primary/20 text-primary hover:bg-primary/5 transition-colors flex items-center gap-2 text-xs font-semibold"
+                  className="px-4 py-2 md:px-5 md:py-2.5 rounded-full border-2 border-primary/20 text-primary hover:bg-primary/5 transition-colors flex items-center gap-2 text-xs font-semibold"
                 >
-                  <span className="material-symbols-outlined text-[18px]">schedule</span>
+                  <Clock className="h-4 w-4 shrink-0" />
                   Ver Novidades do Sistema
                 </button>
               </section>
@@ -365,23 +375,23 @@ export default function LandingScreen() {
 
               {/* Action Area (Form or Action Grid) */}
               {showForm ? (
-                <div className="rounded-3xl border border-outline-variant/40 bg-white/95 p-6 shadow-xl max-w-xl backdrop-blur-xl w-full">
-                  <div className="mb-6 flex items-center gap-3">
+                <div className="rounded-2xl sm:rounded-3xl border border-outline-variant/40 bg-white/95 p-4 sm:p-6 shadow-xl max-w-xl backdrop-blur-xl w-full">
+                  <div className="mb-4 sm:mb-6 flex items-center gap-3">
                     <button
                       type="button"
                       onClick={() => setShowForm(false)}
                       className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
                     >
-                      <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                      <ArrowLeft className="h-4 w-4" />
                     </button>
-                    <span className="material-symbols-outlined text-primary text-[20px]">person</span>
+                    <UserCircle className="h-5 w-5 text-primary" />
                     <h2 className="text-base font-bold text-gray-900">Criar Perfil</h2>
                   </div>
-                  <p className="mb-6 text-xs text-gray-500">
+                  <p className="mb-4 sm:mb-6 text-xs text-gray-500">
                     Preencha seus dados de identificação para criar a sessão. Eles ficam salvos apenas neste navegador.
                   </p>
 
-                  <form onSubmit={handleCreateSubmit} className="space-y-5">
+                  <form onSubmit={handleCreateSubmit} className="space-y-4 sm:space-y-5">
                     <div className="space-y-1.5 relative">
                       <Label htmlFor="nome_completo">
                         Nome Completo <span className="text-red-500">*</span>
@@ -472,26 +482,27 @@ export default function LandingScreen() {
                   </form>
                 </div>
               ) : (
-                <section className="grid grid-cols-1 sm:grid-cols-2 gap-6 max-w-xl w-full">
+                <section className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 max-w-xl w-full">
                   {/* Nova Sessão Card */}
                   <button
                     type="button"
                     onClick={() => setShowForm(true)}
-                    className="group relative p-6 md:p-8 rounded-3xl text-left overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-white/70 backdrop-blur-xl border border-outline-variant/40 hover:border-primary/40 shadow-sm flex flex-col justify-between min-h-[160px] md:min-h-[190px] w-full"
+                    className="group relative p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl text-left overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-white/70 backdrop-blur-xl border border-outline-variant/40 hover:border-primary/40 shadow-sm flex flex-row items-center gap-4 sm:flex-col sm:items-stretch sm:justify-between sm:gap-0 sm:min-h-[190px] w-full"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative z-10 flex flex-col h-full justify-between">
-                      <div className="w-14 h-14 bg-surface rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-center text-primary mb-10 group-hover:scale-110 group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
-                        <span className="material-symbols-outlined text-[28px]">add</span>
+                    <div className="relative z-10 flex flex-row items-center gap-4 sm:flex-col sm:items-stretch sm:h-full sm:justify-between flex-1 min-w-0">
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 shrink-0 bg-surface rounded-xl sm:rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-center text-primary sm:mb-10 group-hover:scale-110 group-hover:bg-primary group-hover:text-on-primary transition-all duration-300">
+                        <Plus className="h-6 w-6 sm:h-7 sm:w-7" />
                       </div>
-                      <div>
-                        <h3 className="text-xl md:text-2xl font-bold text-on-surface mb-1 group-hover:text-primary transition-colors font-headline">Nova Sessão</h3>
-                        <p className="text-[11px] md:text-xs text-on-surface-variant uppercase tracking-widest font-semibold">Começar do Zero</p>
+                      <div className="min-w-0">
+                        <h3 className="text-base sm:text-xl md:text-2xl font-bold text-on-surface sm:mb-1 group-hover:text-primary transition-colors font-headline">Nova Sessão</h3>
+                        <p className="text-[10px] sm:text-[11px] md:text-xs text-on-surface-variant uppercase tracking-widest font-semibold">Começar do Zero</p>
                       </div>
                     </div>
-                    <div className="absolute right-6 bottom-6 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
+                    <ChevronRight className="relative z-10 h-5 w-5 shrink-0 text-outline-variant group-hover:text-primary transition-colors sm:hidden" />
+                    <div className="absolute right-6 bottom-6 hidden sm:block opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
                       <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                        <span className="material-symbols-outlined">arrow_forward</span>
+                        <ArrowRight className="h-5 w-5" />
                       </div>
                     </div>
                   </button>
@@ -501,25 +512,26 @@ export default function LandingScreen() {
                     type="button"
                     onClick={() => importInputRef.current?.click()}
                     disabled={isImporting}
-                    className="group relative p-6 md:p-8 rounded-3xl text-left overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-white/70 backdrop-blur-xl border border-outline-variant/40 hover:border-secondary/40 shadow-sm disabled:opacity-50 flex flex-col justify-between min-h-[160px] md:min-h-[190px] w-full"
+                    className="group relative p-4 sm:p-6 md:p-8 rounded-2xl sm:rounded-3xl text-left overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl bg-white/70 backdrop-blur-xl border border-outline-variant/40 hover:border-secondary/40 shadow-sm disabled:opacity-50 flex flex-row items-center gap-4 sm:flex-col sm:items-stretch sm:justify-between sm:gap-0 sm:min-h-[190px] w-full"
                   >
                     <div className="absolute inset-0 bg-gradient-to-br from-secondary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                    <div className="relative z-10 flex flex-col h-full justify-between">
-                      <div className="w-14 h-14 bg-surface rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-center text-on-surface-variant mb-10 group-hover:scale-110 group-hover:bg-secondary group-hover:text-on-secondary transition-all duration-300">
+                    <div className="relative z-10 flex flex-row items-center gap-4 sm:flex-col sm:items-stretch sm:h-full sm:justify-between flex-1 min-w-0">
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 shrink-0 bg-surface rounded-xl sm:rounded-2xl shadow-sm border border-outline-variant/30 flex items-center justify-center text-on-surface-variant sm:mb-10 group-hover:scale-110 group-hover:bg-secondary group-hover:text-on-secondary transition-all duration-300">
                         {isImporting ? (
-                          <span className="material-symbols-outlined text-[28px] animate-spin">sync</span>
+                          <Loader2 className="h-6 w-6 sm:h-7 sm:w-7 animate-spin" />
                         ) : (
-                          <span className="material-symbols-outlined text-[28px]">upload</span>
+                          <Upload className="h-6 w-6 sm:h-7 sm:w-7" />
                         )}
                       </div>
-                      <div>
-                        <h3 className="text-xl md:text-2xl font-bold text-on-surface mb-1 group-hover:text-secondary transition-colors font-headline">Restaurar Sessão</h3>
-                        <p className="text-[11px] md:text-xs text-on-surface-variant uppercase tracking-widest font-semibold">Carregar Backup .zip</p>
+                      <div className="min-w-0">
+                        <h3 className="text-base sm:text-xl md:text-2xl font-bold text-on-surface sm:mb-1 group-hover:text-secondary transition-colors font-headline">Restaurar Sessão</h3>
+                        <p className="text-[10px] sm:text-[11px] md:text-xs text-on-surface-variant uppercase tracking-widest font-semibold">Carregar Backup .zip</p>
                       </div>
                     </div>
-                    <div className="absolute right-6 bottom-6 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
+                    <ChevronRight className="relative z-10 h-5 w-5 shrink-0 text-outline-variant group-hover:text-secondary transition-colors sm:hidden" />
+                    <div className="absolute right-6 bottom-6 hidden sm:block opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-4 group-hover:translate-x-0">
                       <div className="w-10 h-10 rounded-full bg-secondary/10 flex items-center justify-center text-secondary">
-                        <span className="material-symbols-outlined">arrow_upward</span>
+                        <ArrowUp className="h-5 w-5" />
                       </div>
                     </div>
                   </button>
@@ -539,13 +551,13 @@ export default function LandingScreen() {
               
               {/* Version Alert */}
               <section className="w-full">
-                <div className="bg-white/80 backdrop-blur-md border border-primary/20 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row gap-4 items-start shadow-sm relative overflow-hidden">
+                <div className="bg-white/80 backdrop-blur-md border border-primary/20 rounded-2xl p-3.5 md:p-6 flex flex-row gap-3 md:gap-4 items-start shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                  <div className="w-10 h-10 bg-primary/10 rounded-full text-primary flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: '"FILL" 1' }}>verified</span>
+                  <div className="w-9 h-9 md:w-10 md:h-10 bg-primary/10 rounded-full text-primary flex items-center justify-center flex-shrink-0">
+                    <ShieldCheck className="h-4.5 w-4.5 md:h-5 md:w-5" />
                   </div>
-                  <div>
-                    <h3 className="text-xs md:text-sm font-bold text-on-surface mb-1 uppercase tracking-wider font-sans">Versão Beta Baseada no Decreto</h3>
+                  <div className="min-w-0">
+                    <h3 className="text-[11px] md:text-sm font-bold text-on-surface mb-0.5 md:mb-1 uppercase tracking-wider font-sans">Versão Beta Baseada no Decreto</h3>
                     <p className="text-xs md:text-sm leading-relaxed text-on-surface-variant font-sans">
                       O sistema foi ajustado ao Decreto nº 13.048/2026 e continua em evolução com atos complementares e normas internas.
                     </p>
@@ -557,18 +569,18 @@ export default function LandingScreen() {
               <section className="flex-1 flex flex-col w-full">
                 <div className="bg-white/80 backdrop-blur-xl border border-outline-variant/60 rounded-3xl overflow-hidden shadow-lg shadow-on-surface/5 flex flex-col h-full w-full">
                   
-                  <div className="px-6 py-4 border-b border-outline-variant/40 flex items-center justify-between bg-surface-container-lowest/50">
+                  <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-outline-variant/40 flex items-center justify-between bg-surface-container-lowest/50">
                     <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary text-[20px]">history</span>
+                      <History className="h-4 w-4 text-primary" />
                       <h2 className="text-xs font-bold text-on-surface uppercase tracking-widest font-sans">Sessões Salvas</h2>
                     </div>
                     <span className="bg-primary text-on-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-sm">{sessions.length}</span>
                   </div>
-                  
+
                   <div className="p-2 flex-1 overflow-y-auto max-h-[350px]">
                     {sessions.length === 0 ? (
-                      <div className="p-8 text-center text-gray-400">
-                        <span className="material-symbols-outlined text-[48px] block mb-2 opacity-50">hourglass_empty</span>
+                      <div className="p-6 sm:p-8 text-center text-gray-400">
+                        <Inbox className="mx-auto mb-2 h-9 w-9 opacity-50" />
                         <p className="text-sm">Nenhuma sessão salva neste navegador.</p>
                       </div>
                     ) : (
@@ -576,40 +588,39 @@ export default function LandingScreen() {
                         {sessions.map((session) => (
                           <div
                             key={session.id}
-                            className="p-4 md:p-6 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-surface-container-low transition-all duration-200 group border border-transparent hover:border-outline-variant/30"
+                            className="p-3 sm:p-4 md:p-5 rounded-2xl flex items-center gap-3 sm:gap-4 hover:bg-surface-container-low transition-all duration-200 group border border-transparent hover:border-outline-variant/30"
                           >
-                            <div className="flex items-center gap-4">
-                              <div className="w-12 h-12 bg-surface border border-outline-variant/50 text-primary rounded-full flex items-center justify-center flex-shrink-0 shadow-sm group-hover:bg-primary group-hover:text-on-primary transition-colors">
-                                <span className="material-symbols-outlined text-[22px]">person</span>
-                              </div>
-                              <div>
-                                <h4 className="text-sm md:text-base font-bold text-on-surface group-hover:text-primary transition-colors font-sans">{session.nome_completo}</h4>
-                                <div className="flex items-center gap-2 mt-1 text-on-surface-variant text-[11px] font-sans font-medium">
-                                  <span className="bg-surface-container px-2 py-0.5 rounded text-on-surface">SIAPE {session.siape}</span>
-                                  <span className="w-1 h-1 bg-outline-variant rounded-full"></span>
-                                  <span className="flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[12px]">calendar_today</span> 
-                                    {formatDate(session.updated_at)}
-                                  </span>
-                                </div>
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-surface border border-outline-variant/50 text-primary rounded-full flex items-center justify-center flex-shrink-0 shadow-sm group-hover:bg-primary group-hover:text-on-primary transition-colors">
+                              <UserCircle className="h-5 w-5 sm:h-6 sm:w-6" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="text-sm md:text-base font-bold text-on-surface group-hover:text-primary transition-colors font-sans truncate">{session.nome_completo}</h4>
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1 text-on-surface-variant text-[11px] font-sans font-medium">
+                                <span className="bg-surface-container px-1.5 py-0.5 rounded text-on-surface whitespace-nowrap">SIAPE {session.siape}</span>
+                                <span className="flex items-center gap-1 whitespace-nowrap">
+                                  <Calendar className="h-3 w-3" />
+                                  {formatDate(session.updated_at)}
+                                </span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                               <button
                                 type="button"
                                 disabled={deletingId === session.id}
                                 onClick={() => handleDeleteSession(session.id)}
-                                className="text-outline hover:text-error transition-colors p-2 rounded-full hover:bg-error-container/50 opacity-0 group-hover:opacity-100 focus:opacity-100 disabled:opacity-40"
+                                className="text-outline-variant hover:text-error transition-colors p-2 rounded-full hover:bg-error-container/50 sm:text-outline sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 disabled:opacity-40"
                                 title="Remover sessão"
                               >
-                                <span className="material-symbols-outlined text-[20px]">delete</span>
+                                <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => handleContinue(session.id)}
-                                className="bg-surface border border-outline-variant text-on-surface px-4 py-2 rounded-xl text-xs md:text-sm font-semibold group-hover:bg-primary group-hover:text-on-primary group-hover:border-primary transition-all flex items-center gap-1 shadow-sm font-sans"
+                                title="Continuar sessão"
+                                className="bg-surface border border-outline-variant text-on-surface p-2.5 sm:px-4 sm:py-2 rounded-full sm:rounded-xl text-xs md:text-sm font-semibold group-hover:bg-primary group-hover:text-on-primary group-hover:border-primary transition-all flex items-center gap-1 shadow-sm font-sans whitespace-nowrap"
                               >
-                                Continuar <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                                <span className="hidden sm:inline">Continuar</span>
+                                <ChevronRight className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                               </button>
                             </div>
                           </div>
@@ -618,9 +629,9 @@ export default function LandingScreen() {
                     )}
                   </div>
 
-                  <div className="px-4 py-2 bg-surface-container-lowest/80 border-t border-outline-variant/40">
-                    <p className="text-center text-[11px] text-outline font-medium flex items-center justify-center gap-1.5 font-sans">
-                      <span className="material-symbols-outlined text-[14px]">lock</span>
+                  <div className="px-3 sm:px-4 py-2 bg-surface-container-lowest/80 border-t border-outline-variant/40">
+                    <p className="text-center text-[10px] sm:text-[11px] text-outline font-medium flex items-center justify-center gap-1.5 font-sans">
+                      <Lock className="h-3 w-3 shrink-0" />
                       Todos os dados são armazenados exclusivamente neste navegador. Nenhuma informação é enviada a servidores externos.
                     </p>
                   </div>
