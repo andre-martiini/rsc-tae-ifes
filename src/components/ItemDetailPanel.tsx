@@ -335,11 +335,16 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     if (!isValid(start) || !isValid(end) || end < start) return void toast.error('Informe um período válido.');
     if (item.modo_calculo === 'auto_ano_fracao') {
       const totalMeses = (differenceInDays(end, start) + 1) / 30;
-      if (totalMeses < 6) {
+      // Anos completos + 1 unidade se a fração restante exceder seis meses
+      // (art. 5º e Anexos: "por ano ou fração acima de seis meses").
+      const anosCompletos = Math.floor(totalMeses / 12);
+      const fracaoMeses = totalMeses - anosCompletos * 12;
+      const unidades = anosCompletos + (fracaoMeses > 6 ? 1 : 0);
+      if (unidades < 1) {
         setQuantidade('0');
-        return void toast.warning('Período inferior a 6 meses — não computa unidade para este item.');
+        return void toast.warning('Período de até 6 meses — não computa unidade para este item.');
       }
-      setQuantidade(String(Math.floor((totalMeses - 6) / 12) + 1));
+      setQuantidade(String(unidades));
     } else {
       setQuantidade(((differenceInDays(end, start) + 1) / 30).toFixed(2));
     }

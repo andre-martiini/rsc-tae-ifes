@@ -865,7 +865,7 @@ export default function Consolidation() {
                             Critério {inciso} - {
                               inciso === 'I' ? 'Participação em grupos, comissões, comitês, núcleos ou representações' :
                                 inciso === 'II' ? 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência' :
-                                  inciso === 'III' ? 'Premiações e reconhecimentos públicos' :
+                                  inciso === 'III' ? 'Premiação em evento de reconhecimento público' :
                                     inciso === 'IV' ? 'Responsabilidades técnico-administrativas e/ou especializadas' :
                                       inciso === 'V' ? 'Funções ou cargos de direção e assessoramento institucional' :
                                         'Produção, prospecção e difusão de conhecimento'
