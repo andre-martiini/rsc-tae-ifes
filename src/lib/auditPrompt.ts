@@ -217,8 +217,17 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     '## Pendencias de Texto ou Legibilidade',
     'Liste documentos sem transcricao, com OCR fraco ou com informacao insuficiente.',
     '',
-    '## Acoes Recomendadas Antes da Exportacao',
-    'Liste ajustes objetivos que o servidor deve fazer no sistema antes de gerar o pacote PDF final.',
+    '## Plano de Acao para Corrigir a Documentacao',
+    'Esta e a secao MAIS IMPORTANTE para o servidor. Escreva um passo a passo simples e didatico,',
+    'em linguagem acessivel (o leitor NAO e especialista em RSC nem em termos juridicos),',
+    'explicando exatamente o que ele deve fazer DENTRO DO SISTEMA para deixar a documentacao correta.',
+    '',
+    'Regras para o plano de acao:',
+    '- Se NAO houver nenhum problema, escreva apenas: "Nenhuma correcao necessaria. Sua documentacao esta pronta para exportacao." e nao invente passos.',
+    '- Se houver problemas, numere os passos em ordem de prioridade (1., 2., 3...), um passo por problema encontrado na tabela de conflitos.',
+    '- Cada passo deve dizer: (a) O QUE fazer (ex.: excluir, substituir, anexar, corrigir data ou quantidade); (b) ONDE fazer (cite o item do sistema, ex.: "abra a aba Itens e localize o II-11 - Item 11"); (c) QUAL documento esta envolvido (cite a chave DOC-XX e o nome do arquivo); (d) POR QUE isso e necessario, em uma frase simples.',
+    '- Exemplo de passo bem escrito: "1. Exclua o lancamento duplicado do item I-3 - Item 3: as portarias DOC-04 e DOC-07 tratam da mesma comissao, entao apenas uma pode pontuar. Mantenha a mais recente e remova o outro lancamento na aba Itens."',
+    '- Ao final do plano, acrescente uma frase de fechamento indicando o que o servidor deve fazer depois das correcoes (ex.: rodar novamente esta auditoria e so entao gerar o pacote final).',
   ].join('\n');
 
   return [header, '', serverBlock, '', documentBlock, '', launchesBlock, '', responseFormat].join('\n');
