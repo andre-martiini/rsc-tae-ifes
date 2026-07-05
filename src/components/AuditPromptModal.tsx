@@ -200,7 +200,7 @@ export default function AuditPromptModal({
               {'Auditoria sem\u00e2ntica via IA'}
             </h2>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
-              {'O sistema prepara as transcri\u00e7\u00f5es dispon\u00edveis e gera um prompt consolidado para revisar conflitos, duplicidades e inconsist\u00eancias antes da exporta\u00e7\u00e3o final.'}
+              {'O sistema prepara as transcri\u00e7\u00f5es dispon\u00edveis e gera um prompt consolidado para revisar conflitos, duplicidades e inconsist\u00eancias antes da exporta\u00e7\u00e3o final. Ao final, a IA monta um plano de a\u00e7\u00e3o passo a passo indicando o que corrigir na sua documenta\u00e7\u00e3o.'}
             </p>
           </div>
           <button
