@@ -1,0 +1,513 @@
+{
+  "$fonte": "Decreto nº 13.048, de 3 de julho de 2026 (Anexos I a VI) — Lei nº 15.367/2026",
+  "$gerado_por": "rsc-tae-ifes/scripts/export-rol.ts — NÃO editar manualmente; altere o rol em src/data/normative e re-exporte",
+  "niveis": [
+    {
+      "id": "RSC-I",
+      "equivalencia": "Ensino Fundamental",
+      "percentualIQ": 10,
+      "pontosMinimos": 10,
+      "criteriosMinimos": 1,
+      "incisosObrigatorios": null
+    },
+    {
+      "id": "RSC-II",
+      "equivalencia": "Ensino Médio",
+      "percentualIQ": 15,
+      "pontosMinimos": 15,
+      "criteriosMinimos": 2,
+      "incisosObrigatorios": null
+    },
+    {
+      "id": "RSC-III",
+      "equivalencia": "Graduação",
+      "percentualIQ": 25,
+      "pontosMinimos": 25,
+      "criteriosMinimos": 2,
+      "incisosObrigatorios": null
+    },
+    {
+      "id": "RSC-IV",
+      "equivalencia": "Especialização",
+      "percentualIQ": 30,
+      "pontosMinimos": 30,
+      "criteriosMinimos": 3,
+      "incisosObrigatorios": [
+        [
+          "II",
+          "IV",
+          "V",
+          "VI"
+        ]
+      ]
+    },
+    {
+      "id": "RSC-V",
+      "equivalencia": "Mestrado",
+      "percentualIQ": 52,
+      "pontosMinimos": 52,
+      "criteriosMinimos": 5,
+      "incisosObrigatorios": [
+        [
+          "IV",
+          "V",
+          "VI"
+        ]
+      ]
+    },
+    {
+      "id": "RSC-VI",
+      "equivalencia": "Doutorado",
+      "percentualIQ": 75,
+      "pontosMinimos": 75,
+      "criteriosMinimos": 7,
+      "incisosObrigatorios": [
+        [
+          "VI"
+        ]
+      ]
+    }
+  ],
+  "itens": [
+    {
+      "inciso": "I",
+      "numero": 1,
+      "descricao": "Exercício do mandato como membro de conselhos superiores e conselhos de unidades e órgãos colegiados da Instituição Federal de Ensino.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 2,
+      "descricao": "Coordenação ou presidência de núcleos, representações, grupos de trabalho ou similares, comissões ou comitês previstos no âmbito da administração pública, regularmente instituídos, ou reconhecidos pelo órgão ou pela entidade.",
+      "unidade": "Por designação",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 3,
+      "descricao": "Participação como membro de núcleos, representações, grupos de trabalho ou similares, comissões ou comitês previstos no âmbito da administração pública, regularmente instituídos.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 4,
+      "descricao": "Participação como defensor dativo ou como membro de equipe designada em processos de apuração de materialidade e responsabilidade, como sindicância, processo administrativo disciplinar e tomada de contas especial.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 5,
+      "descricao": "Atuação em atividades de organização, fiscalização, execução de exame de seleção, vestibular ou concursos.",
+      "unidade": "Por designação",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 6,
+      "descricao": "Atuação em atividades de elaboração, revisão e/ou correção de provas de exame de seleção, vestibular ou concursos.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 7,
+      "descricao": "Exercício de mandato em entidade sindical da categoria.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 1.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 8,
+      "descricao": "Participação como membro em programas ou projetos de políticas públicas externas à Instituição Federal de Ensino, desde que comprovada a obtenção de resultados institucionais relevantes.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 9,
+      "descricao": "Representação legal da Instituição Federal de Ensino junto a órgãos e entidades do Poder Público ou responsabilidade técnica junto a órgãos de fiscalização, controle e regulação.",
+      "unidade": "Por designação",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "I",
+      "numero": 10,
+      "descricao": "Atuação técnica externa, formalmente autorizada ou reconhecida pela Instituição Federal de Ensino de lotação, em órgãos estatais ou paraestatais, escolas de governo, agências reguladoras ou organismos internacionais, com contribuição ou repercussão institucional.",
+      "unidade": "Por produto",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 1,
+      "descricao": "Coordenação de projetos institucionais (ensino, pesquisa, extensão, gestão e inovação).",
+      "unidade": "Por projeto",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 2,
+      "descricao": "Participação em atividades técnicas e/ou especializadas em projetos, incluída a elaboração de projetos pedagógicos, programas e/ou ações institucionais (ensino, pesquisa, extensão, gestão e inovação).",
+      "unidade": "Por projeto",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 3,
+      "descricao": "Participação em comissão ou conselho editorial de livros, revistas ou publicações científicas ou outras publicações acadêmicas.",
+      "unidade": "Por mandato",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 4,
+      "descricao": "Participação em atividade de cooperação técnica interinstitucional em projetos institucionais.",
+      "unidade": "Por projeto",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 5,
+      "descricao": "Participação em atividades de orientação, tutoria, preceptoria ou supervisão.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 6,
+      "descricao": "Participação em atividades de produção ou reformulação de material acessível, ou técnico de referência (manuais, roteiros técnicos).",
+      "unidade": "Por produto",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 7,
+      "descricao": "Participação em atividade de avaliação de trabalho ou atuação como jurado em eventos acadêmicos, científicos, culturais, esportivos e técnicos.",
+      "unidade": "Por evento",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 8,
+      "descricao": "Participação em atividade institucional de produção audiovisual, artística, exposição, podcast ou outras formas de apresentação.",
+      "unidade": "Por projeto",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 9,
+      "descricao": "Participação em programas de formação continuada e/ou ações de desenvolvimento de competências, desde que não utilizada para fins de aceleração da promoção na carreira (carga horária mínima de dez horas).",
+      "unidade": "Por capacitação",
+      "pontos": 1,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 10,
+      "descricao": "Desempenho de atividade técnica especializada, formalmente reconhecida pela Instituição Federal de Ensino, com demonstração de domínio técnico diferenciado e contribuição institucional relevante na área de atuação.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 1,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "II",
+      "numero": 11,
+      "descricao": "Participação em capacitação, fórum, oficina, workshop e congresso, com carga horária mínima de dez horas, vinculada aos interesses da Instituição Federal de Ensino.",
+      "unidade": "Por evento",
+      "pontos": 1,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "III",
+      "numero": 1,
+      "descricao": "Recebimento de premiação de âmbito internacional por projeto implementado na administração pública.",
+      "unidade": "Por prêmio",
+      "pontos": 20,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "III",
+      "numero": 2,
+      "descricao": "Recebimento de premiação de âmbito nacional por projeto implementado na administração pública.",
+      "unidade": "Por prêmio",
+      "pontos": 15,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "III",
+      "numero": 3,
+      "descricao": "Recebimento de premiação de âmbito local ou institucional, formalmente instituído, por projeto implementado na administração pública.",
+      "unidade": "Por prêmio",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 1,
+      "descricao": "Atuação tecnicamente qualificada na operação, na implantação, no suporte ou no apoio a desenvolvimento, parametrização ou aperfeiçoamento de sistemas estruturantes da administração pública.",
+      "unidade": "Por sistema",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 2,
+      "descricao": "Elaboração de projeto básico ou de termo de referência, ou participação como membro de equipe de planejamento de contratação.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 3,
+      "descricao": "Exercício de atividades de gestão ou fiscalização de contratos de aquisição, serviços, convênios e acordos ou instrumentos correlatos.",
+      "unidade": "Por designação",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 4,
+      "descricao": "Exercício de atividades relacionadas à licitação e às suas excepcionalidades.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 5,
+      "descricao": "Participação em atividades de apoio técnico especializado em políticas, programas e ações de promoção na área de saúde humana, animal e ambiente, de acessibilidade ou diversidade, de interesse institucional.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 6,
+      "descricao": "Atuação tecnicamente qualificada em ambientes ou processos que demandem condições especiais de segurança, cuidado ou conformidade com requisitos legais e regulatórios, desde que não receba adicional de periculosidade ou insalubridade em razão das mesmas condições.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 7,
+      "descricao": "Atuação em sistemas e/ou processos de trabalho institucionais em ensino, pesquisa, extensão, gestão e inovação, desde que não constitua atividade habitual do cargo.",
+      "unidade": "Por designação",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "IV",
+      "numero": 8,
+      "descricao": "Atuação como responsável por setor ou por unidade, formalmente designado, desde que a designação não gere pagamento de remuneração.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "V",
+      "numero": 1,
+      "descricao": "Exercício de Cargo de Direção (CD-02) ou equivalente.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 9,
+      "pontosSubstituto": 4.5
+    },
+    {
+      "inciso": "V",
+      "numero": 2,
+      "descricao": "Exercício de Cargo de Direção (CD-03 e 04) ou equivalente.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 7.5,
+      "pontosSubstituto": 3
+    },
+    {
+      "inciso": "V",
+      "numero": 3,
+      "descricao": "Exercício de Função Gratificada (FG-01 e 02) ou equivalente.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 4.5,
+      "pontosSubstituto": 1.5
+    },
+    {
+      "inciso": "V",
+      "numero": 4,
+      "descricao": "Exercício de Função Gratificada (a partir da FG-03) ou equivalente.",
+      "unidade": "Por ano ou fração acima de seis meses",
+      "pontos": 3,
+      "pontosSubstituto": 1
+    },
+    {
+      "inciso": "VI",
+      "numero": 1,
+      "descricao": "Carta patente relacionada aos interesses institucionais.",
+      "unidade": "Por patente",
+      "pontos": 30,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 2,
+      "descricao": "Participação relevante no desenvolvimento de protótipos, depósitos e/ou registros de propriedade intelectual ou privilégio de invenção relacionada aos interesses institucionais.",
+      "unidade": "Por projeto",
+      "pontos": 25,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 3,
+      "descricao": "Participação em transferência de tecnologia, licenciamento ou exploração de ativo tecnológico, como autor ou inventor relacionada aos interesses institucionais.",
+      "unidade": "Por produto",
+      "pontos": 20,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 4,
+      "descricao": "Conclusão de curso de educação formal superior ao exigido para o ingresso no cargo de que é titular e que não seja utilizado para percepção de Incentivo à Qualificação - IQ.",
+      "unidade": "Por curso",
+      "pontos": 15,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 5,
+      "descricao": "Participação relevante na implantação ou desenvolvimento de produto, projeto, processo, técnica ou tecnologia de interesse institucional.",
+      "unidade": "Por produto",
+      "pontos": 15,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 6,
+      "descricao": "Atuação em atividade de liderança ou vice-liderança de grupo de pesquisa ou extensão registrado em órgão ou sistema oficial de reconhecimento institucional.",
+      "unidade": "Por grupo de pesquisa",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 7,
+      "descricao": "Participação como membro em grupo de pesquisa devidamente registrado em órgão ou sistema oficial de reconhecimento institucional.",
+      "unidade": "Por projeto",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 8,
+      "descricao": "Aprovação de projeto para a captação de recursos para a Instituição Federal de Ensino.",
+      "unidade": "Por projeto",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 9,
+      "descricao": "Publicação ou organização de livro relacionado aos interesses institucionais (com ISBN e Conselho Editorial).",
+      "unidade": "Por produto",
+      "pontos": 20,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 10,
+      "descricao": "Autoria ou coautoria de capítulo de livro, de artigo publicado em revista especializada, jornal científico ou periódico, relacionado aos interesses institucionais.",
+      "unidade": "Por publicação",
+      "pontos": 7.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 11,
+      "descricao": "Apresentação de trabalho de interesse institucional em congresso, seminário ou outros eventos.",
+      "unidade": "Por produto",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 12,
+      "descricao": "Produção de material técnico, científico, metodológico ou administrativo estruturado que visa à difusão do conhecimento.",
+      "unidade": "Por produto",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 13,
+      "descricao": "Avaliação do projeto de ensino e/ou pesquisa e/ou extensão e/ou inovação.",
+      "unidade": "Por projeto",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 14,
+      "descricao": "Participação em atividade de difusão ou apoio à formação institucional (expositor, facilitador, colaborador).",
+      "unidade": "Por evento",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 15,
+      "descricao": "Atuação formalmente autorizada como instrutor, tutor, palestrante, autor de conteúdo técnico ou orientador em ação formativa estruturada de interesse institucional, prevista em plano ou programa de desenvolvimento de pessoas.",
+      "unidade": "Por curso",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 16,
+      "descricao": "Atuação na coordenação de congresso, simpósio ou seminário de interesse institucional.",
+      "unidade": "Por evento",
+      "pontos": 3.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 17,
+      "descricao": "Exercício de atividade de coorientação de trabalho de conclusão de curso em diferentes modalidades de ensino.",
+      "unidade": "Por evento",
+      "pontos": 4.5,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 18,
+      "descricao": "Autoria de obra artística ou cultural registrada com contribuição ou repercussão institucional comprovada.",
+      "unidade": "Por produto",
+      "pontos": 3,
+      "pontosSubstituto": null
+    },
+    {
+      "inciso": "VI",
+      "numero": 19,
+      "descricao": "Atuação institucional no enfrentamento de situações de surto, epidemia e pandemia.",
+      "unidade": "Por mês",
+      "pontos": 1,
+      "pontosSubstituto": null
+    }
+  ]
+}

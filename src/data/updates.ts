@@ -14,6 +14,17 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '05 de julho de 2026',
+    title: 'Auditoria IA com plano de ação e rol compartilhado com o Analisador',
+    description: 'A auditoria semântica ficou mais útil e a base de critérios passou a ser compartilhada com o sistema Analisador de Processos RSC da Comissão.',
+    features: [
+      'A Auditoria IA (tela de Consolidação) agora orienta a IA a encerrar a resposta com um plano de ação passo a passo, simples e didático, dizendo exatamente o que corrigir na sua documentação (ex.: qual lançamento duplicado excluir e em qual item do sistema).',
+    ],
+    improvements: [
+      'Novo comando "npm run export-rol" gera o rol canônico de critérios (shared/rol-rsc-pcctae-2026.json), consumido também pelo Analisador de Processos RSC — os dois sistemas passam a usar exatamente a mesma tabela do Decreto nº 13.048/2026.',
+    ],
+  },
+  {
     date: '03 de julho de 2026',
     title: 'Alinhamento ao Decreto nº 13.048/2026',
     description: 'Atualização da base normativa e das telas principais após a publicação do decreto regulamentador do RSC-PCCTAE.',
