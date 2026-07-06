@@ -94,6 +94,8 @@ export interface Lancamento {
   fato_gerador_descricao?: string;
   data_inicio: string;
   data_fim: string;
+  /** Períodos individuais (ex.: uma portaria por período). data_inicio/data_fim guardam a abrangência total. */
+  periodos?: Array<{ inicio: string; fim: string }>;
   quantidade_informada: number;
   justificativa_alteracao?: string;
   declaracao_nao_duplicidade?: boolean;

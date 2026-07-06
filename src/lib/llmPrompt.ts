@@ -1,5 +1,6 @@
 import type { ItemRSC, Lancamento, Documento, Servidor } from '../data/mock';
 import { formatarDataSegura } from './utils';
+import { periodosDoLancamento } from './periodos';
 
 export function generateLLMPrompt(params: {
     item: ItemRSC;
@@ -9,12 +10,12 @@ export function generateLLMPrompt(params: {
 }): string {
     const { item, lancamento, documento, servidor } = params;
 
-    const dataInicioStr = formatarDataSegura(lancamento.data_inicio, 'Não informada');
-    const dataFimStr = formatarDataSegura(lancamento.data_fim, 'Não informada');
-
+    const periodosLanc = periodosDoLancamento(lancamento);
     const periodoStr =
-        lancamento.data_inicio && lancamento.data_fim
-            ? `${dataInicioStr} até ${dataFimStr}`
+        periodosLanc.length > 0
+            ? periodosLanc
+                  .map((p) => `${formatarDataSegura(p.inicio, 'Não informada')} até ${formatarDataSegura(p.fim, 'Não informada')}`)
+                  .join('; ')
             : 'Não exigido para este item';
 
     const docInfo = documento

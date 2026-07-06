@@ -11,6 +11,7 @@ import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../d
 import { addPointValues, formatPointValue, sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura, sanitizeForTag } from './utils';
+import { periodosDoLancamento } from './periodos';
 
 export type NivelRsc = {
   label: string;
@@ -893,7 +894,8 @@ export async function generateMemorialDescritivo(
       const item = itensRSC.find((i) => i.id === l.item_rsc_id);
       if (item) {
         writer.text(`Item ${item.numero} — ${item.descricao}`, { bold: true, size: 8.5 });
-        const periodStr = l.data_inicio && l.data_fim ? ` (Período: ${formatDate(l.data_inicio)} a ${formatDate(l.data_fim)})` : '';
+        const periodosL = periodosDoLancamento(l);
+        const periodStr = periodosL.length > 0 ? ` (Período: ${periodosL.map((p) => `${formatDate(p.inicio)} a ${formatDate(p.fim)}`).join('; ')})` : '';
         writer.text(`Observação${periodStr}: ${l.observacao}`, { indent: 8, size: 8.5 });
         writer.gap(4);
       }
@@ -1047,7 +1049,7 @@ export async function generateComprovacaoResumoItem(
     grupo.lancamentos.map((entry) => {
       const docItem = grupo.documentos.find((candidate) => candidate.id === entry.documento_id);
       return [
-        `${formatDate(entry.data_inicio)} a ${formatDate(entry.data_fim)}`,
+        periodosDoLancamento(entry).map((p) => `${formatDate(p.inicio)} a ${formatDate(p.fim)}`).join('; ') || '-',
         formatNumber(entry.quantidade_informada),
         `${formatNumber(entry.pontos_calculados)} pts`,
         docItem?.nome_arquivo ?? '-',

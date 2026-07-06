@@ -2,6 +2,7 @@ import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../d
 import { formatPointValue, sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura } from './utils';
+import { periodosDoLancamento } from './periodos';
 
 type NivelResumo = {
   id?: string;
@@ -47,10 +48,11 @@ function cleanInline(value?: string) {
 }
 
 function formatDateRange(lancamento: Lancamento) {
-  if (!lancamento.data_inicio && !lancamento.data_fim) return 'Nao informado ou nao exigido';
-  const start = formatarDataSegura(lancamento.data_inicio, 'Nao informado');
-  const end = formatarDataSegura(lancamento.data_fim, 'Nao informado');
-  return `${start} a ${end}`;
+  const periodos = periodosDoLancamento(lancamento);
+  if (periodos.length === 0) return 'Nao informado ou nao exigido';
+  return periodos
+    .map((p) => `${formatarDataSegura(p.inicio, 'Nao informado')} a ${formatarDataSegura(p.fim, 'Nao informado')}`)
+    .join('; ');
 }
 
 export function estimatePromptTokens(prompt: string) {

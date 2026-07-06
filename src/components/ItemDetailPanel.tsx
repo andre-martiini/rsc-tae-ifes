@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { differenceInDays, format, isValid, parseISO } from 'date-fns';
+import { format } from 'date-fns';
 import { PDFDocument } from 'pdf-lib';
 import {
   AlertCircle,
@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { normalizeUploadToPdf, toPdfFile, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
 import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
+import { abrangenciaPeriodos, periodosDoLancamento, periodoValido, totalDiasBrutos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, type Periodo } from '../lib/periodos';
 import { cn, formatarDataSegura } from '../lib/utils';
 import { downloadFileFromUrl } from '../lib/urlDownloader';
 import { Button } from './ui/button';
@@ -46,6 +47,20 @@ type UploadMeta = {
   componentFiles?: Documento['arquivos_componentes'];
 };
 
+type PeriodoForm = { inicio: string; fim: string; emVigor: boolean };
+
+const createEmptyPeriodo = (): PeriodoForm => ({ inicio: '', fim: '', emVigor: false });
+
+type PeriodoSetter = React.Dispatch<React.SetStateAction<PeriodoForm[]>>;
+
+const patchPeriodo = (setter: PeriodoSetter, index: number, patch: Partial<PeriodoForm>) =>
+  setter((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+
+const addPeriodo = (setter: PeriodoSetter) => setter((prev) => [...prev, createEmptyPeriodo()]);
+
+const removePeriodo = (setter: PeriodoSetter, index: number) =>
+  setter((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
+
 export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSaved: () => void }) {
   const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, addComprovanteToLancamento, removeComprovanteFromLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
@@ -58,9 +73,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [documentProxyAvailable, setDocumentProxyAvailable] = useState<boolean | null>(null);
   const [referenceInput, setReferenceInput] = useState('');
   const [referenceLinks, setReferenceLinks] = useState<string[]>([]);
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const [ongoing, setOngoing] = useState(false);
+  const [periodos, setPeriodos] = useState<PeriodoForm[]>([createEmptyPeriodo()]);
   const [quantidade, setQuantidade] = useState('');
   const [observacao, setObservacao] = useState('');
   const [saving, setSaving] = useState(false);
@@ -71,8 +84,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [editingObservation, setEditingObservation] = useState('');
   const [editingLancamentoId, setEditingLancamentoId] = useState<string | null>(null);
   const [editQtd, setEditQtd] = useState('');
-  const [editDataInicio, setEditDataInicio] = useState('');
-  const [editDataFim, setEditDataFim] = useState('');
+  const [editPeriodos, setEditPeriodos] = useState<PeriodoForm[]>([createEmptyPeriodo()]);
   const [editObs, setEditObs] = useState('');
   const [addingFileToLancId, setAddingFileToLancId] = useState<string | null>(null);
   const [isAddingFile, setIsAddingFile] = useState(false);
@@ -92,7 +104,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const isSubmitted = processo.status === 'Em triagem';
   const allowsDecimals = item.quantidade_automatica || /tempo|m.s|ano/i.test(item.unidade_medida);
   const showDateFields = item.modo_calculo !== 'manual';
-  const effectiveEndDate = ongoing ? format(new Date(), 'yyyy-MM-dd') : dataFim;
+  const hoje = format(new Date(), 'yyyy-MM-dd');
+  const toPeriodos = (rows: PeriodoForm[]): Periodo[] => rows.map((row) => ({ inicio: row.inicio, fim: row.emVigor ? hoje : row.fim }));
+  const effectivePeriodos = toPeriodos(periodos);
   const quantidadeNumerica = Number.parseFloat(quantidade);
   const itemLancamentos = useMemo(() => lancamentos.filter((entry) => entry.servidor_id === servidor?.id && entry.item_rsc_id === item.id), [item.id, lancamentos, servidor?.id]);
   const itemPontos = useMemo(() => sumPointValues(itemLancamentos.map((entry) => entry.pontos_calculados)), [itemLancamentos]);
@@ -127,9 +141,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     setReferenceInput('');
     setReferenceLinks([]);
     setIsDownloading(false);
-    setDataInicio('');
-    setDataFim('');
-    setOngoing(false);
+    setPeriodos([createEmptyPeriodo()]);
     setQuantidade('');
     setObservacao('');
     resetUpload();
@@ -329,24 +341,43 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   };
 
   const calculateQuantityFromDates = () => {
-    if (!dataInicio || !effectiveEndDate) return void toast.error('Preencha as datas antes de calcular.');
-    const start = parseISO(dataInicio);
-    const end = parseISO(effectiveEndDate);
-    if (!isValid(start) || !isValid(end) || end < start) return void toast.error('Informe um período válido.');
+    if (effectivePeriodos.some((p) => !p.inicio || !p.fim)) return void toast.error('Preencha as datas de todos os períodos antes de calcular.');
+    if (!effectivePeriodos.every(periodoValido)) return void toast.error('Informe períodos válidos (fim igual ou posterior ao início).');
+    const totalDias = totalDiasPeriodos(effectivePeriodos);
+    if (totalDiasBrutos(effectivePeriodos) > totalDias) {
+      toast.info('Há períodos sobrepostos — os dias coincidentes foram contados uma única vez.');
+    }
     if (item.modo_calculo === 'auto_ano_fracao') {
-      const totalMeses = (differenceInDays(end, start) + 1) / 30;
-      // Anos completos + 1 unidade se a fração restante exceder seis meses
-      // (art. 5º e Anexos: "por ano ou fração acima de seis meses").
-      const anosCompletos = Math.floor(totalMeses / 12);
-      const fracaoMeses = totalMeses - anosCompletos * 12;
-      const unidades = anosCompletos + (fracaoMeses > 6 ? 1 : 0);
+      // A regra "por ano ou fração acima de seis meses" (art. 5º e Anexos) é
+      // aplicada sobre o tempo total somado de todos os períodos, não por período.
+      const unidades = unidadesAnoFracao(totalDias);
       if (unidades < 1) {
         setQuantidade('0');
-        return void toast.warning('Período de até 6 meses — não computa unidade para este item.');
+        return void toast.warning('Tempo total de até 6 meses — não computa unidade para este item.');
       }
       setQuantidade(String(unidades));
     } else {
-      setQuantidade(((differenceInDays(end, start) + 1) / 30).toFixed(2));
+      setQuantidade(String(unidadesMes(totalDias)));
+    }
+  };
+
+  const calculateQuantityForEdit = () => {
+    const editPeriodosEffective = toPeriodos(editPeriodos);
+    if (editPeriodosEffective.some((p) => !p.inicio || !p.fim)) return void toast.error('Preencha as datas de todos os períodos antes de calcular.');
+    if (!editPeriodosEffective.every(periodoValido)) return void toast.error('Informe períodos válidos (fim igual ou posterior ao início).');
+    const totalDias = totalDiasPeriodos(editPeriodosEffective);
+    if (totalDiasBrutos(editPeriodosEffective) > totalDias) {
+      toast.info('Há períodos sobrepostos — os dias coincidentes foram contados uma única vez.');
+    }
+    if (item.modo_calculo === 'auto_ano_fracao') {
+      const unidades = unidadesAnoFracao(totalDias);
+      if (unidades < 1) {
+        setEditQtd('0');
+        return void toast.warning('Tempo total de até 6 meses — não computa unidade para este item.');
+      }
+      setEditQtd(String(unidades));
+    } else {
+      setEditQtd(String(unidadesMes(totalDias)));
     }
   };
 
@@ -411,7 +442,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const save = async () => {
     if (!servidor || saving) return;
     if (!quantidade.trim() || Number.isNaN(quantidadeNumerica) || quantidadeNumerica <= 0) return void toast.error('Informe uma quantidade maior que zero.');
-    if (item.modo_calculo !== 'manual' && (!dataInicio || !effectiveEndDate)) return void toast.error('Este item exige datas de início e fim.');
+    if (item.modo_calculo !== 'manual' && !effectivePeriodos.every(periodoValido)) return void toast.error('Este item exige datas de início e fim válidas em todos os períodos.');
     if (docMode === 'reference' && referenceLinks.length === 0) return void toast.error(`Adicione ao menos um ${institutionConfig.documentLinks.label}.`);
     if ((docMode === 'upload') && pendingFiles.length === 0) return void toast.error('Anexe ao menos um documento comprobatório.');
     try {
@@ -449,13 +480,15 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         isDuplicate = false;
       }
       const pontosCalculados = calculateLancamentoPoints(quantidadeNumerica, item.pontos_por_unidade);
+      const abrangencia = showDateFields ? abrangenciaPeriodos(effectivePeriodos) : null;
       const lancamentoParaPrompt = {
         servidor_id: servidor.id,
         item_rsc_id: item.id,
         documento_id: documentoId,
         comprovantes_ids: allComprovanteIds.length > 0 ? allComprovanteIds : (documentoId ? [documentoId] : []),
-        data_inicio: showDateFields ? dataInicio : '',
-        data_fim: showDateFields ? effectiveEndDate : '',
+        data_inicio: abrangencia?.inicio ?? '',
+        data_fim: abrangencia?.fim ?? '',
+        periodos: showDateFields ? effectivePeriodos : undefined,
         quantidade_informada: quantidadeNumerica,
         declaracao_nao_duplicidade: true,
         pontos_calculados: pontosCalculados,
@@ -565,8 +598,8 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const startEditingLancamento = (lancamento: Lancamento) => {
     setEditingLancamentoId(lancamento.id);
     setEditQtd(String(lancamento.quantidade_informada));
-    setEditDataInicio(lancamento.data_inicio ?? '');
-    setEditDataFim(lancamento.data_fim ?? '');
+    const periodosExistentes = periodosDoLancamento(lancamento);
+    setEditPeriodos(periodosExistentes.length > 0 ? periodosExistentes.map((p) => ({ ...p, emVigor: false })) : [createEmptyPeriodo()]);
     setEditObs(lancamento.observacao ?? '');
     setEditingObservationId(null);
   };
@@ -580,14 +613,17 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     if (!editQtd.trim() || Number.isNaN(qtdNum) || qtdNum <= 0) {
       return void toast.error('Informe uma quantidade maior que zero.');
     }
-    if (item.modo_calculo !== 'manual' && (!editDataInicio || !editDataFim)) {
-      return void toast.error('Este item exige datas de início e fim.');
+    const periodosEditados = toPeriodos(editPeriodos);
+    if (item.modo_calculo !== 'manual' && !periodosEditados.every(periodoValido)) {
+      return void toast.error('Este item exige datas de início e fim válidas em todos os períodos.');
     }
+    const abrangencia = item.modo_calculo !== 'manual' ? abrangenciaPeriodos(periodosEditados) : null;
     const novos_pontos = calculateLancamentoPoints(qtdNum, item.pontos_por_unidade);
     updateLancamento(lancamento.id, {
       quantidade_informada: qtdNum,
-      data_inicio: editDataInicio,
-      data_fim: editDataFim,
+      data_inicio: abrangencia?.inicio ?? '',
+      data_fim: abrangencia?.fim ?? '',
+      periodos: item.modo_calculo !== 'manual' ? periodosEditados : undefined,
       observacao: editObs.trim() || undefined,
       pontos_calculados: novos_pontos,
     });
@@ -848,20 +884,41 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
             <section className="space-y-4">
               {showDateFields && (
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="data-inicio" className="text-xs">Data de início <span className="text-red-500">*</span></Label>
-                    <Input id="data-inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-11 text-sm" />
-                  </div>
+                <div className="space-y-3">
+                  {periodos.map((periodo, index) => (
+                    <div key={index} className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor={`data-inicio-${index}`} className="text-xs">
+                          {periodos.length > 1 ? `Período ${index + 1} — início` : 'Data de início'} <span className="text-red-500">*</span>
+                        </Label>
+                        <Input id={`data-inicio-${index}`} type="date" value={periodo.inicio} onChange={(e) => patchPeriodo(setPeriodos, index, { inicio: e.target.value })} className="h-11 text-sm" />
+                      </div>
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="data-fim" className="text-xs">Data de fim <span className="text-red-500">*</span></Label>
-                    <Input id="data-fim" type="date" value={effectiveEndDate} onChange={(e) => setDataFim(e.target.value)} disabled={ongoing} className="h-11 text-sm" />
-                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
-                      <input type="checkbox" checked={ongoing} onChange={(e) => setOngoing(e.target.checked)} className="h-3 w-3" />
-                      Ainda em vigor
-                    </label>
-                  </div>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor={`data-fim-${index}`} className="text-xs">
+                            {periodos.length > 1 ? `Período ${index + 1} — fim` : 'Data de fim'} <span className="text-red-500">*</span>
+                          </Label>
+                          {periodos.length > 1 && (
+                            <button type="button" onClick={() => removePeriodo(setPeriodos, index)} className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-500 hover:text-red-600">
+                              <Trash2 className="h-3 w-3" />Remover
+                            </button>
+                          )}
+                        </div>
+                        <Input id={`data-fim-${index}`} type="date" value={periodo.emVigor ? hoje : periodo.fim} onChange={(e) => patchPeriodo(setPeriodos, index, { fim: e.target.value })} disabled={periodo.emVigor} className="h-11 text-sm" />
+                        <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-gray-500">
+                          <input type="checkbox" checked={periodo.emVigor} onChange={(e) => patchPeriodo(setPeriodos, index, { emVigor: e.target.checked })} className="h-3 w-3" />
+                          Ainda em vigor
+                        </label>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addPeriodo(setPeriodos)} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10">
+                    <Plus className="h-3.5 w-3.5" />Adicionar período
+                  </button>
+                  <p className="text-[11px] text-gray-400">
+                    Tem mais de uma designação (ex.: várias portarias)? Informe um período para cada uma — o cálculo soma o tempo de todos os períodos antes de aplicar a regra de pontuação.
+                  </p>
                 </div>
               )}
 
@@ -931,11 +988,17 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       <div className="rounded-lg bg-green-50 p-2 text-green-700"><CheckCircle2 className="h-5 w-5" /></div>
                       <div>
                         <p className="text-sm font-bold text-gray-900">{lancamento.quantidade_informada} {item.unidade_medida || 'unidade(s)'}</p>
-                        <p className="text-xs text-gray-500">
-                          {lancamento.data_inicio && lancamento.data_fim
-                            ? `${formatarDataSegura(lancamento.data_inicio)} a ${formatarDataSegura(lancamento.data_fim)}`
-                            : 'Período não informado/exigido'}
-                        </p>
+                        {(() => {
+                          const periodosLanc = periodosDoLancamento(lancamento);
+                          if (periodosLanc.length === 0) {
+                            return <p className="text-xs text-gray-500">Período não informado/exigido</p>;
+                          }
+                          return periodosLanc.map((p, i) => (
+                            <p key={i} className="text-xs text-gray-500">
+                              {periodosLanc.length > 1 ? `Período ${i + 1}: ` : ''}{formatarDataSegura(p.inicio)} a {formatarDataSegura(p.fim)}
+                            </p>
+                          ));
+                        })()}
                         {comprovantes.length > 0 && (
                           <p className="mt-0.5 text-[11px] text-gray-400">{comprovantes.length} arquivo{comprovantes.length !== 1 ? 's' : ''} anexado{comprovantes.length !== 1 ? 's' : ''}</p>
                         )}
@@ -958,30 +1021,55 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     <div className="mt-3 space-y-3 rounded-xl border border-primary/20 bg-white p-4">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-primary">Editar lançamento</p>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                        <div className="space-y-1">
+                        <div className="space-y-1 sm:col-span-2">
                           <Label className="text-xs">Quantidade</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step={allowsDecimals ? '0.01' : '1'}
-                            value={editQtd}
-                            onChange={(e) => setEditQtd(e.target.value)}
-                            className="h-9 text-center font-bold"
-                          />
+                          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              step={allowsDecimals ? '0.01' : '1'}
+                              value={editQtd}
+                              onChange={(e) => setEditQtd(e.target.value)}
+                              className="h-9 text-center font-bold sm:w-[150px] sm:shrink-0"
+                            />
+                            {item.quantidade_automatica && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={calculateQuantityForEdit}
+                                className="h-9 rounded-md border-green-300 bg-green-50/60 px-3 text-xs font-semibold text-green-700 hover:border-green-400 hover:bg-green-100/70 hover:text-green-800"
+                              >
+                                <Calculator className="mr-1.5 h-3.5 w-3.5" />Calcular
+                              </Button>
+                            )}
+                          </div>
                         </div>
-                        {item.modo_calculo !== 'manual' && (
-                          <>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Data início</Label>
-                              <Input type="date" value={editDataInicio} onChange={(e) => setEditDataInicio(e.target.value)} className="h-9" />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-xs">Data fim</Label>
-                              <Input type="date" value={editDataFim} onChange={(e) => setEditDataFim(e.target.value)} className="h-9" />
-                            </div>
-                          </>
-                        )}
                       </div>
+                      {item.modo_calculo !== 'manual' && (
+                        <div className="space-y-2">
+                          {editPeriodos.map((periodo, index) => (
+                            <div key={index} className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:items-end">
+                              <div className="space-y-1">
+                                <Label className="text-xs">{editPeriodos.length > 1 ? `Período ${index + 1} — início` : 'Data início'}</Label>
+                                <Input type="date" value={periodo.inicio} onChange={(e) => patchPeriodo(setEditPeriodos, index, { inicio: e.target.value })} className="h-9" />
+                              </div>
+                              <div className="space-y-1">
+                                <Label className="text-xs">{editPeriodos.length > 1 ? `Período ${index + 1} — fim` : 'Data fim'}</Label>
+                                <Input type="date" value={periodo.fim} onChange={(e) => patchPeriodo(setEditPeriodos, index, { fim: e.target.value })} className="h-9" />
+                              </div>
+                              {editPeriodos.length > 1 && (
+                                <button type="button" onClick={() => removePeriodo(setEditPeriodos, index)} className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-red-200 bg-white px-3 text-xs font-semibold text-red-500 hover:bg-red-50">
+                                  <Trash2 className="h-3.5 w-3.5" />Remover
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => addPeriodo(setEditPeriodos)} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10">
+                            <Plus className="h-3 w-3" />Adicionar período
+                          </button>
+                        </div>
+                      )}
                       <div className="space-y-1">
                         <Label className="text-xs">Observação (opcional)</Label>
                         <textarea
