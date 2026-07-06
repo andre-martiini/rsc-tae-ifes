@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '06 de julho de 2026',
+    title: 'Múltiplos períodos por atividade e cálculo na edição',
+    description: 'Agora você pode declarar várias portarias/períodos de datas para uma mesma atividade e recalcular seus pontos de forma automática também na tela de edição.',
+    features: [
+      'Lançamento com múltiplos períodos: Para atividades com pontuação calculada por tempo (ex.: atuação como responsável por setor/unidade), agora é possível adicionar vários períodos de início e fim no mesmo lançamento. O assistente soma os dias declarados e desconta períodos sobrepostos automaticamente para garantir uma pontuação justa.',
+      'Calcular na edição: Adicionamos o botão "Calcular" dentro do formulário de edição de lançamentos existentes. Ao alterar ou adicionar datas de uma atividade salva, você pode recalcular a nova quantidade automaticamente com apenas um clique.',
+    ],
+  },
+  {
     date: '05 de julho de 2026',
     title: 'Auditoria IA com plano de ação e rol compartilhado com o Analisador',
     description: 'A auditoria semântica ficou mais útil e a base de critérios passou a ser compartilhada com o sistema Analisador de Processos RSC da Comissão.',
