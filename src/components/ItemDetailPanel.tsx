@@ -26,6 +26,7 @@ import { institutionConfig, isValidInstitutionDocumentLink, normalizeInstitution
 import type { Documento, ItemRSC, Lancamento } from '../data/mock';
 import { useAppContext } from '../context/AppContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { copyTextToClipboard } from '../lib/clipboard';
 import { normalizeUploadToPdf, toPdfFile, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
 import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
 import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
@@ -1415,15 +1416,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    const ta = document.getElementById('prompt-textarea') as HTMLTextAreaElement;
-                    if (ta) {
-                      ta.focus();
-                      ta.select();
-                      ta.setSelectionRange(0, ta.value.length);
-                      document.execCommand('copy');
-                      toast.success('Prompt copiado com sucesso!');
+                  onClick={async () => {
+                    const copied = await copyTextToClipboard(promptModalText);
+                    if (!copied) {
+                      toast.error('Não foi possível copiar o prompt completo.');
+                      return;
                     }
+                    toast.success(`Prompt copiado por completo (${promptModalText.length.toLocaleString('pt-BR')} caracteres).`);
                   }}
                   className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 transition-colors"
                 >

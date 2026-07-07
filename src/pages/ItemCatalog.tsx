@@ -33,19 +33,17 @@ const incisoLabels: Record<string, string> = {
 
 const ALL_INCISOS: Inciso[] = ['I', 'II', 'III', 'IV', 'V', 'VI'];
 
-type StatusFilter = 'todos' | 'sem_lancamento' | 'em_andamento' | 'completo';
+type StatusFilter = 'todos' | 'sem_lancamento' | 'lancado';
 
 const statusOptions: { value: StatusFilter; label: string }[] = [
   { value: 'todos', label: 'Todos' },
   { value: 'sem_lancamento', label: 'Sem lançamento' },
-  { value: 'em_andamento', label: 'Em andamento' },
-  { value: 'completo', label: 'Completo' },
+  { value: 'lancado', label: 'Lançado' },
 ];
 
-function getItemStatus(pontosLancados: number, limitepontos: number | undefined): StatusFilter {
+function getItemStatus(pontosLancados: number): StatusFilter {
   if (pontosLancados === 0) return 'sem_lancamento';
-  if (limitepontos !== undefined && pontosLancados >= limitepontos) return 'completo';
-  return 'em_andamento';
+  return 'lancado';
 }
 
 export default function ItemCatalog() {
@@ -139,7 +137,7 @@ export default function ItemCatalog() {
     if (statusFilter !== 'todos') {
       items = items.filter((item) => {
         const pontos = lancamentosByItemId.get(item.id) ?? 0;
-        return getItemStatus(pontos, item.limite_pontos) === statusFilter;
+        return getItemStatus(pontos) === statusFilter;
       });
     }
 
@@ -318,7 +316,7 @@ export default function ItemCatalog() {
                   const pontosLancados = lancamentosByItemId.get(item.id) ?? 0;
                   const hasLancamentos = pontosLancados > 0;
                   const isFragile = isItemJuridicallyFragile(item);
-                  const itemStatus = getItemStatus(pontosLancados, item.limite_pontos);
+                  const itemStatus = getItemStatus(pontosLancados);
 
                   return (
                     <button
@@ -390,17 +388,10 @@ export default function ItemCatalog() {
                             </div>
                             <div className={cn('rounded-xl border p-3', hasLancamentos ? 'border-emerald-200 bg-emerald-50/70' : 'border-gray-100 bg-gray-50')}>
                               <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Situação</p>
-                              <p className={`mt-1 text-sm font-medium ${itemStatus === 'completo'
-                                ? 'text-emerald-700'
-                                : itemStatus === 'em_andamento'
-                                  ? 'text-sky-700'
-                                  : 'text-gray-800'
-                                }`}>
-                                {itemStatus === 'completo'
-                                  ? `Completo — ${formatPointValue(pontosLancados)} pts`
-                                  : itemStatus === 'em_andamento'
-                                    ? `${formatPointValue(pontosLancados)} pts lançados`
-                                    : 'Ainda sem lançamento'}
+                              <p className={`mt-1 text-sm font-medium ${itemStatus === 'lancado' ? 'text-emerald-700' : 'text-gray-800'}`}>
+                                {itemStatus === 'lancado'
+                                  ? `Lançado — ${formatPointValue(pontosLancados)} pts`
+                                  : 'Ainda sem lançamento'}
                               </p>
                             </div>
                           </div>
@@ -431,7 +422,7 @@ export default function ItemCatalog() {
                       const pontosLancados = lancamentosByItemId.get(item.id) ?? 0;
                       const hasLancamentos = pontosLancados > 0;
                       const isFragile = isItemJuridicallyFragile(item);
-                      const itemStatus = getItemStatus(pontosLancados, item.limite_pontos);
+                      const itemStatus = getItemStatus(pontosLancados);
 
                       return (
                         <tr
@@ -483,13 +474,9 @@ export default function ItemCatalog() {
                             {formatPointValue(item.pontos_por_unidade)}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {itemStatus === 'completo' ? (
+                            {itemStatus === 'lancado' ? (
                               <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
-                                Completo — {formatPointValue(pontosLancados)} pts
-                              </span>
-                            ) : itemStatus === 'em_andamento' ? (
-                              <span className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
-                                {formatPointValue(pontosLancados)} pts
+                                Lançado — {formatPointValue(pontosLancados)} pts
                               </span>
                             ) : (
                               <span className="text-[11px] text-gray-400">Sem lançamento</span>

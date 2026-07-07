@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, Clipboard, Download, ExternalLink, FileText, Loader2, X } from 'lucide-react';
+import { AlertTriangle, Clipboard, Download, ExternalLink, FileText, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { estimatePromptTokens, gerarPromptAuditoriaConsolidada } from '../lib/auditPrompt';
@@ -88,7 +88,6 @@ export default function AuditPromptModal({
 }: Props) {
   const [preparedDocs, setPreparedDocs] = useState<Documento[]>(documentos);
   const [prompt, setPrompt] = useState('');
-  const [copied, setCopied] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [status, setStatus] = useState<PrepStatus>({ total: 0, current: 0, failures: [] });
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -108,7 +107,6 @@ export default function AuditPromptModal({
 
     async function prepare() {
       setIsPreparing(true);
-      setCopied(false);
       setPrompt('');
 
       const docsById = new Map(documentos.map((doc) => [doc.id, doc]));
@@ -165,17 +163,13 @@ export default function AuditPromptModal({
     [preparedDocs, usedDocumentIds],
   );
 
-  const handleCopy = async () => {
-    if (!prompt) return;
-    try {
-      await navigator.clipboard.writeText(prompt);
-    } catch {
-      textareaRef.current?.select();
-      document.execCommand('copy');
-    }
-    setCopied(true);
-    toast.success('Prompt copiado.');
-    window.setTimeout(() => setCopied(false), 2500);
+  const handleSelectAll = () => {
+    const textarea = textareaRef.current;
+    if (!textarea || !prompt) return;
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    toast.info('Prompt selecionado. Use Ctrl+C ou clique com o botão direito e copie.');
   };
 
   if (!open) return null;
@@ -246,7 +240,7 @@ export default function AuditPromptModal({
 
           {promptTokens > 30000 && (
             <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
-              {'Prompt extenso. Para melhor resultado, prefira modelos com contexto longo e use o bot\u00e3o de baixar TXT se a c\u00f3pia direta ficar pesada.'}
+              {'Prompt extenso. Para melhor resultado, prefira modelos com contexto longo. Use "Selecionar tudo" e copie com Ctrl+C ou pelo botão direito do mouse. Se preferir, baixe o TXT.'}
             </div>
           )}
 
@@ -271,16 +265,21 @@ export default function AuditPromptModal({
         </div>
 
         <div className="flex flex-col gap-3 border-t border-gray-100 bg-gray-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <div className="flex flex-wrap gap-2 text-xs">
-            <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://gemini.google.com" target="_blank" rel="noreferrer">
-              Gemini <ExternalLink className="h-3 w-3" />
-            </a>
-            <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://claude.ai" target="_blank" rel="noreferrer">
-              Claude <ExternalLink className="h-3 w-3" />
-            </a>
-            <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://chat.openai.com" target="_blank" rel="noreferrer">
-              ChatGPT <ExternalLink className="h-3 w-3" />
-            </a>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-gray-600">
+              {'Depois de selecionar, copie com Ctrl+C ou clique com o botão direito e escolha Copiar.'}
+            </p>
+            <div className="flex flex-wrap gap-2 text-xs">
+              <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://gemini.google.com" target="_blank" rel="noreferrer">
+                Gemini <ExternalLink className="h-3 w-3" />
+              </a>
+              <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://claude.ai" target="_blank" rel="noreferrer">
+                Claude <ExternalLink className="h-3 w-3" />
+              </a>
+              <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://chat.openai.com" target="_blank" rel="noreferrer">
+                ChatGPT <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -296,12 +295,13 @@ export default function AuditPromptModal({
             </Button>
             <Button
               type="button"
-              onClick={handleCopy}
+              variant="outline"
+              onClick={handleSelectAll}
               disabled={isPreparing || !prompt}
-              className="h-10 rounded-xl bg-violet-700 px-5 text-xs font-black uppercase tracking-widest text-white hover:bg-violet-800"
+              className="h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest"
             >
-              {copied ? <CheckCircle2 className="mr-2 h-4 w-4" /> : <Clipboard className="mr-2 h-4 w-4" />}
-              {copied ? 'Copiado' : 'Copiar Prompt'}
+              <Clipboard className="mr-2 h-4 w-4" />
+              Selecionar tudo
             </Button>
           </div>
         </div>
