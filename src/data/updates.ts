@@ -15,11 +15,14 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '07 de julho de 2026',
-    title: 'Documentos mais organizados e fáceis de revisar',
-    description: 'A aba Documentos ficou mais integrada ao dossiê: a ordem dos comprovantes agora conversa melhor com a consolidação, a Auditoria IA e a revisão dos itens.',
+    title: 'Revisão mais clara de documentos e itens',
+    description: 'A organização dos comprovantes e dos itens ficou mais consistente, com menos dúvidas na hora de revisar, copiar prompts e ajustar lançamentos.',
     improvements: [
       'Os documentos usados no dossiê agora seguem uma ordem única e recebem a mesma numeração na aba Documentos, no pacote consolidado e no prompt da Auditoria IA.',
-      'Também ficou mais simples corrigir vínculos: você pode desvincular um documento diretamente pela aba Documentos e, em seguida, abrir o item correspondente para revisar quantidade, período e pontuação quando necessário.',
+      'A aba Documentos permite desvincular um comprovante diretamente e abrir o item correspondente para revisar quantidade, período e pontuação quando necessário.',
+      'O detalhe do documento agora acompanha a lista na aba Documentos, facilitando a revisão de itens mais abaixo na tela.',
+      'Na Auditoria IA, o prompt pode ser selecionado por completo para cópia manual com Ctrl+C ou botão direito, além da opção de baixar em TXT.',
+      'Na lista de itens, a situação ficou mais objetiva: os filtros agora diferenciam apenas itens sem lançamento e itens já lançados.',
     ],
   },
   {

@@ -22,6 +22,7 @@ import MainLayout from '../components/MainLayout';
 import { Input } from '../components/ui/input';
 import { useAppContext } from '../context/AppContext';
 import type { Documento, ItemRSC, Lancamento } from '../data/mock';
+import { copyTextToClipboard } from '../lib/clipboard';
 import {
   buildDossierDocumentOrder,
   compareDocumentsByDossierOrder,
@@ -784,7 +785,7 @@ export default function Documents() {
             )}
           </section>
 
-          <aside className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <aside className="rounded-2xl border border-gray-200 bg-white shadow-sm xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:self-start xl:overflow-y-auto">
             {selectedRow ? (
               <DocumentDetail
                 row={selectedRow}
@@ -1141,14 +1142,13 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 function PromptModal({ text, onClose }: { text: string; onClose: () => void }) {
-  const copyPrompt = () => {
-    const textarea = document.getElementById('documents-prompt-textarea') as HTMLTextAreaElement | null;
-    if (!textarea) return;
-    textarea.focus();
-    textarea.select();
-    textarea.setSelectionRange(0, textarea.value.length);
-    document.execCommand('copy');
-    toast.success('Prompt copiado com sucesso.');
+  const copyPrompt = async () => {
+    const copied = await copyTextToClipboard(text);
+    if (!copied) {
+      toast.error('Não foi possível copiar o prompt completo.');
+      return;
+    }
+    toast.success(`Prompt copiado por completo (${text.length.toLocaleString('pt-BR')} caracteres).`);
   };
 
   return (
