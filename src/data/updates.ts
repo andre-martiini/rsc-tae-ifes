@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '07 de julho de 2026',
+    title: 'Documentos mais organizados e fáceis de revisar',
+    description: 'A aba Documentos ficou mais integrada ao dossiê: a ordem dos comprovantes agora conversa melhor com a consolidação, a Auditoria IA e a revisão dos itens.',
+    improvements: [
+      'Os documentos usados no dossiê agora seguem uma ordem única e recebem a mesma numeração na aba Documentos, no pacote consolidado e no prompt da Auditoria IA.',
+      'Também ficou mais simples corrigir vínculos: você pode desvincular um documento diretamente pela aba Documentos e, em seguida, abrir o item correspondente para revisar quantidade, período e pontuação quando necessário.',
+    ],
+  },
+  {
     date: '06 de julho de 2026',
     title: 'Múltiplos períodos por atividade e cálculo na edição',
     description: 'Agora você pode declarar várias portarias/períodos de datas para uma mesma atividade e recalcular seus pontos de forma automática também na tela de edição.',

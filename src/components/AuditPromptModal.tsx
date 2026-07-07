@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Clipboard, Download, ExternalLink, FileTex
 import { toast } from 'sonner';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { estimatePromptTokens, gerarPromptAuditoriaConsolidada } from '../lib/auditPrompt';
+import { getLancamentoDocumentIds } from '../lib/documentOrdering';
 import { getDocumentBlob } from '../lib/documentStorage';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
 import { extractTextFromImage } from '../lib/ocr';
@@ -93,7 +94,7 @@ export default function AuditPromptModal({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const usedDocumentIds = useMemo(
-    () => new Set(lancamentos.map((entry) => entry.documento_id).filter(Boolean) as string[]),
+    () => new Set(lancamentos.flatMap(getLancamentoDocumentIds)),
     [lancamentos],
   );
 

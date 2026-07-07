@@ -11,6 +11,12 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { institutionConfig } from '../config/institution';
 import { useAppContext } from '../context/AppContext';
+import {
+  buildDossierDocumentOrder,
+  formatDossierDocumentLabel,
+  getLancamentoDocumentIds,
+  sortLancamentosByDossierOrder,
+} from '../lib/documentOrdering';
 import { exportPacoteRSC } from '../lib/pacoteExport';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import {
@@ -125,12 +131,15 @@ export default function Consolidation() {
     return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [resumoItens]);
 
-  const documentosUtilizados = useMemo(() => {
-    const ids = new Set(lancamentosDoServidor.flatMap((l) => l.comprovantes_ids ?? (l.documento_id ? [l.documento_id] : [])));
-    return documentos
-      .filter((d) => ids.has(d.id))
-      .sort((a, b) => (a.data_upload < b.data_upload ? 1 : -1));
-  }, [documentos, lancamentosDoServidor]);
+  const documentOrder = useMemo(
+    () => buildDossierDocumentOrder({ lancamentos: lancamentosDoServidor, itensRSC }),
+    [itensRSC, lancamentosDoServidor],
+  );
+  const docsById = useMemo(() => new Map(documentos.map((doc) => [doc.id, doc])), [documentos]);
+  const lancamentosOrdenados = useMemo(
+    () => sortLancamentosByDossierOrder(lancamentosDoServidor, itensRSC),
+    [itensRSC, lancamentosDoServidor],
+  );
 
   useEffect(() => {
     if (!nivelPleiteadoId && nivelElegivel?.id) {
@@ -886,7 +895,7 @@ export default function Consolidation() {
                             </thead>
                             <tbody>
                               {items.map((item) => {
-                                const itemLancamentos = lancamentosDoServidor.filter(l => l.item_rsc_id === item.itemId);
+                                const itemLancamentos = lancamentosOrdenados.filter(l => l.item_rsc_id === item.itemId);
                                 return (
                                   <tr key={item.itemId}>
                                     <td className="border border-gray-900 px-2 py-2 text-center font-bold text-sm">{item.numero}</td>
@@ -896,11 +905,18 @@ export default function Consolidation() {
                                     <td className="border border-gray-900 px-2 py-2 text-center font-black bg-gray-50/50">{formatPointValue(item.pontos)}</td>
                                     <td className="border border-gray-900 px-2 py-2 align-top">
                                       <div className="flex flex-col gap-1.5">
-                                        {itemLancamentos.map((l, i) => (
-                                          <span key={i} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
-                                            [DOC {i + 1}] {documentos.find(d => d.id === (l.comprovantes_ids?.[0] ?? l.documento_id))?.nome_arquivo}
-                                          </span>
-                                        ))}
+                                        {itemLancamentos.map((l) =>
+                                          getLancamentoDocumentIds(l).map((docId) => {
+                                            const docItem = docsById.get(docId);
+                                            const dossierEntry = documentOrder.get(docId);
+                                            const docLabel = dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : 'Documento sem ordem';
+                                            return (
+                                              <span key={`${l.id}-${docId}`} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
+                                                [{docLabel}] {docItem?.nome_arquivo ?? 'Documento não encontrado'}
+                                              </span>
+                                            );
+                                          })
+                                        )}
                                       </div>
                                     </td>
                                   </tr>
