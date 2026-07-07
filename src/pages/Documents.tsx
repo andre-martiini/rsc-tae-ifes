@@ -14,6 +14,7 @@ import {
   Search,
   Sparkles,
   Trash2,
+  Unlink,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,6 +22,13 @@ import MainLayout from '../components/MainLayout';
 import { Input } from '../components/ui/input';
 import { useAppContext } from '../context/AppContext';
 import type { Documento, ItemRSC, Lancamento } from '../data/mock';
+import {
+  buildDossierDocumentOrder,
+  compareDocumentsByDossierOrder,
+  formatDossierDocumentLabel,
+  getLancamentoDocumentIds,
+  sortLancamentosByDossierOrder,
+} from '../lib/documentOrdering';
 import { getDocumentBlob } from '../lib/documentStorage';
 import { generateLLMPrompt } from '../lib/llmPrompt';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
@@ -47,6 +55,8 @@ type InventoryRow = {
   itemCount: number;
   duplicateHashDocs: Documento[];
   duplicateLinkDocs: Documento[];
+  dossierIndex?: number;
+  dossierLabel?: string;
 };
 
 type StatusFilter =
@@ -176,9 +186,11 @@ function buildInventoryRows(params: {
   const itemsById = new Map(itensRSC.map((item) => [item.id, item]));
   const hashIndex = buildHashIndex(docs);
   const linkIndex = buildLinkIndex(docs);
+  const dossierOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
+  const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
 
   const usageMap = new Map<string, DocumentUsage[]>();
-  lancamentos.forEach((lancamento) => {
+  sortedLancamentos.forEach((lancamento) => {
     const ids = lancamento.comprovantes_ids ?? (lancamento.documento_id ? [lancamento.documento_id] : []);
     for (const docId of ids) {
       if (!docsById.has(docId)) continue;
@@ -191,6 +203,7 @@ function buildInventoryRows(params: {
   return docs
     .map((doc) => {
       const usages = usageMap.get(doc.id) ?? [];
+      const dossierEntry = dossierOrder.get(doc.id);
       const itemCount = new Set(usages.map((usage) => usage.lancamento.item_rsc_id)).size;
       const duplicateHashDocs = getDocumentHashes(doc)
         .flatMap((hash) => hashIndex.get(hash) ?? [])
@@ -238,9 +251,11 @@ function buildInventoryRows(params: {
         itemCount,
         duplicateHashDocs: Array.from(new Map(duplicateHashDocs.map((entry) => [entry.id, entry])).values()),
         duplicateLinkDocs: Array.from(new Map(duplicateLinkDocs.map((entry) => [entry.id, entry])).values()),
+        dossierIndex: dossierEntry?.index,
+        dossierLabel: dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : undefined,
       };
     })
-    .sort((a, b) => (a.doc.data_upload < b.doc.data_upload ? 1 : -1));
+    .sort((a, b) => compareDocumentsByDossierOrder(a.doc, b.doc, dossierOrder));
 }
 
 function matchesFilter(row: InventoryRow, filter: StatusFilter) {
@@ -262,7 +277,7 @@ function alertClass(tone: DocumentAlert['tone']) {
 }
 
 export default function Documents() {
-  const { servidor, itensRSC, documentos, lancamentos, updateDocumento, deleteDocumento } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, updateLancamento, updateDocumento, deleteDocumento } = useAppContext();
   const navigate = useNavigate();
   const servidorId = servidor?.id ?? '';
   const [query, setQuery] = useState('');
@@ -275,6 +290,8 @@ export default function Documents() {
   const [promptLoadingDocId, setPromptLoadingDocId] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [pendingDeleteRow, setPendingDeleteRow] = useState<InventoryRow | null>(null);
+  const [pendingUnlink, setPendingUnlink] = useState<{ row: InventoryRow; usage: DocumentUsage } | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
   const blobUrlsRef = useRef<Record<string, string>>({});
 
   const docsDoServidor = useMemo(
@@ -312,6 +329,7 @@ export default function Documents() {
       if (!normalizedQuery) return true;
 
       const searchable = [
+        row.dossierLabel,
         row.doc.nome_arquivo,
         row.doc.hash_arquivo,
         row.doc.arquivo_origem_nome,
@@ -482,6 +500,86 @@ export default function Documents() {
     }
   };
 
+  const unlinkDocumentFromUsage = async (params: {
+    row: InventoryRow;
+    usage: DocumentUsage;
+    deleteIfOrphan: boolean;
+  }) => {
+    const { row, usage, deleteIfOrphan } = params;
+    const docId = row.doc.id;
+    const currentIds = getLancamentoDocumentIds(usage.lancamento);
+    const reviewAction = usage.item
+      ? {
+        label: 'Revisar item',
+        onClick: () => navigate(`/itens?item=${usage.item!.id}`),
+      }
+      : undefined;
+
+    if (!currentIds.includes(docId)) {
+      toast.error('Este vínculo já não existe mais no lançamento.');
+      setPendingUnlink(null);
+      return;
+    }
+
+    const nextIds = currentIds.filter((id) => id !== docId);
+    setUnlinking(true);
+    try {
+      const updated = updateLancamento(usage.lancamento.id, {
+        comprovantes_ids: nextIds,
+        documento_id: nextIds[0],
+      });
+
+      if (!updated) {
+        toast.error('Não foi possível atualizar o item vinculado.');
+        return;
+      }
+
+      const stillUsedElsewhere = lancamentosDoServidor.some((entry) =>
+        entry.id !== usage.lancamento.id && getLancamentoDocumentIds(entry).includes(docId),
+      );
+
+      if (deleteIfOrphan && !stillUsedElsewhere) {
+        const existingUrl = blobUrls[docId];
+        if (existingUrl) URL.revokeObjectURL(existingUrl);
+        setBlobUrls((current) => {
+          const next = { ...current };
+          delete next[docId];
+          return next;
+        });
+        setViewerErrors((current) => {
+          const next = { ...current };
+          delete next[docId];
+          return next;
+        });
+        await deleteDocumento(docId);
+        setSelectedDocId(null);
+        toast.success('Documento desvinculado do item e apagado do inventário.', {
+          description: 'Revise a quantidade, o período e a pontuação do item se necessário.',
+          action: reviewAction,
+          duration: 10000,
+        });
+      } else if (nextIds.length === 0) {
+        toast.warning('Documento desvinculado. O lançamento ficou sem comprovante vinculado.', {
+          description: 'Revise a quantidade, o período e a pontuação do item antes de consolidar.',
+          action: reviewAction,
+          duration: 12000,
+        });
+      } else {
+        toast.success('Documento desvinculado do item.', {
+          description: 'Revise a quantidade, o período e a pontuação do item se necessário.',
+          action: reviewAction,
+          duration: 10000,
+        });
+      }
+
+      setPendingUnlink(null);
+    } catch {
+      toast.error('Não foi possível desvincular o documento.');
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
   if (!servidor) {
     return <Navigate to="/" replace />;
   }
@@ -622,6 +720,11 @@ export default function Documents() {
                                 {row.source === 'reference' ? <Link className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
                               </div>
                               <div className="min-w-0 flex-1">
+                                {row.dossierLabel && (
+                                  <span className="mb-1 inline-flex rounded-full border border-primary/15 bg-primary/5 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-primary">
+                                    {row.dossierLabel}
+                                  </span>
+                                )}
                                 <p className="break-words text-[12px] font-semibold leading-snug text-gray-900">{row.doc.nome_arquivo}</p>
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                   {row.usages.length === 0 ? (
@@ -692,6 +795,7 @@ export default function Documents() {
                 deleting={deletingDocId === selectedRow.doc.id}
                 onGeneratePrompt={() => void generatePromptForRow(selectedRow)}
                 onDelete={() => setPendingDeleteRow(selectedRow)}
+                onUnlinkUsage={(usage) => setPendingUnlink({ row: selectedRow, usage })}
                 onNavigateToItem={(itemId) => navigate(`/itens?item=${itemId}`)}
               />
             ) : (
@@ -715,6 +819,18 @@ export default function Documents() {
           deleting={deletingDocId === pendingDeleteRow.doc.id}
           onClose={() => setPendingDeleteRow(null)}
           onConfirm={() => void deleteUnlinkedDocument(pendingDeleteRow)}
+        />
+      )}
+      {pendingUnlink && (
+        <UnlinkDocumentModal
+          row={pendingUnlink.row}
+          usage={pendingUnlink.usage}
+          unlinking={unlinking}
+          remainingUsageCount={pendingUnlink.row.usages.filter((entry) => entry.lancamento.id !== pendingUnlink.usage.lancamento.id).length}
+          remainingDocsInLaunch={getLancamentoDocumentIds(pendingUnlink.usage.lancamento).filter((id) => id !== pendingUnlink.row.doc.id).length}
+          onClose={() => setPendingUnlink(null)}
+          onUnlinkOnly={() => void unlinkDocumentFromUsage({ ...pendingUnlink, deleteIfOrphan: false })}
+          onUnlinkAndDelete={() => void unlinkDocumentFromUsage({ ...pendingUnlink, deleteIfOrphan: true })}
         />
       )}
     </MainLayout>
@@ -755,6 +871,7 @@ function DocumentDetail({
   deleting,
   onGeneratePrompt,
   onDelete,
+  onUnlinkUsage,
   onNavigateToItem,
 }: {
   row: InventoryRow;
@@ -765,6 +882,7 @@ function DocumentDetail({
   deleting: boolean;
   onGeneratePrompt: () => void;
   onDelete: () => void;
+  onUnlinkUsage: (usage: DocumentUsage) => void;
   onNavigateToItem: (itemId: string) => void;
 }) {
   const { doc } = row;
@@ -833,6 +951,7 @@ function DocumentDetail({
         <section className="space-y-2.5">
           <h3 className="text-xs font-black uppercase tracking-wide text-gray-400">Informações</h3>
           <dl className="grid grid-cols-1 gap-1.5 text-sm md:grid-cols-3">
+            <DetailRow label="Ordem" value={row.dossierLabel ?? 'Sem vínculo'} />
             <DetailRow label="Origem" value={sourceLabels[row.source]} />
             <DetailRow label="Upload" value={formatDate(doc.data_upload)} />
             <DetailRow label="Tamanho" value={formatBytes(doc.tamanho_bytes)} />
@@ -849,16 +968,26 @@ function DocumentDetail({
                 </span>
               ) : (
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1">
-                  {row.usages.map(({ lancamento, item }) => (
-                    <button
-                      key={lancamento.id}
-                      type="button"
-                      onClick={() => item && onNavigateToItem(item.id)}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
-                      title={item?.descricao ?? lancamento.item_rsc_id}
-                    >
-                      {item ? `Item ${item.numero} · Inciso ${item.inciso}` : 'Item não encontrado'}
-                    </button>
+                  {row.usages.map((usage) => (
+                    <span key={usage.lancamento.id} className="inline-flex overflow-hidden rounded-full border border-gray-200 bg-white">
+                      <button
+                        type="button"
+                        onClick={() => usage.item && onNavigateToItem(usage.item.id)}
+                        className="px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition-colors hover:bg-emerald-50 hover:text-emerald-700"
+                        title={usage.item?.descricao ?? usage.lancamento.item_rsc_id}
+                      >
+                        {usage.item ? `Item ${usage.item.numero} · Inciso ${usage.item.inciso}` : 'Item não encontrado'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUnlinkUsage(usage)}
+                        className="inline-flex h-5 w-5 items-center justify-center border-l border-gray-200 text-red-400 transition-colors hover:bg-red-50 hover:text-red-700"
+                        title="Desvincular este documento do item"
+                        aria-label="Desvincular este documento do item"
+                      >
+                        <Unlink className="h-3 w-3" />
+                      </button>
+                    </span>
                   ))}
                 </div>
               )}
@@ -1129,6 +1258,99 @@ function DeleteDocumentModal({
               Apagar documento
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UnlinkDocumentModal({
+  row,
+  usage,
+  unlinking,
+  remainingUsageCount,
+  remainingDocsInLaunch,
+  onClose,
+  onUnlinkOnly,
+  onUnlinkAndDelete,
+}: {
+  row: InventoryRow;
+  usage: DocumentUsage;
+  unlinking: boolean;
+  remainingUsageCount: number;
+  remainingDocsInLaunch: number;
+  onClose: () => void;
+  onUnlinkOnly: () => void;
+  onUnlinkAndDelete: () => void;
+}) {
+  const canDeleteAfterUnlink = remainingUsageCount === 0;
+  const itemLabel = usage.item
+    ? `Item ${usage.item.numero} · Inciso ${usage.item.inciso}`
+    : 'Item não encontrado';
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={unlinking ? undefined : onClose}>
+      <div
+        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-700">
+            <Unlink className="h-5 w-5" />
+          </div>
+
+          <h3 className="text-lg font-black tracking-tight text-gray-900">Desvincular documento do item?</h3>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+            O vínculo será removido do lançamento selecionado e a aba Itens será atualizada automaticamente.
+            {remainingDocsInLaunch === 0 ? ' Este lançamento ficará sem comprovante vinculado.' : ''}
+          </p>
+
+          <div className="mt-4 space-y-2 rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">Documento</p>
+              <p className="mt-1 break-words text-sm font-bold text-gray-900">{row.doc.nome_arquivo}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-gray-400">Vínculo</p>
+              <p className="mt-1 text-sm font-semibold text-gray-700">{itemLabel}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col gap-2">
+            {canDeleteAfterUnlink && (
+              <button
+                type="button"
+                onClick={onUnlinkAndDelete}
+                disabled={unlinking}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {unlinking && <LoaderCircle className="h-4 w-4 animate-spin" />}
+                Desvincular e apagar documento
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onUnlinkOnly}
+              disabled={unlinking}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Desvincular e manter no inventário
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={unlinking}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+          </div>
+
+          {!canDeleteAfterUnlink && (
+            <p className="mt-3 text-xs leading-relaxed text-amber-700">
+              Este documento ainda é usado em outro vínculo, por isso ele será mantido no inventário.
+            </p>
+          )}
         </div>
       </div>
     </div>

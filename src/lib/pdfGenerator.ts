@@ -8,6 +8,12 @@ import {
 } from 'pdf-lib';
 import { institutionConfig } from '../config/institution';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
+import {
+  buildDossierDocumentOrder,
+  formatDossierDocumentLabel,
+  getLancamentoDocumentIds,
+  sortLancamentosByDossierOrder,
+} from './documentOrdering';
 import { addPointValues, formatPointValue, sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura, sanitizeForTag } from './utils';
@@ -836,9 +842,11 @@ export async function generateMemorialDescritivo(
 
   const RSC_IDS = ['I', 'II', 'III', 'IV', 'V', 'VI'];
   const docsById = new Map(documentos.map((d) => [d.id, d]));
+  const documentOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
+  const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
 
   for (const inciso of RSC_IDS) {
-    const incisoLancamentos = lancamentos.filter((l) => {
+    const incisoLancamentos = sortedLancamentos.filter((l) => {
       const item = itensRSC.find((i) => i.id === l.item_rsc_id);
       return item?.inciso === inciso;
     });
@@ -852,12 +860,13 @@ export async function generateMemorialDescritivo(
       const entry = groupedRows.get(item.id) || { item, points: 0, quantidadeTotal: 0, docs: [] };
       entry.points = addPointValues(entry.points, l.pontos_calculados);
       entry.quantidadeTotal += l.quantidade_informada ?? 1;
-      const firstDocId = l.comprovantes_ids?.[0] ?? l.documento_id;
-      const doc = firstDocId ? docsById.get(firstDocId) : undefined;
-      if (doc) {
-        const docLabel = `[DOC ${entry.docs.length + 1}] ${doc.nome_arquivo}`;
-        entry.docs.push(docLabel);
-      }
+      getLancamentoDocumentIds(l).forEach((docId) => {
+        const doc = docsById.get(docId);
+        if (!doc) return;
+        const dossierEntry = documentOrder.get(docId);
+        const docLabel = dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : 'Documento sem ordem';
+        entry.docs.push(`[${docLabel}] ${doc.nome_arquivo}`);
+      });
       groupedRows.set(item.id, entry);
     });
 
@@ -924,15 +933,8 @@ export async function generateMemorialDescritivo(
   writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
 
-  // Ordena os lançamentos por número do item e ID para gerar tags de forma previsível
-  const sortedLancamentosForTags = [...lancamentos].sort((a, b) => {
-    const itemA = itensRSC.find((i) => i.id === a.item_rsc_id);
-    const itemB = itensRSC.find((i) => i.id === b.item_rsc_id);
-    const numA = itemA?.numero ?? 0;
-    const numB = itemB?.numero ?? 0;
-    if (numA !== numB) return numA - numB;
-    return a.id.localeCompare(b.id);
-  });
+  // Mantem as tags na mesma ordem documental usada na aba Documentos e na Auditoria IA.
+  const sortedLancamentosForTags = sortLancamentosByDossierOrder(lancamentos, itensRSC);
 
   for (const l of sortedLancamentosForTags) {
     const item = itensRSC.find((i) => i.id === l.item_rsc_id);
@@ -1047,12 +1049,15 @@ export async function generateComprovacaoResumoItem(
   writer.table(
     ['Período', 'Quantidade', 'Pontos', 'Documento'],
     grupo.lancamentos.map((entry) => {
-      const docItem = grupo.documentos.find((candidate) => candidate.id === entry.documento_id);
+      const entryDocumentIds = getLancamentoDocumentIds(entry);
+      const docItems = entryDocumentIds
+        .map((docId) => grupo.documentos.find((candidate) => candidate.id === docId))
+        .filter((docItem): docItem is Documento => !!docItem);
       return [
         periodosDoLancamento(entry).map((p) => `${formatDate(p.inicio)} a ${formatDate(p.fim)}`).join('; ') || '-',
         formatNumber(entry.quantidade_informada),
         `${formatNumber(entry.pontos_calculados)} pts`,
-        docItem?.nome_arquivo ?? '-',
+        docItems.map((docItem) => docItem.nome_arquivo).join('\n') || '-',
       ];
     }),
     [0.34, 0.16, 0.16, 0.34],

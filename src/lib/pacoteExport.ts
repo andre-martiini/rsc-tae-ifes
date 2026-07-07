@@ -2,6 +2,12 @@ import JSZip from 'jszip';
 import { PDFDocument, StandardFonts, rgb, degrees, PDFPage } from 'pdf-lib';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import { getDocumentBlob } from './documentStorage';
+import {
+  buildDossierDocumentOrder,
+  compareItemsByDossierOrder,
+  sortDocumentsByDossierOrder,
+  sortLancamentosByDossierOrder,
+} from './documentOrdering';
 import { sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { sanitizeForTag } from './utils';
@@ -25,19 +31,17 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function sortDocuments(documents: Documento[]) {
-  return [...documents].sort((a, b) => a.nome_arquivo.localeCompare(b.nome_arquivo));
-}
-
 function buildComprovacaoGroups(
   lancamentos: Lancamento[],
   itensRSC: ItemRSC[],
   documentos: Documento[],
 ): ComprovacaoItemResumo[] {
   const docsById = new Map(documentos.map((doc) => [doc.id, doc]));
+  const documentOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
+  const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
   const grouped = new Map<string, Lancamento[]>();
 
-  lancamentos.forEach((entry) => {
+  sortedLancamentos.forEach((entry) => {
     const current = grouped.get(entry.item_rsc_id) ?? [];
     current.push(entry);
     grouped.set(entry.item_rsc_id, current);
@@ -48,7 +52,7 @@ function buildComprovacaoGroups(
       const item = itensRSC.find((candidate) => candidate.id === itemId);
       if (!item) return null;
 
-      const documentosDoItem = sortDocuments(Array.from(
+      const documentosDoItem = sortDocumentsByDossierOrder(Array.from(
         new Map(
           itemLancamentos
             .flatMap((entry) => {
@@ -58,16 +62,16 @@ function buildComprovacaoGroups(
             .filter((doc): doc is Documento => !!doc)
             .map((doc) => [doc.id, doc]),
         ).values(),
-      ));
+      ), documentOrder);
 
       return {
         item,
-        lancamentos: itemLancamentos.sort((a, b) => a.data_inicio.localeCompare(b.data_inicio)),
+        lancamentos: itemLancamentos,
         documentos: documentosDoItem,
       };
     })
     .filter((group): group is ComprovacaoItemResumo => !!group)
-    .sort((a, b) => a.item.numero - b.item.numero);
+    .sort((a, b) => compareItemsByDossierOrder(a.item, b.item));
 }
 
 function drawTagOnPage(

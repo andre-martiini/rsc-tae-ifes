@@ -1,4 +1,11 @@
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
+import {
+  buildDossierDocumentOrder,
+  formatDossierDocumentLabel,
+  getLancamentoDocumentIds,
+  sortDocumentsByDossierOrder,
+  sortLancamentosByDossierOrder,
+} from './documentOrdering';
 import { formatPointValue, sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura } from './utils';
@@ -27,7 +34,7 @@ function itemCode(item?: ItemRSC) {
 }
 
 function documentKey(index: number) {
-  return `DOC-${String(index + 1).padStart(2, '0')}`;
+  return formatDossierDocumentLabel(index);
 }
 
 function itemReference(item?: ItemRSC) {
@@ -63,9 +70,13 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
   const { servidor, nivelPleiteado, processo, lancamentos, itensRSC, documentos } = params;
   const docsById = new Map(documentos.map((doc) => [doc.id, doc]));
   const itensById = new Map(itensRSC.map((item) => [item.id, item]));
-  const getIds = (l: Lancamento) => l.comprovantes_ids ?? (l.documento_id ? [l.documento_id] : []);
+  const getIds = getLancamentoDocumentIds;
   const usedDocumentIds = Array.from(new Set(lancamentos.flatMap(getIds)));
-  const usedDocuments = usedDocumentIds.map((id) => docsById.get(id)).filter((doc): doc is Documento => !!doc);
+  const documentOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
+  const usedDocuments = sortDocumentsByDossierOrder(
+    usedDocumentIds.map((id) => docsById.get(id)).filter((doc): doc is Documento => !!doc),
+    documentOrder,
+  );
   const docKeys = new Map(usedDocuments.map((doc, index) => [doc.id, documentKey(index)]));
   const documentLinksCount = lancamentos.filter((entry) => getIds(entry).length > 0).length;
   const launchesByDocumentId = new Map<string, Lancamento[]>();
@@ -128,7 +139,7 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     '',
     'Este catalogo lista DOCUMENTOS UNICOS, nao a quantidade de lancamentos.',
     'Se um mesmo documento foi usado em dois itens, ele aparecera uma unica vez aqui, mas tera dois itens relacionados.',
-    'Cada documento recebe uma chave DOC-XX e informa exatamente em qual item do sistema ele foi usado.',
+    'Cada documento recebe a mesma numeracao exibida na aba Documentos do sistema (Documento 1, Documento 2 etc.).',
     'Ao recomendar ajustes, cite sempre o item do sistema (ex.: II-11 - Item 11), pois e por ele que o usuario localizara o lancamento para corrigir.',
     '',
     ...usedDocuments.flatMap((doc, index) => {
@@ -162,12 +173,7 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     }),
   ].join('\n');
 
-  const launches = [...lancamentos].sort((a, b) => {
-    const itemA = itensById.get(a.item_rsc_id);
-    const itemB = itensById.get(b.item_rsc_id);
-    const codeCompare = itemCode(itemA).localeCompare(itemCode(itemB));
-    return codeCompare || a.id.localeCompare(b.id);
-  });
+  const launches = sortLancamentosByDossierOrder(lancamentos, itensRSC);
 
   const launchesBlock = [
     '=== LANCAMENTOS DECLARADOS ===',
@@ -227,8 +233,8 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     'Regras para o plano de acao:',
     '- Se NAO houver nenhum problema, escreva apenas: "Nenhuma correcao necessaria. Sua documentacao esta pronta para exportacao." e nao invente passos.',
     '- Se houver problemas, numere os passos em ordem de prioridade (1., 2., 3...), um passo por problema encontrado na tabela de conflitos.',
-    '- Cada passo deve dizer: (a) O QUE fazer (ex.: excluir, substituir, anexar, corrigir data ou quantidade); (b) ONDE fazer (cite o item do sistema, ex.: "abra a aba Itens e localize o II-11 - Item 11"); (c) QUAL documento esta envolvido (cite a chave DOC-XX e o nome do arquivo); (d) POR QUE isso e necessario, em uma frase simples.',
-    '- Exemplo de passo bem escrito: "1. Exclua o lancamento duplicado do item I-3 - Item 3: as portarias DOC-04 e DOC-07 tratam da mesma comissao, entao apenas uma pode pontuar. Mantenha a mais recente e remova o outro lancamento na aba Itens."',
+    '- Cada passo deve dizer: (a) O QUE fazer (ex.: excluir, substituir, anexar, corrigir data ou quantidade); (b) ONDE fazer (cite o item do sistema, ex.: "abra a aba Itens e localize o II-11 - Item 11"); (c) QUAL documento esta envolvido (cite a chave Documento N e o nome do arquivo); (d) POR QUE isso e necessario, em uma frase simples.',
+    '- Exemplo de passo bem escrito: "1. Exclua o lancamento duplicado do item I-3 - Item 3: os Documentos 4 e 7 tratam da mesma comissao, entao apenas um pode pontuar. Mantenha o mais recente e remova o outro lancamento na aba Itens."',
     '- Ao final do plano, acrescente uma frase de fechamento indicando o que o servidor deve fazer depois das correcoes (ex.: rodar novamente esta auditoria e so entao gerar o pacote final).',
   ].join('\n');
 
