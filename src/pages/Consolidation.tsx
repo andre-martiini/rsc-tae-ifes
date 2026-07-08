@@ -28,6 +28,17 @@ import {
 } from '../lib/rsc';
 import { cn, formatarDataSegura, parseLocalDate } from '../lib/utils';
 
+const RSC_IDS = ['I', 'II', 'III', 'IV', 'V', 'VI'] as const;
+
+const CRITERIO_LABELS: Record<string, string> = {
+  I: 'Participação em grupos de trabalho, comissões, comitês, núcleos, representações ou similares',
+  II: 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência',
+  III: 'Premiações e reconhecimentos públicos',
+  IV: 'Responsabilidades técnico-administrativas e/ou especializadas',
+  V: 'Funções ou cargos de direção e assessoramento institucional',
+  VI: 'Produção, prospecção e difusão de conhecimento',
+};
+
 export default function Consolidation() {
   const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso, updateDocumento } = useAppContext();
   const navigate = useNavigate();
@@ -731,7 +742,7 @@ export default function Consolidation() {
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Cargo:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.cargo}</p></div>
                       <div>
                         <div className="flex items-center gap-1 mb-0.5">
-                          <span className="font-bold uppercase text-[10px] text-gray-500">Data de Início do Efetivo Exercício:</span>
+                          <span className="font-bold uppercase text-[10px] text-gray-500">Data de ingresso em Instituição Federal de Ensino:</span>
                           <div className="group relative flex items-center justify-center">
                             <Info className="h-3 w-3 text-gray-400 hover:text-gray-600 cursor-help" />
                             <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-72 -translate-x-1/2 opacity-0 transition-opacity group-hover:opacity-100 bg-gray-900 text-white text-[10px] rounded-md py-1.5 px-2.5 shadow-lg text-center font-normal normal-case leading-relaxed">
@@ -759,7 +770,7 @@ export default function Consolidation() {
 
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Lotação:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.lotacao}</p></div>
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Função/Encargo (se houver):</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.funcao_encargo || '—'}</p></div>
-                      <div className="md:col-span-2"><span className="font-bold uppercase text-[10px] text-gray-500 block">Telefone/E-mail:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.email_institucional}</p></div>
+                      <div className="md:col-span-2"><span className="font-bold uppercase text-[10px] text-gray-500 block">Telefone/E-mail:</span> <p className="border-b border-gray-300 min-h-[20px]">{[servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ')}</p></div>
                     </div>
                   </section>
 
@@ -802,7 +813,7 @@ export default function Consolidation() {
                           <span className="font-bold">{nivelPleiteado ? formatPointValue(Math.max(0, totalPontos - nivelPleiteado.pontosMinimos)) : '—'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1">
-                          <span className="text-gray-600">Saldo não aproveitado de concessão anterior:</span>
+                          <span className="text-gray-600">Saldo de pontuação de concessão anterior:</span>
                           <span className="font-bold">{saldoConcessaoAnterior || '0'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
@@ -810,25 +821,118 @@ export default function Consolidation() {
                           <span className="font-bold">{numeroProcessoAnterior || '—'}</span>
                         </div>
                         <div className="flex justify-between border-b border-dotted border-gray-200 py-1 md:col-span-2">
-                          <span className="text-gray-600">Data da última concessão do RSC-PCCTAE:</span>
+                          <span className="text-gray-600">Data da última concessão para controle de interstício:</span>
                           <span className="font-bold">{formatarDataSegura(dataUltimaConcessao)}</span>
                         </div>
                       </div>
                     </div>
                   </section>
 
-                  {/* 3. Declaração */}
+                  {/* 3. Descrição das Atividades */}
+                  <section className="space-y-5">
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">3. Descrição das Atividades por Requisito Legal</h3>
+                    <p className="text-[12px] leading-relaxed text-gray-600">
+                      Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das contribuições institucionais e conforme os requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026, vinculando cada atividade ao número correspondente aos critérios específicos.
+                    </p>
+                    <div className="space-y-5">
+                      {RSC_IDS.map((inciso) => {
+                        const items = resumoItens.filter((item) => item.inciso === inciso);
+                        const incisoSubtotal = sumPointValues(items.map((item) => item.pontos));
+
+                        return (
+                          <div key={inciso} className="space-y-2">
+                            <h4 className="bg-gray-100 px-3 py-1 text-[11px] font-black uppercase ring-1 ring-gray-900/10">
+                              Critério {inciso} - {CRITERIO_LABELS[inciso]}
+                            </h4>
+                            <div className="overflow-x-auto">
+                              <table className="min-w-[760px] w-full table-fixed border-collapse border border-gray-900 text-[9px]">
+                                <thead>
+                                  <tr className="bg-gray-50 text-center">
+                                    <th className="border border-gray-900 px-1.5 py-1.5 w-[5%] font-black uppercase">Nº do item</th>
+                                    <th className="border border-gray-900 px-1.5 py-1.5 text-left w-[38%] font-black uppercase">Critério específico</th>
+                                    <th className="border border-gray-900 px-1.5 py-1.5 w-[12%] font-black uppercase">Unidade de medida</th>
+                                    <th className="border border-gray-900 px-1.5 py-1.5 w-[10%] font-black uppercase">Pontuação</th>
+                                    <th className="border border-gray-900 px-1.5 py-1.5 w-[10%] font-black uppercase">Pontuação obtida</th>
+                                    <th className="border border-gray-900 px-1.5 py-1.5 w-[25%] font-black uppercase">Documentos comprobatórios</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {items.length === 0 ? (
+                                    <tr>
+                                      <td className="border border-gray-900 px-2 py-2 text-center">-</td>
+                                      <td className="border border-gray-900 px-2 py-2" colSpan={5}>Sem lançamentos neste critério</td>
+                                    </tr>
+                                  ) : items.map((item) => {
+                                    const itemLancamentos = lancamentosOrdenados.filter(l => l.item_rsc_id === item.itemId);
+                                    return (
+                                      <tr key={item.itemId}>
+                                        <td className="border border-gray-900 px-2 py-2 text-center font-bold">{item.numero}</td>
+                                        <td className="border border-gray-900 px-2 py-2 leading-tight">{item.descricao}</td>
+                                        <td className="border border-gray-900 px-2 py-2 text-center">{item.quantidadeTotal} {item.unidade_medida ? `(${item.unidade_medida})` : 'unid.'}</td>
+                                        <td className="border border-gray-900 px-2 py-2 text-center">{formatPointValue(item.pontos_por_unidade)}</td>
+                                        <td className="border border-gray-900 px-2 py-2 text-center font-black bg-gray-50/50">{formatPointValue(item.pontos)}</td>
+                                        <td className="border border-gray-900 px-2 py-2 align-top">
+                                          <div className="flex flex-col gap-1">
+                                            {itemLancamentos.flatMap((l) =>
+                                              getLancamentoDocumentIds(l).map((docId) => {
+                                                const docItem = docsById.get(docId);
+                                                const dossierEntry = documentOrder.get(docId);
+                                                const docLabel = dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : 'Documento sem ordem';
+                                                return (
+                                                  <span key={`${l.id}-${docId}`} className="text-[8px] leading-tight text-gray-500 break-all">
+                                                    [{docLabel}] {docItem?.nome_arquivo ?? 'Documento não encontrado'}
+                                                  </span>
+                                                );
+                                              })
+                                            )}
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                  <tr className="bg-gray-100 font-black">
+                                    <td colSpan={4} className="border border-gray-900 px-4 py-2 text-right uppercase italic tracking-widest">Subtotal CRITÉRIO {inciso}</td>
+                                    <td className="border border-gray-900 px-2 py-2 text-center bg-gray-200">{formatPointValue(incisoSubtotal)}</td>
+                                    <td className="border border-gray-900 px-2 py-2"></td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="overflow-x-auto pt-2">
+                      <table className="min-w-[560px] w-full border-collapse border border-gray-900 text-xs font-black">
+                        <tbody>
+                          <tr className="bg-gray-200/50">
+                            <td className="border border-gray-900 px-6 py-4 text-right uppercase italic tracking-widest leading-relaxed">
+                              (Critério I + Critério II + Critério III + Critério IV + Critério V + Critério VI)
+                              <br />
+                              <span className="text-base font-black">TOTAL ACUMULADO</span>
+                            </td>
+                            <td className="border border-gray-900 px-4 py-4 text-center text-xl w-40 bg-gray-900 text-white tabular-nums">
+                              {formatPointValue(totalPontos)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-[13px] leading-relaxed">
+                      À vista das informações apresentadas, totalizo <strong>{formatPointValue(totalPontos)}</strong> pontos e atendo aos critérios legais e regulamentares para o nível <strong>{nivelPleiteado?.label || '____'}</strong> do RSC-PCCTAE. Solicito a análise pela CRSC-PCCTAE.
+                    </p>
+                  </section>
+
+                  {/* 4. Declaração */}
                   <section className="space-y-4">
-                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">3. Declaração do Servidor</h3>
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">4. Declaração de Conformidade Legal</h3>
                     <div className="text-[12px] leading-relaxed space-y-4">
-                      <p>Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:</p>
+                      <p>Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:</p>
                       <ul className="list-disc pl-5 space-y-1">
-                        <li>Todos os fatos apresentados ocorreram no exercício da carreira;</li>
-                        <li>Nenhuma atividade aqui declarada foi utilizada para pontuação em concessões anteriores;</li>
-                        <li>Cada atividade foi considerada uma única vez, sem utilização simultânea para mais de um critério específico;</li>
-                        <li>As atividades descritas não representam exclusivamente atribuições ordinárias do cargo e demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;</li>
-                        <li>A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;</li>
-                        <li>Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.</li>
+                        <li>I - Todos os fatos apresentados ocorreram no exercício do cargo;</li>
+                        <li>II - Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;</li>
+                        <li>III - Toda a documentação anexada é autêntica e comprova integralmente as atividades apresentadas; e</li>
+                        <li>IV - Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.</li>
                       </ul>
                     </div>
                   </section>
@@ -858,7 +962,7 @@ export default function Consolidation() {
                     <h1 className="text-lg font-black uppercase tracking-tight decoration-2">Memorial e Descrição das Atividades</h1>
                     <p className="max-w-3xl mx-auto text-[11px] leading-relaxed text-gray-500 italic pt-4">
                       Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das
-                      contribuições institucionais e conforme os incisos I a VI do art. 3º da base normativa adotada pelo sistema, vinculando cada
+                      contribuições institucionais e conforme os requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026, vinculando cada
                       atividade ao número correspondente aos critérios específicos.
                     </p>
                   </div>
@@ -871,14 +975,7 @@ export default function Consolidation() {
                       return (
                         <div key={inciso} className="space-y-2">
                           <h2 className="bg-gray-100 px-4 py-1.5 text-[11px] font-black uppercase ring-1 ring-gray-900/10">
-                            Critério {inciso} - {
-                              inciso === 'I' ? 'Participação em grupos, comissões, comitês, núcleos ou representações' :
-                                inciso === 'II' ? 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência' :
-                                  inciso === 'III' ? 'Premiação em evento de reconhecimento público' :
-                                    inciso === 'IV' ? 'Responsabilidades técnico-administrativas e/ou especializadas' :
-                                      inciso === 'V' ? 'Funções ou cargos de direção e assessoramento institucional' :
-                                        'Produção, prospecção e difusão de conhecimento'
-                            }
+                            Critério {inciso} - {CRITERIO_LABELS[inciso] ?? 'Produção, prospecção e difusão de conhecimento'}
                           </h2>
 
                           <div className="overflow-x-auto">

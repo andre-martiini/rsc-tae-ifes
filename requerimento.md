@@ -1,13 +1,20 @@
 # REQUERIMENTO DE RSC-PCCTAE
 
-## 1. Identificação do Servidor
-- Servidor(a): campo obrigatório
-- Unidade/Lotação: campo obrigatório
-- Cargo: campo obrigatório
-- SIAPE: campo obrigatório
-- E-mail institucional: campo obrigatório
+Modelo ajustado conforme a Portaria MEC nº 608, de 7 de julho de 2026, publicada no DOU em 8 de julho de 2026.
 
-## 2. Nível Pleiteado
+## 1. Identificação do Servidor
+
+- Nome: campo obrigatório
+- SIAPE: campo obrigatório
+- Cargo: campo obrigatório
+- Data de ingresso em Instituição Federal de Ensino: campo obrigatório
+- Nível de Classificação: campo obrigatório
+- Lotação: campo obrigatório
+- Função/Encargo, se houver
+- Telefone/E-mail: campo obrigatório
+
+## 2. Informações do Requerimento
+
 O(a) servidor(a) requer a preparação documental do pedido de RSC-PCCTAE no nível:
 
 - `RSC-PCCTAE I`
@@ -17,26 +24,49 @@ O(a) servidor(a) requer a preparação documental do pedido de RSC-PCCTAE no ní
 - `RSC-PCCTAE V`
 - `RSC-PCCTAE VI`
 
-## 3. Base de Conferência do Pedido
 O requerimento deve consolidar:
 
 - o nível de RSC-PCCTAE pretendido;
-- a pontuação total informada no sistema;
-- a quantidade de itens distintos utilizados;
-- o saldo excedente, quando houver;
-- a referência à documentação organizada para compor o dossiê.
+- a pontuação mínima necessária;
+- a pontuação total apresentada;
+- a quantidade de critérios específicos utilizados;
+- a pontuação total excedente, quando houver;
+- o saldo de pontuação de concessão anterior, quando houver;
+- o número do processo relativo à concessão anterior do RSC-PCCTAE, se houver.
 
-## 4. Declarações do Servidor
-Declaro, para instrução do meu pedido de RSC-PCCTAE, que:
+## 3. Descrição das Atividades por Requisito Legal
 
-- os fatos e atividades aqui descritos ocorreram no exercício da carreira;
-- a documentação apresentada foi organizada para comprovar os itens lançados;
-- não utilizei o mesmo fato gerador em duplicidade entre itens;
-- as atividades descritas demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes, não se limitando a atribuições ordinárias do cargo;
-- os fatos declarados não foram utilizados em concessões anteriores;
-- as informações prestadas são verdadeiras, ficando sob minha responsabilidade.
+O requerimento deve listar os itens conforme os requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048/2026:
+
+- Critério I - Participação em grupos de trabalho, comissões, comitês, núcleos, representações ou similares;
+- Critério II - Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência;
+- Critério III - Premiações e reconhecimentos públicos;
+- Critério IV - Responsabilidades técnico-administrativas e/ou especializadas;
+- Critério V - Funções ou cargos de direção e assessoramento institucional;
+- Critério VI - Produção, prospecção e difusão de conhecimento.
+
+Para cada critério específico, devem constar:
+
+- número do item;
+- critério específico;
+- unidade de medida;
+- pontuação;
+- pontuação obtida;
+- documentos comprobatórios anexos.
+
+Ao final da seção, o requerimento deve apresentar o subtotal de cada critério e o total acumulado.
+
+## 4. Declaração de Conformidade Legal
+
+Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:
+
+- I - todos os fatos apresentados ocorreram no exercício do cargo;
+- II - nenhuma atividade declarada foi utilizada em requerimentos anteriores;
+- III - toda a documentação anexada é autêntica e comprova integralmente as atividades apresentadas; e
+- IV - tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.
 
 ## 5. Observação de Uso
+
 Este documento integra o conjunto documental preparado pelo sistema e deve ser utilizado juntamente com:
 
 - os documentos originais organizados por item;
