@@ -197,6 +197,9 @@ export async function exportPacoteRSC(params: {
     processo,
     totalPontos,
     itensDistintos,
+    lancamentos,
+    itensRSC,
+    documentos,
   );
   zip.file('01_Requerimento_RSC.pdf', requerimentoBytes);
 

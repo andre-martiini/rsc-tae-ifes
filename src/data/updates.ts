@@ -14,6 +14,20 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '08 de julho de 2026',
+    title: 'Requerimento atualizado conforme a Portaria MEC nº 608/2026',
+    description: 'O modelo de requerimento do pacote RSC foi adequado ao formulário padrão estabelecido pelo Ministério da Educação para solicitação do RSC-PCCTAE.',
+    features: [
+      'O PDF do requerimento agora inclui a seção "Descrição das Atividades por Requisito Legal", com os critérios I a VI, subtotais por critério e total acumulado.',
+      'A prévia da aba Consolidar foi alinhada ao novo modelo, incluindo os mesmos campos, rótulos e a declaração de conformidade legal prevista na portaria.',
+      'A declaração final passou a seguir o texto padrão da Portaria MEC nº 608, de 7 de julho de 2026, publicada no DOU em 8 de julho de 2026.',
+    ],
+    improvements: [
+      'Os rótulos de saldo de pontuação, processo anterior e identificação funcional foram ajustados para acompanhar o novo formulário mínimo do Ministério da Educação.',
+      'Os nomes dos critérios foram uniformizados no requerimento e no memorial para refletir a redação do modelo oficial.',
+    ],
+  },
+  {
     date: '07 de julho de 2026',
     title: 'Revisão mais clara de documentos e itens',
     description: 'A organização dos comprovantes e dos itens ficou mais consistente, com menos dúvidas na hora de revisar, copiar prompts e ajustar lançamentos.',

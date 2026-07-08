@@ -52,6 +52,17 @@ const COLORS = {
   accent: rgb(0.16, 0.16, 0.16),
 };
 
+const RSC_IDS = ['I', 'II', 'III', 'IV', 'V', 'VI'] as const;
+
+const CRITERIO_LABELS: Record<string, string> = {
+  I: 'Participação em grupos de trabalho, comissões, comitês, núcleos, representações ou similares',
+  II: 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência',
+  III: 'Premiações e reconhecimentos públicos',
+  IV: 'Responsabilidades técnico-administrativas e/ou especializadas',
+  V: 'Funções ou cargos de direção e assessoramento institucional',
+  VI: 'Produção, prospecção e difusão de conhecimento',
+};
+
 
 let logoBytesPromise: Promise<Uint8Array | null> | null = null;
 
@@ -691,6 +702,9 @@ export async function generateRequerimentoFormal(
   processo: ProcessoRSC,
   totalPontos: number,
   itensDistintos: number,
+  lancamentos: Lancamento[],
+  itensRSC: ItemRSC[],
+  documentos: Documento[],
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const writer = new Writer({
@@ -720,7 +734,7 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Nome:', sanitize(servidor.nome_completo));
   writer.keyValue('SIAPE:', sanitize(servidor.siape));
   writer.keyValue('Cargo:', sanitize(servidor.cargo ?? '-'));
-  writer.keyValue('Data de Início do Efetivo Exercício:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
+  writer.keyValue('Data de ingresso em Instituição Federal de Ensino:', sanitize(formatDate(servidor.data_ingresso_ife || servidor.data_ingresso)));
   writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
@@ -734,18 +748,85 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Pontuação total:', `${formatNumber(totalPontos)} pts`);
   writer.keyValue('Qtd. critérios utilizados:', `${itensDistintos}`);
   writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
-  writer.keyValue('Saldo não aproveitado anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
-  writer.keyValue('Processo anterior:', sanitize(processo.numero_processo_anterior ?? '-'));
-  writer.keyValue('Data da última concessão:', sanitize(formatDate(processo.data_ultima_concessao)));
+  writer.keyValue('Saldo de pontuação de concessão anterior:', processo.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
+  writer.keyValue('Número do processo relativo à concessão anterior do RSC-PCCTAE:', sanitize(processo.numero_processo_anterior ?? '-'));
+  writer.keyValue('Data da última concessão para controle de interstício:', sanitize(formatDate(processo.data_ultima_concessao)));
 
-  writer.section('3. Declaração do Servidor');
-  writer.text('Declaro, para instrução documental do meu pedido de RSC-PCCTAE, que:', { size: 9 });
-  writer.bullet('Todos os fatos apresentados ocorreram no exercício da carreira;');
-  writer.bullet('Nenhuma atividade aqui declarada foi utilizada para pontuação em concessões anteriores;');
-  writer.bullet('Cada atividade foi considerada uma única vez, sem utilização simultânea para mais de um critério específico;');
-  writer.bullet('As atividades descritas não representam exclusivamente atribuições ordinárias do cargo e demonstram saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes;');
-  writer.bullet('A documentação anexada foi organizada para comprovar os itens lançados neste dossiê;');
-  writer.bullet('Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.');
+  writer.addPage();
+  writer.section('3. Descrição das Atividades por Requisito Legal');
+  writer.text(
+    'Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das contribuições institucionais e conforme os requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026, vinculando cada atividade ao número correspondente aos critérios específicos.',
+    { size: 8.5, color: COLORS.muted },
+  );
+  writer.gap(6);
+
+  const COL_WIDTHS = [0.05, 0.38, 0.12, 0.10, 0.10, 0.25];
+  const colSubtotalLabelStart = 0.05 + 0.38 + 0.12;
+  const colSubtotalValueStart = 0.05 + 0.38 + 0.12 + 0.10;
+  const docsById = new Map(documentos.map((d) => [d.id, d]));
+  const documentOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
+  const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
+
+  for (const inciso of RSC_IDS) {
+    const incisoLancamentos = sortedLancamentos.filter((l) => {
+      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+      return item?.inciso === inciso;
+    });
+
+    writer.criterioHeader(`Critério ${inciso} - ${CRITERIO_LABELS[inciso]}`);
+
+    const groupedRows = new Map<string, { item: ItemRSC; points: number; quantidadeTotal: number; docs: string[] }>();
+    incisoLancamentos.forEach((l) => {
+      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+      if (!item) return;
+      const entry = groupedRows.get(item.id) || { item, points: 0, quantidadeTotal: 0, docs: [] };
+      entry.points = addPointValues(entry.points, l.pontos_calculados);
+      entry.quantidadeTotal += l.quantidade_informada ?? 1;
+      getLancamentoDocumentIds(l).forEach((docId) => {
+        const doc = docsById.get(docId);
+        if (!doc) return;
+        const dossierEntry = documentOrder.get(docId);
+        const docLabel = dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : 'Documento sem ordem';
+        entry.docs.push(`[${docLabel}] ${doc.nome_arquivo}`);
+      });
+      groupedRows.set(item.id, entry);
+    });
+
+    const sortedGroups = Array.from(groupedRows.values()).sort((a, b) => a.item.numero - b.item.numero);
+    const tableRows = sortedGroups.map((g) => [
+      `${g.item.numero}`,
+      g.item.descricao,
+      `${formatNumber(g.quantidadeTotal)} ${g.item.unidade_medida ? `(${g.item.unidade_medida})` : 'unid.'}`,
+      formatNumber(g.item.pontos_por_unidade),
+      formatNumber(g.points),
+      g.docs.join('\n'),
+    ]);
+
+    writer.table(
+      ['Nº', 'Critério específico', 'Unidade de medida', 'Pontuação', 'Pontuação obtida', 'Documentos comprobatórios'],
+      tableRows.length > 0 ? tableRows : [['-', 'Sem lançamentos neste critério', '-', '-', '-', '-']],
+      COL_WIDTHS,
+    );
+
+    const subtotal = sortedGroups.reduce((acc, g) => addPointValues(acc, g.points), 0);
+    writer.subtotalRow(`Subtotal CRITÉRIO ${inciso}`, formatNumber(subtotal), [colSubtotalLabelStart, colSubtotalValueStart]);
+    writer.gap(8);
+  }
+
+  writer.subtotalRow('TOTAL ACUMULADO', formatNumber(totalPontos), [colSubtotalLabelStart, colSubtotalValueStart], true);
+
+  writer.gap(14);
+  writer.text(
+    `À vista das informações apresentadas, totalizo ${formatPointValue(totalPontos)} pontos e atendo aos critérios legais e regulamentares para o nível ${nivelPleiteado?.label ?? '____'} do RSC-PCCTAE. Solicito a análise pela CRSC-PCCTAE.`,
+    { size: 9 },
+  );
+
+  writer.section('4. Declaração de Conformidade Legal');
+  writer.text('Declaro, para os fins previstos no Decreto regulamentador do RSC-PCCTAE, que:', { size: 9 });
+  writer.bullet('I - Todos os fatos apresentados ocorreram no exercício do cargo;');
+  writer.bullet('II - Nenhuma atividade aqui declarada foi utilizada em requerimentos anteriores;');
+  writer.bullet('III - Toda a documentação anexada é autêntica e comprova integralmente as atividades apresentadas; e');
+  writer.bullet('IV - Tenho ciência de que informações falsas implicam responsabilidade administrativa, civil e penal.');
 
   writer.gap(16);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
@@ -753,13 +834,14 @@ export async function generateRequerimentoFormal(
   writer.text('Data: ______ / ______ / __________', { size: 9 });
 
   // Injeção de metadados estruturados (Sistema 2)
+  writer.ensure(70);
   writer.gap(10);
   const grayColor = rgb(0.6, 0.6, 0.6);
   const sanitizedNome = sanitizeForTag(servidor.nome_completo);
   const sanitizedNivel = nivelPleiteado ? sanitizeForTag(nivelPleiteado.label) : 'RSC_NAO_DEFINIDO';
   const sanitizedSiape = sanitizeForTag(servidor.siape);
 
-  // Desenhamos as tags diretamente na página para garantir que caibam na primeira página do Requerimento
+  // Desenhamos as tags diretamente na página corrente para manter o requerimento rastreável.
   writer.drawTag(`[RSC:DOC_TIPO:REQUERIMENTO]`, { y: writer.y - 10, color: grayColor, size: 8 });
   writer.drawTag(`[RSC:SIAPE:${sanitizedSiape}]`, { y: writer.y - 20, color: grayColor, size: 8 });
   writer.drawTag(`[RSC:NOME:${sanitizedNome}]`, { y: writer.y - 30, color: grayColor, size: 8 });
@@ -825,22 +907,12 @@ export async function generateMemorialDescritivo(
   writer.addPage();
   writer.section('4. Memorial e Descrição das Atividades');
   writer.gap(4);
-  writer.text('Descrição detalhada das atividades vinculadas aos incisos I a VI do art. 3º da base normativa adotada pelo sistema.', { size: 8, color: COLORS.muted });
-
-  const CRITERIO_LABELS: Record<string, string> = {
-    I: 'Participação em grupos, comissões, comitês, núcleos ou representações',
-    II: 'Projetos institucionais, gestão, ensino, pesquisa, extensão, inovação ou assistência',
-    III: 'Premiação em evento de reconhecimento público',
-    IV: 'Responsabilidades técnico-administrativas e/ou especializadas',
-    V: 'Funções ou cargos de direção e assessoramento institucional',
-    VI: 'Produção, prospecção e difusão de conhecimento',
-  };
+  writer.text('Descrição detalhada das atividades vinculadas aos requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026.', { size: 8, color: COLORS.muted });
 
   const COL_WIDTHS = [0.05, 0.38, 0.12, 0.10, 0.10, 0.25];
   const colSubtotalLabelStart = 0.05 + 0.38 + 0.12;
   const colSubtotalValueStart = 0.05 + 0.38 + 0.12 + 0.10;
 
-  const RSC_IDS = ['I', 'II', 'III', 'IV', 'V', 'VI'];
   const docsById = new Map(documentos.map((d) => [d.id, d]));
   const documentOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
   const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
