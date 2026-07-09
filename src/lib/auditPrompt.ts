@@ -180,8 +180,11 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     '',
     ...launches.flatMap((entry, index) => {
       const item = itensById.get(entry.item_rsc_id);
-      const firstDocId = getIds(entry)[0];
-      const doc = firstDocId ? docsById.get(firstDocId) : undefined;
+      const docIds = getIds(entry);
+      const docs = docIds.map((id) => docsById.get(id)).filter((doc): doc is Documento => !!doc);
+      const docsStr = docs.length
+        ? docs.map((doc) => `${docKeys.get(doc.id) ?? doc.id} - ${doc.nome_arquivo}`).join('; ')
+        : 'Sem documento vinculado';
       return [
         '------------------------------------------------------------',
         `LANCAMENTO ${index + 1}: ${itemCode(item)}`,
@@ -192,7 +195,7 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
         `Quantidade         : ${entry.quantidade_informada}`,
         `Periodo declarado  : ${formatDateRange(entry)}`,
         `Pontos declarados  : ${formatPointValue(entry.pontos_calculados)}`,
-        `Documento vinculado: ${doc ? `${docKeys.get(doc.id) ?? doc.id} - ${doc.nome_arquivo}` : 'Sem documento vinculado'}`,
+        `Documento(s) vinculado(s): ${docsStr}`,
         `Localizar no sistema: abra a aba Itens e busque por ${itemCode(item)} / Item ${item?.numero ?? 'nao mapeado'}`,
         `Observacao usuario : ${cleanInline(entry.observacao) || 'Sem observacao'}`,
         `Status auditoria   : ${entry.status_auditoria}`,

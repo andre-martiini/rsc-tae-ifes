@@ -490,7 +490,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addDocumento = (doc: Omit<Documento, 'id' | 'data_upload'>) => {
     const newDoc: Documento = {
       ...doc,
-      id: `doc-${Date.now()}`,
+      id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       data_upload: new Date().toISOString(),
     };
     setDocumentos((current) => [...current, newDoc]);
@@ -554,7 +554,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { doc: duplicatedDocument, exists: true };
     }
 
-    const docId = `doc-${Date.now()}`;
+    const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const persistedFile = await persistDocumentFile({ docId, servidorId, file });
 
     const newDoc: Documento = {
@@ -586,7 +586,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     links: string[];
   }): Promise<Documento> => {
     const normalizedLinks = links.map(normalizeInstitutionDocumentLink);
-    const docId = `doc-${Date.now()}`;
+    const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const nomeArquivo = buildInstitutionReferenceFileName(normalizedLinks.length);
 
     const newDoc: Documento = {
