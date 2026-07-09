@@ -24,10 +24,11 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
   const [quantidade, setQuantidade] = useState<number>(0);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [justificativa, setJustificativa] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [duplicateWarning, setDuplicateWarning] = useState<{
     doc: Documento;
     docId: string;
+    comprovantesIds: string[];
   } | null>(null);
 
   // Auto-calculate quantity based on dates (only for items with quantidade_automatica)
@@ -45,7 +46,6 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     }
   }, [dataInicio, dataFim, isUnlocked, item.quantidade_automatica]);
 
-
   const handleSave = async () => {
     if (!servidor) return;
 
@@ -59,21 +59,29 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
       return;
     }
 
-    if (!file) {
-      toast.error('Anexe um documento.');
+    if (files.length === 0) {
+      toast.error('Anexe ao menos um documento.');
       return;
     }
 
-    let docId: string | undefined;
+    const uploadedIds: string[] = [];
+    let firstDocId: string | undefined;
+    let duplicateDocFound: Documento | undefined = undefined;
 
     try {
-      const { doc, exists } = await addDocumentoFromFile({
-        servidorId: servidor.id,
-        file,
-      });
-      docId = doc.id;
-      if (exists) {
-        setDuplicateWarning({ doc, docId: doc.id });
+      for (const f of files) {
+        const { doc, exists } = await addDocumentoFromFile({
+          servidorId: servidor.id,
+          file: f,
+        });
+        uploadedIds.push(doc.id);
+        if (!firstDocId) firstDocId = doc.id;
+        if (exists && !duplicateDocFound) {
+          duplicateDocFound = doc;
+        }
+      }
+      if (duplicateDocFound) {
+        setDuplicateWarning({ doc: duplicateDocFound, docId: firstDocId!, comprovantesIds: uploadedIds });
         return;
       }
     } catch (error) {
@@ -81,16 +89,17 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
       return;
     }
 
-    finishSave(docId!);
+    finishSave(firstDocId!, uploadedIds);
   };
 
-  const finishSave = (docId: string) => {
+  const finishSave = (docId: string, comprovantesIds: string[]) => {
     const pontosCalculados = quantidade * item.pontos_por_unidade;
 
     addLancamento({
       servidor_id: servidor!.id,
       item_rsc_id: item.id,
       documento_id: docId,
+      comprovantes_ids: comprovantesIds,
       data_inicio: dataInicio,
       data_fim: dataFim,
       quantidade_informada: quantidade,
@@ -106,7 +115,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     setQuantidade(0);
     setIsUnlocked(false);
     setJustificativa('');
-    setFile(null);
+    setFiles([]);
     setDuplicateWarning(null);
     onToggle(); // Close accordion
   };
@@ -138,8 +147,6 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
             transition={{ duration: 0.2 }}
           >
             <CardContent className="pt-0 pb-4 px-4 border-t border-gray-100">
-
-
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -204,7 +211,6 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                   <div className="flex items-center justify-between">
                     <Label>Comprovação Documental</Label>
                     <div className="flex gap-2">
-                      {/* Mini toggle logic if we want, but let's just show both or a simple input */}
                     </div>
                   </div>
 
@@ -213,14 +219,39 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                       type="file"
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                       accept=".pdf"
-                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                      multiple
+                      onChange={(e) => {
+                        if (e.target.files) {
+                          setFiles((prev) => [...prev, ...Array.from(e.target.files as FileList)]);
+                        }
+                      }}
                     />
                     <UploadCloud className="w-8 h-8 text-gray-400 mb-2" />
                     <p className="text-sm font-medium text-gray-900">
-                      {file ? file.name : 'Arraste o PDF ou clique para buscar'}
+                      {files.length > 0 
+                        ? `${files.length} arquivo(s) selecionado(s)` 
+                        : 'Arraste os PDFs ou clique para buscar'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">Tamanho máximo: 5MB</p>
+                    <p className="text-xs text-gray-500 mt-1">Tamanho máximo: 5MB por arquivo</p>
                   </div>
+
+                  {files.length > 0 && (
+                    <div className="space-y-1.5 rounded-lg border border-gray-100 bg-gray-50/50 p-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{files.length} arquivo(s) selecionado(s)</p>
+                      {files.map((f, index) => (
+                        <div key={index} className="flex items-center justify-between gap-2 rounded border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                          <span className="truncate font-medium text-gray-700 flex-1">{f.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== index))}
+                            className="text-red-500 hover:text-red-700 font-bold px-1"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -267,7 +298,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Button
-                    onClick={() => finishSave(duplicateWarning.docId)}
+                    onClick={() => finishSave(duplicateWarning.docId, duplicateWarning.comprovantesIds)}
                     className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
                   >
                     Reaproveitar e salvar
@@ -276,7 +307,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                     variant="ghost"
                     onClick={() => {
                       setDuplicateWarning(null);
-                      setFile(null);
+                      setFiles([]);
                     }}
                     className="text-gray-500 hover:bg-gray-100"
                   >

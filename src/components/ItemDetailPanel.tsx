@@ -462,6 +462,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         allComprovanteIds = [newDoc.id];
       } else if (pendingFiles.length > 0) {
         const uploadedIds: string[] = [];
+        let duplicateDocFound: Documento | undefined = undefined;
         for (const { file: f, meta } of pendingFiles) {
           const result = await addDocumentoFromFile({
             servidorId: servidor.id,
@@ -475,10 +476,16 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           });
           uploadedIds.push(result.doc.id);
           if (!newDoc) newDoc = result.doc;
+          if (result.exists && !duplicateDocFound) {
+            duplicateDocFound = result.doc;
+            isDuplicate = true;
+          }
         }
         documentoId = uploadedIds[0];
         allComprovanteIds = uploadedIds;
-        isDuplicate = false;
+        if (isDuplicate && duplicateDocFound) {
+          newDoc = duplicateDocFound;
+        }
       }
       const pontosCalculados = calculateLancamentoPoints(quantidadeNumerica, item.pontos_por_unidade);
       const abrangencia = showDateFields ? abrangenciaPeriodos(effectivePeriodos) : null;

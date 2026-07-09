@@ -483,14 +483,6 @@ export default function Consolidation() {
                 </li>
               ))}
             </ul>
-            {/* SRP Support Link Footer */}
-            {!canGenerate && (
-              <div className="bg-gray-50 px-6 py-3 border-t border-gray-100">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">
-                  Dúvidas sobre o processo? Acesse o nosso site <a href="https://www.srp.org.br" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">www.srp.org.br</a>
-                </p>
-              </div>
-            )}
           </div>
         </div>
 

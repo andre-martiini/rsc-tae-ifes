@@ -1012,28 +1012,45 @@ export async function generateMemorialDescritivo(
     const item = itensRSC.find((i) => i.id === l.item_rsc_id);
     if (!item) continue;
 
-    const firstDocId = l.comprovantes_ids?.[0] ?? l.documento_id;
-    const docItem = firstDocId ? documentos.find((d) => d.id === firstDocId) : undefined;
-    const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
-    const range = docRefKey && documentPageRanges ? documentPageRanges[docRefKey] : undefined;
-
-    const startPage = range ? range.startPage : 0;
-    const endPage = range ? range.endPage : 0;
-    const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
+    const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0 ? l.comprovantes_ids : (l.documento_id ? [l.documento_id] : []);
     const incisoRomano = item.inciso;
     const pontosStr = formatPointValue(l.pontos_calculados);
 
-    writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    if (l.observacao) {
-      const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
-      writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    if (docIds.length === 0) {
+      writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:PAGINA_INICIO:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:PAGINA_FIM:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:DOC_REF:AUTODECLARACAO]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      if (l.observacao) {
+        const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+        writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      }
+      writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    } else {
+      for (const docId of docIds) {
+        const docItem = documentos.find((d) => d.id === docId);
+        const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
+        const range = docRefKey && documentPageRanges ? documentPageRanges[docRefKey] : undefined;
+
+        const startPage = range ? range.startPage : 0;
+        const endPage = range ? range.endPage : 0;
+        const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
+
+        writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        if (l.observacao) {
+          const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+          writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        }
+        writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      }
     }
-    writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   }
 
   writer.text(`[RSC:END]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
