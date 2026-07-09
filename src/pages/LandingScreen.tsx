@@ -557,9 +557,9 @@ export default function LandingScreen() {
                     <ShieldCheck className="h-4.5 w-4.5 md:h-5 md:w-5" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-[11px] md:text-sm font-bold text-on-surface mb-0.5 md:mb-1 uppercase tracking-wider font-sans">Versão Beta Baseada no Decreto</h3>
+                    <h3 className="text-[11px] md:text-sm font-bold text-on-surface mb-0.5 md:mb-1 uppercase tracking-wider font-sans">Alinhado ao Novo Decreto</h3>
                     <p className="text-xs md:text-sm leading-relaxed text-on-surface-variant font-sans">
-                      O sistema foi ajustado ao Decreto nº 13.048/2026 e continua em evolução com atos complementares e normas internas.
+                      O sistema está atualizado conforme as diretrizes do Decreto nº 13.048/2026, atos complementares e normas internas.
                     </p>
                   </div>
                 </div>
