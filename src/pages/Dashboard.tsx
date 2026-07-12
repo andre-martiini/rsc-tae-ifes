@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, Info, LayoutGrid, List, Wand2, Bot, ScrollText, UserCircle, ExternalLink, X } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, FileSearch, Info, LayoutGrid, List, Bot, ScrollText, UserCircle, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -11,7 +11,6 @@ import { Card, CardContent } from '../components/ui/card';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getDistinctRscCriterionCount, getEligibleRscLevel, getServidorProbationaryStatus, validateLevelConstraints } from '../lib/rsc';
 import MainLayout from '../components/MainLayout';
-import WizardModal from '../components/WizardModal';
 
 const levelAccentClasses = [
   {
@@ -41,33 +40,12 @@ const levelAccentClasses = [
 ];
 
 export default function Dashboard() {
-  const { servidor, itensRSC, lancamentos, processo, wizardRecommendedIds, setWizardRecommendedIds } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo, triagem } = useAppContext();
   const navigate = useNavigate();
-  const [wizardOpen, setWizardOpen] = useState(false);
 
   if (!servidor) {
     return <Navigate to="/" replace />;
   }
-
-  const [isWizardHidden, setIsWizardHidden] = useState(() => {
-    return localStorage.getItem(`rsc-tae-${servidor.id}-wizard-hidden`) === 'true';
-  });
-
-  const handleHideWizard = () => {
-    localStorage.setItem(`rsc-tae-${servidor.id}-wizard-hidden`, 'true');
-    setIsWizardHidden(true);
-    toast.success('Mapeamento ocultado. Você pode reexibi-lo a qualquer momento nas Ferramentas de Apoio.');
-  };
-
-  const handleShowWizard = () => {
-    localStorage.removeItem(`rsc-tae-${servidor.id}-wizard-hidden`);
-    setIsWizardHidden(false);
-  };
-
-  const handleClearSuggestions = () => {
-    setWizardRecommendedIds([]);
-    toast.success('Sugestões limpas com sucesso! O mapeamento foi reiniciado.');
-  };
 
   const lancamentosDoServidor = lancamentos.filter((lancamento) => lancamento.servidor_id === servidor.id);
   const totalPontos = sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados));
@@ -426,87 +404,64 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 px-1">
             <h2 className="text-xs font-black uppercase tracking-[0.2em] text-gray-400">Ferramentas de Apoio</h2>
             <div className="h-px flex-1 bg-gray-100" />
-            {isWizardHidden && (
-              <button
-                type="button"
-                onClick={handleShowWizard}
-                className="text-xs font-bold text-violet-600 hover:text-violet-700 hover:underline transition-colors"
-              >
-                Reexibir Wizard
-              </button>
-            )}
           </div>
 
-          <div className={cn(
-            "grid grid-cols-1 gap-4",
-            isWizardHidden ? "lg:grid-cols-1" : "lg:grid-cols-2"
-          )}>
-            {/* Card 1: Wizard */}
-            {!isWizardHidden && (
-              <Card className={cn(
-                "relative overflow-hidden border-none shadow-sm transition-all hover:shadow-md",
-                wizardRecommendedIds.length > 0 ? "bg-violet-50/50 ring-1 ring-inset ring-violet-100" : "bg-white"
-              )}>
-                {/* Close Button */}
-                <button
-                  type="button"
-                  onClick={handleHideWizard}
-                  className="absolute right-4 top-4 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                  title="Ocultar Mapeamento"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+          <div className="grid grid-cols-1 gap-4">
+            {/* Card: Dossiê Inteligente */}
+            {(() => {
+              const pendentesTriagem = (triagem?.sugestoes ?? []).filter((s) => s.status === 'pendente').length;
+              const hasTriagemAtiva = triagem && (triagem.documento_ids.length > 0 || triagem.sugestoes.length > 0);
 
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-4 pr-6">
-                    <div className={cn(
-                      "rounded-2xl p-3.5",
-                      wizardRecommendedIds.length > 0 ? "bg-violet-100 text-violet-600" : "bg-gray-100 text-gray-400"
-                    )}>
-                      <Wand2 className="h-6 w-6" />
-                    </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-bold text-gray-900">Mapeamento Objetivado (Wizard)</h3>
-                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-gray-500">Opcional</span>
-                        {wizardRecommendedIds.length > 0 && (
-                          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-violet-700">Mapeado</span>
-                        )}
+              return (
+                <Card className="overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-2xl bg-sky-50 p-3.5 text-sky-600">
+                        <FileSearch className="h-6 w-6" />
                       </div>
-                      <p className="text-[13px] leading-relaxed text-gray-500">
-                        Responda a perguntas objetivas sobre sua trajetória para filtrar automaticamente quais itens do catálogo você possui para pontuação.
-                      </p>
-                      <div className="flex flex-col gap-3 pt-3 sm:flex-row sm:flex-wrap">
-                        <button
-                          onClick={() => setWizardOpen(true)}
-                          className="flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-violet-700 hover:shadow-lg hover:shadow-violet-200"
-                        >
-                          {wizardRecommendedIds.length > 0 ? 'Refazer Mapeamento' : 'Iniciar Wizard'}
-                        </button>
-                        {wizardRecommendedIds.length > 0 && (
+                      <div className="flex-1 space-y-1">
+                        <h3 className="font-bold text-gray-900">Dossiê Inteligente</h3>
+                        {hasTriagemAtiva ? (
                           <>
-                            <button
-                              onClick={() => navigate('/itens')}
-                              className="flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-5 py-2 text-xs font-bold text-violet-700 transition-all hover:bg-violet-50"
-                            >
-                              Ver Sugestões
-                            </button>
-                            <button
-                              onClick={handleClearSuggestions}
-                              className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-5 py-2 text-xs font-bold text-red-600 transition-all hover:bg-red-50 hover:border-red-300"
-                            >
-                              Limpar Sugestões
-                            </button>
+                            <p className="text-[13px] leading-relaxed text-gray-500">
+                              {pendentesTriagem > 0
+                                ? `Dossiê em andamento — ${pendentesTriagem} sugestão(ões) aguardando revisão.`
+                                : 'Todas as sugestões foram revisadas. Confira o resultado.'}
+                            </p>
+                            <div className="pt-3">
+                              <button
+                                onClick={() => navigate('/triagem')}
+                                className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-sky-700 hover:shadow-lg hover:shadow-sky-200"
+                              >
+                                {pendentesTriagem > 0 ? 'Revisar dossiê' : 'Ver dossiê'}
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[13px] leading-relaxed text-gray-500">
+                              Não sabe onde seus documentos se encaixam? Solte todos os arquivos e a IA descobre os encaixes, além de auditar o resultado automaticamente.
+                            </p>
+                            <div className="pt-3">
+                              <button
+                                onClick={() => navigate('/triagem')}
+                                className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-sky-700 hover:shadow-lg hover:shadow-sky-200"
+                              >
+                                Iniciar dossiê
+                                <ChevronRight className="h-3 w-3" />
+                              </button>
+                            </div>
                           </>
                         )}
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
-            {/* Card 2: NotebookLM */}
+            {/* Card: NotebookLM */}
             <Card className="overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
@@ -638,16 +593,6 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
-      {wizardOpen && (
-        <WizardModal
-          onClose={() => setWizardOpen(false)}
-          onConfirm={(ids) => {
-            setWizardRecommendedIds(ids);
-            setWizardOpen(false);
-          }}
-          initialIds={wizardRecommendedIds}
-        />
-      )}
     </MainLayout>
   );
 }

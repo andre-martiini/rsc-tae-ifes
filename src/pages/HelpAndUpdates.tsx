@@ -20,12 +20,131 @@ import {
   UserCheck,
   Mail,
   X,
+  Gavel,
+  Scale,
+  Download,
+  ExternalLink,
+  FileText,
+  AlertTriangle,
 } from 'lucide-react';
 import MainLayout from '../components/MainLayout';
 import { SYSTEM_UPDATES, type UpdateEntry } from '../data/updates';
 
+// ── Dados de Legislação (migrados de Legislation.tsx) ───────────────────
+
+const LEGISLATIONS: Array<{
+  title: string;
+  description: string;
+  category: string;
+  date: string;
+  status: 'vigente' | 'referencial';
+  statusLabel: string;
+  notes: string;
+  url: string;
+  download?: string;
+  icon: typeof Gavel;
+  color: string;
+}> = [
+  {
+    title: 'Lei Nº 15.367/2026',
+    description:
+      'Dispõe sobre o Reconhecimento de Saberes e Competências (RSC) para os servidores Técnico-Administrativos em Educação (TAE).',
+    category: 'Lei Federal',
+    date: '30 de março de 2026',
+    status: 'vigente',
+    statusLabel: 'Base legal vigente',
+    notes:
+      'Esta é a base legal principal que fundamenta a preparação documental do pedido no sistema.',
+    url: 'https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2026/lei/L15367.htm',
+    icon: Gavel,
+    color: 'emerald',
+  },
+  {
+    title: 'Decreto Nº 13.048/2026',
+    description:
+      'Regulamenta os critérios e procedimentos para a concessão do RSC-PCCTAE aos servidores Técnico-Administrativos em Educação.',
+    category: 'Decreto Federal',
+    date: '3 de julho de 2026',
+    status: 'vigente',
+    statusLabel: 'Regulamento vigente',
+    notes:
+      'Base regulamentar vigente adotada pelo sistema para níveis, pontuação mínima, critérios específicos, não duplicidade, interstício, documentação e procedimentos gerais.',
+    url: '/decreto_13048_rsc_pcctae_2026.pdf',
+    download: 'decreto_13048_rsc_pcctae_2026.pdf',
+    icon: FileText,
+    color: 'emerald',
+  },
+  {
+    title: 'Portaria MEC Nº 608/2026',
+    description:
+      'Estabelece o modelo padrão de formulário de requerimento para solicitação do RSC-PCCTAE, a ser utilizado pelas Instituições Federais de Ensino como instrumento mínimo para instrução dos processos administrativos.',
+    category: 'Portaria',
+    date: '7 de julho de 2026',
+    status: 'vigente',
+    statusLabel: 'Modelo oficial',
+    notes:
+      'Define o formulário padrão de requerimento com identificação do servidor, informações do requerimento, descrição das atividades por requisito legal (incisos I a VI) e declaração de conformidade legal.',
+    url: 'https://mecnormas.mec.gov.br/pesquisa/detalhar/13462',
+    icon: FileText,
+    color: 'emerald',
+  },
+];
+
+const SYSTEM_BASIS: {
+  title: string;
+  summary: string;
+  status: 'vigente' | 'referencial';
+  statusLabel: string;
+  details: string[];
+} = {
+  title: 'Base normativa utilizada pelo sistema',
+  summary:
+    'O sistema utiliza uma base normativa estruturada para organizar itens, cálculos, memorial, requerimento e dossiê exportado.',
+  status: 'vigente',
+  statusLabel: 'Alinhado ao decreto vigente',
+  details: [
+    'A aplicação organiza a documentação do pedido, mas não executa análise institucional, decisão ou tramitação posterior.',
+    'Os textos, cálculos e rótulos exibidos devem ser lidos como apoio à preparação documental do servidor.',
+    'O decreto prevê análise pela CRSC-PCCTAE e pode ser complementado por ato do Ministério da Educação e por regras internas da Instituição Federal de Ensino.',
+  ],
+};
+
+const DECREE_RULES = [
+  {
+    title: 'Análise e decisão',
+    text: 'A CRSC-PCCTAE analisa o mérito do memorial em até 120 dias, contados do protocolo ou da complementação documental solicitada.',
+  },
+  {
+    title: 'Efeitos financeiros',
+    text: 'Os efeitos financeiros contam do deferimento e não retroagem ao requerimento, salvo quando a concessão ultrapassar o prazo regulamentar.',
+  },
+  {
+    title: 'Recurso',
+    text: 'O servidor pode recorrer à instância deliberativa máxima da instituição em até 30 dias da ciência ou divulgação oficial da decisão.',
+  },
+  {
+    title: 'Normas complementares',
+    text: 'As instituições devem instituir a CRSC-PCCTAE e normas internas, e o Ministério da Educação pode editar atos complementares para uniformização.',
+  },
+];
+
+function getStatusStyle(status: 'vigente' | 'referencial') {
+  if (status === 'vigente') {
+    return {
+      chip: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+      iconBg: 'bg-emerald-50 text-emerald-600',
+      Icon: CheckCircle2,
+    };
+  }
+  return {
+    chip: 'bg-amber-50 text-amber-700 ring-amber-200',
+    iconBg: 'bg-amber-50 text-amber-600',
+    Icon: AlertTriangle,
+  };
+}
+
 export default function HelpAndUpdates() {
-  const [activeTab, setActiveTab] = useState<'info' | 'updates' | 'comparison'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'updates' | 'comparison' | 'legislation'>('info');
   const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   const toggleFaq = (index: number) => {
@@ -111,6 +230,18 @@ export default function HelpAndUpdates() {
           >
             <GitBranch className="h-4 w-4" />
             Mudanças do Decreto 13.048
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('legislation')}
+            className={`flex items-center gap-2 border-b-2 px-6 py-3 text-sm font-bold transition-all ${
+              activeTab === 'legislation'
+                ? 'border-primary text-primary font-black'
+                : 'border-transparent text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <Scale className="h-4 w-4" />
+            Legislação
           </button>
         </div>
 
@@ -198,7 +329,7 @@ export default function HelpAndUpdates() {
                     </span>
                     <h4 className="text-sm font-bold text-gray-900 pt-1">Exportar Documentos</h4>
                     <p className="text-xs leading-relaxed text-gray-500">
-                      Acesse a aba Consolidar para revisar suas metas e baixar todos os documentos do dossiê preenchidos (Memorial, Requerimento e cópias de comprovação).
+                      Acesse a aba Consolidar para revisar suas metas, redigir o Memorial, anexar os documentos funcionais e baixar o pacote completo com Requerimento, Memorial, fichas SIAPE, portarias e comprovações.
                     </p>
                   </div>
                 </div>
@@ -513,6 +644,138 @@ export default function HelpAndUpdates() {
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {activeTab === 'legislation' && (
+            <div className="space-y-8">
+              {/* Base normativa do sistema */}
+              {(() => {
+                const basisStyle = getStatusStyle(SYSTEM_BASIS.status);
+                return (
+                  <section className="rounded-3xl border border-amber-100 bg-amber-50/60 p-6 shadow-sm">
+                    <div className="flex items-start gap-4">
+                      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${basisStyle.iconBg}`}>
+                        <basisStyle.Icon className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ${basisStyle.chip}`}>
+                            {SYSTEM_BASIS.statusLabel}
+                          </span>
+                          <span className="text-xs text-gray-500">Escopo do sistema: preparação documental</span>
+                        </div>
+                        <h2 className="text-lg font-bold text-gray-900">{SYSTEM_BASIS.title}</h2>
+                        <p className="text-sm leading-relaxed text-gray-600">{SYSTEM_BASIS.summary}</p>
+                        <ul className="space-y-2 text-sm leading-relaxed text-gray-600">
+                          {SYSTEM_BASIS.details.map((detail) => (
+                            <li key={detail} className="flex gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                              <span>{detail}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </section>
+                );
+              })()}
+
+              {/* Lista de legislações */}
+              <div className="grid gap-6">
+                {LEGISLATIONS.map((item) => {
+                  const style = getStatusStyle(item.status);
+                  return (
+                    <div
+                      key={item.title}
+                      className="group relative flex flex-col items-start gap-4 rounded-3xl border border-gray-100 bg-white p-6 shadow-sm transition-all duration-300 hover:border-primary/20 hover:shadow-xl hover:shadow-primary/5 sm:flex-row sm:items-center sm:p-8"
+                    >
+                      <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-${item.color}-50 text-${item.color}-600 transition-colors group-hover:bg-${item.color}-100`}>
+                        <item.icon className="h-8 w-8" />
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`rounded-full bg-${item.color}-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-${item.color}-700 ring-1 ring-inset ring-${item.color}-200`}>
+                            {item.category}
+                          </span>
+                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ring-1 ring-inset ${style.chip}`}>
+                            {item.statusLabel}
+                          </span>
+                          <span className="text-xs text-gray-400">Publicado em {item.date}</span>
+                        </div>
+                        <h3 className="text-lg font-bold text-gray-900 transition-colors group-hover:text-primary sm:text-xl">
+                          {item.title}
+                        </h3>
+                        <p className="max-w-2xl text-sm leading-relaxed text-gray-500">{item.description}</p>
+                        <p className="max-w-2xl text-sm leading-relaxed text-gray-600">{item.notes}</p>
+                      </div>
+
+                      <div className="mt-4 flex flex-col gap-2 sm:mt-0 sm:ml-4 sm:flex-row">
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          download={item.download}
+                          className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gray-900 px-6 text-sm font-bold text-white transition-all hover:bg-primary hover:shadow-lg hover:shadow-primary/20 sm:w-auto"
+                        >
+                          {item.download ? (
+                            <>
+                              Baixar documento
+                              <Download className="h-4 w-4" />
+                            </>
+                          ) : (
+                            <>
+                              Acessar documento
+                              <ExternalLink className="h-4 w-4" />
+                            </>
+                          )}
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Pontos procedimentais */}
+              <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                <div className="mb-5 flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                    <Gavel className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900">Pontos procedimentais do Decreto nº 13.048/2026</h2>
+                    <p className="mt-1 text-sm leading-relaxed text-gray-600">
+                      O sistema prepara o dossiê; a tramitação, a decisão, os efeitos financeiros e eventual recurso seguem o fluxo institucional.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {DECREE_RULES.map((rule) => (
+                    <div key={rule.title} className="rounded-2xl border border-gray-100 bg-gray-50/60 p-4">
+                      <h3 className="text-sm font-bold text-gray-900">{rule.title}</h3>
+                      <p className="mt-1 text-sm leading-relaxed text-gray-600">{rule.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Como interpretar */}
+              <section className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-50 text-slate-600">
+                    <FileText className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-2">
+                    <h2 className="text-lg font-bold text-gray-900">Como interpretar esta página</h2>
+                    <p className="text-sm leading-relaxed text-gray-600">
+                      A legislação listada aqui serve para transparência e conferência. O sistema utiliza essa base
+                      para ajudar na organização do pedido, mas não substitui validação normativa institucional nem
+                      acompanha etapas posteriores à emissão dos documentos.
+                    </p>
+                  </div>
+                </div>
+              </section>
             </div>
           )}
         </div>

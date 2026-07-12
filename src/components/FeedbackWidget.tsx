@@ -38,7 +38,8 @@ const SCREEN_NAMES: Record<string, string> = {
   "/perfil": "Perfil",
   "/itens": "Catálogo de Itens",
   "/consolidar": "Consolidar",
-  "/legislacao": "Legislação",
+  "/triagem": "Dossiê Inteligente",
+  "/ajuda": "Ajuda & Novidades",
 };
 
 function getMetadata(pathname: string) {

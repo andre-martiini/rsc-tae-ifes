@@ -23,7 +23,20 @@ export interface ItemRSC {
   quantidade_automatica: boolean;
   modo_calculo: ModoCalculo;
   limite_pontos?: number;
+  /** Fase 3.2 — Critérios de enquadramento (quando disponível) */
+  criterios_enquadramento?: string;
+  /** Fase 3.2 — Fatos mínimos que o documento deve comprovar */
+  fatos_minimos?: string;
+  /** Fase 3.2 — Hipóteses de exclusão */
+  hipoteses_exclusao?: string;
+  /** Fase 3.2 — Documentos típicos aceitos como comprovante */
+  documentos_tipicos?: string;
+  /** Fase 3.2 — Documentos insuficientes para comprovação */
+  documentos_insuficientes?: string;
 }
+
+/** Fase 3.3 — Versão do catálogo normativo embutido no prompt */
+export const CATALOG_VERSION = 'rsc-pcctae-2026.1';
 
 export const RSC_LEVELS: readonly RscLevelDefinition[] = [
   {
@@ -93,6 +106,11 @@ export const rolItensRSC: ItemRSC[] = [
     pontos_por_unidade: 3,
     quantidade_automatica: true,
     modo_calculo: 'auto_ano_fracao',
+    criterios_enquadramento: 'Membro efetivo de conselho superior ou órgão colegiado da IFE, com mandato formalmente instituído.',
+    fatos_minimos: 'Designação ou eleição para o conselho, período de vigência do mandato.',
+    documentos_tipicos: 'Ata de eleição, portaria de designação, resolução de instituição do conselho.',
+    documentos_insuficientes: 'Meru email de convocação para reunião sem comprovar posse.',
+    hipoteses_exclusao: 'Participação eventual em reunião sem ser membro efetivo do conselho.',
   },
   {
     id: 'item-2',
@@ -103,6 +121,11 @@ export const rolItensRSC: ItemRSC[] = [
     pontos_por_unidade: 4.5,
     quantidade_automatica: false,
     modo_calculo: 'manual',
+    criterios_enquadramento: 'Coordenador ou presidente de núcleo, comissão ou grupo de trabalho formalmente instituído por ato normativo.',
+    fatos_minimos: 'Ato de instituição do núcleo/comissão, ato de designação como coordenador/presidente.',
+    documentos_tipicos: 'Portaria de designação, resolução de instituição do grupo, ata de instalação.',
+    documentos_insuficientes: 'Email de nomeação sem portaria, lista de presença em reuniões.',
+    hipoteses_exclusao: 'Participação como membro (não coordenador/presidente) — usar item-3. Grupo informal sem ato de instituição.',
   },
   {
     id: 'item-3',

@@ -10,6 +10,7 @@ import {
 } from './documentOrdering';
 import { sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
+import { getInstructionDocument } from './instructionDocuments';
 import { sanitizeForTag } from './utils';
 import {
   generateMemorialDescritivo,
@@ -110,6 +111,27 @@ function drawTagOnPage(
   });
 }
 
+async function mergePdfDocumentSet(documents: Documento[]): Promise<Uint8Array | null> {
+  const merged = await PDFDocument.create();
+
+  for (const document of documents) {
+    if (!document.caminho_storage) continue;
+    const blob = await getDocumentBlob(document.id);
+    if (!blob) continue;
+
+    try {
+      const source = await PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true });
+      const pages = await merged.copyPages(source, source.getPageIndices());
+      pages.forEach((page) => merged.addPage(page));
+    } catch (error) {
+      console.error(`Erro ao incluir o documento de instrução ${document.nome_arquivo}:`, error);
+    }
+  }
+
+  if (merged.getPageCount() === 0) return null;
+  return merged.save();
+}
+
 export async function exportPacoteRSC(params: {
   servidor: Servidor;
   nivelElegivel: NivelRsc | null;
@@ -188,7 +210,7 @@ export async function exportPacoteRSC(params: {
   }
 
   const unifiedPdfBytes = await unifiedPdf.save();
-  zip.file('03_Documentos_Comprobatorios_Unificados.pdf', unifiedPdfBytes);
+  zip.file('06_Documentos_Comprobatorios_Unificados.pdf', unifiedPdfBytes);
 
   // 2. Gerar o Requerimento
   const requerimentoBytes = await generateRequerimentoFormal(
@@ -203,7 +225,7 @@ export async function exportPacoteRSC(params: {
   );
   zip.file('01_Requerimento_RSC.pdf', requerimentoBytes);
 
-  // 3. Gerar o Memorial Descritivo com as referências de página
+  // 3. Gerar o Memorial textual com as referências estruturadas de página
   const memorialBytes = await generateMemorialDescritivo(
     servidor,
     nivelElegivel,
@@ -213,9 +235,30 @@ export async function exportPacoteRSC(params: {
     processo,
     documentPageRanges,
   );
-  zip.file('02_Memorial_Descritivo_RSC.pdf', memorialBytes);
+  zip.file('02_Memorial_RSC.pdf', memorialBytes);
 
-  // 4. Compactar e iniciar download do ZIP com estritamente esses 3 arquivos
+  // 4. Reunir os documentos funcionais exigidos para instrução do processo.
+  const siapeDocuments = [
+    getInstructionDocument(documentos, 'siape_dados_funcionais'),
+    getInstructionDocument(documentos, 'siape_posicao_carreira'),
+    getInstructionDocument(documentos, 'siape_cargo_confianca'),
+  ].filter((doc): doc is Documento => !!doc);
+  const siapeBytes = await mergePdfDocumentSet(siapeDocuments);
+  if (siapeBytes) zip.file('03_Fichas_Funcionais_SIAPE.pdf', siapeBytes);
+
+  const stabilityDocument = getInstructionDocument(documentos, 'portaria_estabilidade');
+  if (stabilityDocument) {
+    const stabilityBytes = await mergePdfDocumentSet([stabilityDocument]);
+    if (stabilityBytes) zip.file('04_Portaria_Estabilidade.pdf', stabilityBytes);
+  }
+
+  const priorGrantDocument = getInstructionDocument(documentos, 'portaria_concessao_anterior');
+  if (priorGrantDocument) {
+    const priorGrantBytes = await mergePdfDocumentSet([priorGrantDocument]);
+    if (priorGrantBytes) zip.file('05_Portaria_Concessao_Anterior_RSC.pdf', priorGrantBytes);
+  }
+
+  // 5. Compactar e iniciar download do conjunto completo.
   const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   const siape = servidor.siape.replace(/\D/g, '');
   const date = new Date().toISOString().slice(0, 10);

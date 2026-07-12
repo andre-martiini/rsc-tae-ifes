@@ -8,9 +8,9 @@ import {
     ChevronLeft,
     ChevronRight,
     LogOut,
-    Scale,
     X,
     HelpCircle,
+    Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -18,7 +18,7 @@ import AppLogo from './AppLogo';
 import { useAppContext } from '../context/AppContext';
 
 interface SidebarProps {
-    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'legislation' | 'help';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'help' | 'triagem';
     onNavigate: (view: any) => void;
     onLogout: () => void;
     mobileOpen?: boolean;
@@ -37,11 +37,11 @@ export default function AppSidebar({
 
     const menuItems = [
         { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { key: 'triagem', label: 'Dossiê Inteligente', icon: Sparkles },
         { key: 'profile', label: 'Perfil', icon: UserCircle },
         { key: 'catalog', label: 'Itens', icon: ScrollText },
         { key: 'documents', label: 'Documentos', icon: Files },
         { key: 'consolidate', label: 'Consolidar', icon: FileCheck },
-        { key: 'legislation', label: 'Legislação', icon: Scale },
         { key: 'help', label: 'Ajuda & Novidades', icon: HelpCircle },
     ] as const;
 
@@ -98,6 +98,7 @@ export default function AppSidebar({
                     return (
                         <button
                             key={key}
+                            data-onboarding={key === 'triagem' ? 'dossie' : undefined}
                             onClick={() => {
                                 onNavigate(key);
                                 if (isMobile) onCloseMobile?.();

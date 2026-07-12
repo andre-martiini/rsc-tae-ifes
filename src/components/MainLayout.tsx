@@ -3,15 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import AppSidebar from './AppSidebar';
 import AppHeader from './AppHeader';
 import AppFooter from './AppFooter';
+import OnboardingSpotlight from './OnboardingSpotlight';
+import { useAppContext } from '../context/AppContext';
 
 interface MainLayoutProps {
     children: React.ReactNode;
-    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'legislation' | 'help';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'help' | 'triagem';
 }
 
 export default function MainLayout({ children, activeView }: MainLayoutProps) {
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+    const { activeSessionId } = useAppContext();
 
     const handleNavigate = (view: string) => {
         switch (view) {
@@ -20,8 +23,8 @@ export default function MainLayout({ children, activeView }: MainLayoutProps) {
             case 'catalog': navigate('/itens'); break;
             case 'documents': navigate('/documentos'); break;
             case 'consolidate': navigate('/consolidar'); break;
-            case 'legislation': navigate('/legislacao'); break;
             case 'help': navigate('/ajuda'); break;
+            case 'triagem': navigate('/triagem'); break;
             default: navigate('/dashboard');
         }
         setMobileMenuOpen(false);
@@ -54,6 +57,8 @@ export default function MainLayout({ children, activeView }: MainLayoutProps) {
                     <AppFooter />
                 </div>
             </div>
+
+            <OnboardingSpotlight activeSessionId={activeSessionId} />
         </div>
     );
 }

@@ -8,6 +8,8 @@ import {
   ProcessoRSC,
   mockItensRSC,
 } from '../data/mock';
+import type { EstadoTriagem, SugestaoTriagem } from '../data/triagem';
+import type { EstadoAuditoria, OperacaoAuditoria } from '../data/auditoria';
 import {
   buildInstitutionReferenceFileName,
   normalizeInstitutionDocumentLink,
@@ -45,7 +47,9 @@ export function sessionKeys(id: string) {
     documentos: `rsc-tae-${id}-documentos`,
     lancamentos: `rsc-tae-${id}-lancamentos`,
     processo: `rsc-tae-${id}-processo`,
-    wizardIds: `rsc-tae-${id}-wizard-ids`,
+    triagem: `rsc-tae-${id}-triagem`,
+    auditoria: `rsc-tae-${id}-auditoria`,
+    onboarding: `rsc-tae-${id}-onboarding-seen`,
   };
 }
 
@@ -55,7 +59,6 @@ const OLD_KEYS = {
   documentos: 'rsc-tae-documentos',
   lancamentos: 'rsc-tae-lancamentos',
   processo: 'rsc-tae-processo',
-  wizardIds: 'rsc-tae-wizard-ids',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -78,9 +81,16 @@ function normalizeFileName(value: string): string {
     .trim();
 }
 
+// Sufixo aleatório é obrigatório: Date.now() sozinho colide quando vários
+// lançamentos são criados no mesmo milissegundo (ex.: "Confirmar todas").
+function gerarLancamentoId(): string {
+  return `lanc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
 interface MigrationStats {
   repontuados: number;
   zerados: number;
+  idsDuplicados: number;
 }
 
 function migrateLancamento(l: Lancamento, stats?: MigrationStats): Lancamento {
@@ -109,8 +119,21 @@ function migrateLancamento(l: Lancamento, stats?: MigrationStats): Lancamento {
 }
 
 function migrateLancamentos(list: Lancamento[]): { list: Lancamento[]; stats: MigrationStats } {
-  const stats: MigrationStats = { repontuados: 0, zerados: 0 };
-  return { list: list.map((l) => migrateLancamento(l, stats)), stats };
+  const stats: MigrationStats = { repontuados: 0, zerados: 0, idsDuplicados: 0 };
+  // Sessões antigas podem conter IDs duplicados (gerados só com Date.now()).
+  // A primeira ocorrência mantém o ID original — referências externas
+  // (sugestões da triagem, operações de auditoria) passam a apontar para ela.
+  const seenIds = new Set<string>();
+  const migrated = list.map((l) => {
+    let updated = migrateLancamento(l, stats);
+    if (seenIds.has(updated.id)) {
+      stats.idsDuplicados += 1;
+      updated = { ...updated, id: gerarLancamentoId() };
+    }
+    seenIds.add(updated.id);
+    return updated;
+  });
+  return { list: migrated, stats };
 }
 
 // Transparência para quem lançou dados na versão anterior (minuta):
@@ -126,6 +149,12 @@ function notifyMigration(stats: MigrationStats) {
     toast.warning(
       `${stats.zerados} lançamento(s) referem-se a itens excluídos pelo Decreto nº 13.048/2026 e agora valem 0 pontos. Revise-os no catálogo de itens.`,
       { id: 'migracao-zerados', duration: 12000 },
+    );
+  }
+  if (stats.idsDuplicados > 0) {
+    toast.warning(
+      `${stats.idsDuplicados} lançamento(s) tinham identificadores duplicados e receberam novos identificadores. Se houver uma auditoria IA pendente, gere o prompt novamente antes de continuar.`,
+      { id: 'migracao-ids-duplicados', duration: 12000 },
     );
   }
 }
@@ -150,9 +179,6 @@ function migrateOldSession(): SessionSummary[] {
 
   const procRaw = window.localStorage.getItem(OLD_KEYS.processo);
   if (procRaw) window.localStorage.setItem(keys.processo, procRaw);
-
-  const wizRaw = window.localStorage.getItem(OLD_KEYS.wizardIds);
-  if (wizRaw) window.localStorage.setItem(keys.wizardIds, wizRaw);
 
   // Clean up old flat keys
   Object.values(OLD_KEYS).forEach((k) => window.localStorage.removeItem(k));
@@ -179,7 +205,6 @@ interface AppContextType {
   documentos: Documento[];
   lancamentos: Lancamento[];
   processo: ProcessoRSC;
-  wizardRecommendedIds: string[];
   createSession: (perfil: Servidor) => void;
   loadSession: (id: string) => void;
   deleteSession: (id: string) => Promise<void>;
@@ -187,7 +212,7 @@ interface AppContextType {
   updateProcesso: (updates: Partial<ProcessoRSC>) => void;
   restoreSession: (session: RestoredSession) => void;
   importSessionAsNew: (session: RestoredSession) => void;
-  addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => boolean;
+  addLancamento: (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => Lancamento;
   updateLancamento: (lancamentoId: string, updates: Partial<Omit<Lancamento, 'id'>>) => boolean;
   removeLancamento: (lancamentoId: string) => boolean;
   addComprovanteToLancamento: (lancamentoId: string, documentoId: string) => void;
@@ -202,6 +227,9 @@ interface AppContextType {
     transcription?: string;
     componentHashes?: string[];
     componentFiles?: Documento['arquivos_componentes'];
+    tipoDocumento?: Documento['tipo_documento'];
+    categoriaInstrucao?: Documento['categoria_instrucao'];
+    allowDuplicate?: boolean;
   }) => Promise<{ doc: Documento; exists: boolean }>;
   addDocumentoFromGedocLinks: (params: {
     servidorId: string;
@@ -209,7 +237,14 @@ interface AppContextType {
   }) => Promise<Documento>;
   updateDocumento: (docId: string, updates: Partial<Documento>) => void;
   deleteDocumento: (docId: string) => Promise<void>;
-  setWizardRecommendedIds: (ids: string[]) => void;
+  triagem: EstadoTriagem | null;
+  setTriagem: React.Dispatch<React.SetStateAction<EstadoTriagem | null>>;
+  atualizarSugestao: (id: string, updates: Partial<SugestaoTriagem>) => void;
+  limparTriagem: () => void;
+  auditoria: EstadoAuditoria | null;
+  setAuditoria: React.Dispatch<React.SetStateAction<EstadoAuditoria | null>>;
+  atualizarOperacaoAuditoria: (id: string, updates: Partial<OperacaoAuditoria>) => void;
+  limparAuditoria: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -270,12 +305,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return id ? loadJson<ProcessoRSC>(`rsc-tae-${id}-processo`, INITIAL_PROCESSO) : INITIAL_PROCESSO;
   });
 
-  const [wizardRecommendedIds, setWizardRecommendedIds] = useState<string[]>(() => {
+  const [itensRSC] = useState<ItemRSC[]>(mockItensRSC);
+
+  const [triagem, setTriagem] = useState<EstadoTriagem | null>(() => {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
-    return id ? loadJson<string[]>(`rsc-tae-${id}-wizard-ids`, []) : [];
+    return id ? loadJson<EstadoTriagem | null>(`rsc-tae-${id}-triagem`, null) : null;
   });
 
-  const [itensRSC] = useState<ItemRSC[]>(mockItensRSC);
+  const [auditoria, setAuditoria] = useState<EstadoAuditoria | null>(() => {
+    const id = window.localStorage.getItem(GLOBAL_KEYS.active);
+    return id ? loadJson<EstadoAuditoria | null>(`rsc-tae-${id}-auditoria`, null) : null;
+  });
 
   // ── Persistence effects ─────────────────────────────────────────────────────
 
@@ -339,24 +379,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!activeSessionId) return;
-    window.localStorage.setItem(`rsc-tae-${activeSessionId}-wizard-ids`, JSON.stringify(wizardRecommendedIds));
-  }, [wizardRecommendedIds, activeSessionId]);
-
-  // Sincronização reativa: adiciona itens lançados à lista de sugestões do Wizard
-  useEffect(() => {
-    if (!activeSessionId || !servidor) return;
-    const lancadosIds = lancamentos
-      .filter((l) => l.servidor_id === servidor.id)
-      .map((l) => l.item_rsc_id);
-
-    if (lancadosIds.length > 0) {
-      setWizardRecommendedIds((prev) => {
-        const hasMissing = lancadosIds.some((id) => !prev.includes(id));
-        if (!hasMissing) return prev;
-        return Array.from(new Set([...prev, ...lancadosIds]));
-      });
+    const key = `rsc-tae-${activeSessionId}-triagem`;
+    if (triagem) {
+      window.localStorage.setItem(key, JSON.stringify(triagem));
+    } else {
+      window.localStorage.removeItem(key);
     }
-  }, [lancamentos, activeSessionId, servidor]);
+  }, [triagem, activeSessionId]);
+
+  useEffect(() => {
+    if (!activeSessionId) return;
+    const key = `rsc-tae-${activeSessionId}-auditoria`;
+    if (auditoria) {
+      window.localStorage.setItem(key, JSON.stringify(auditoria));
+    } else {
+      window.localStorage.removeItem(key);
+    }
+  }, [auditoria, activeSessionId]);
 
   // ── Session actions ─────────────────────────────────────────────────────────
 
@@ -377,7 +416,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(keys.documentos, JSON.stringify([]));
     window.localStorage.setItem(keys.lancamentos, JSON.stringify([]));
     window.localStorage.setItem(keys.processo, JSON.stringify(INITIAL_PROCESSO));
-    window.localStorage.setItem(keys.wizardIds, JSON.stringify([]));
     window.localStorage.setItem(GLOBAL_KEYS.active, id);
 
     setSessions((prev) => [...prev, summary]);
@@ -386,7 +424,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setDocumentos([]);
     setLancamentos([]);
     setProcesso(INITIAL_PROCESSO);
-    setWizardRecommendedIds([]);
+    setTriagem(null);
+    setAuditoria(null);
   };
 
   const loadSession = (id: string) => {
@@ -399,7 +438,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notifyMigration(stats);
     setLancamentos(migratedLancamentos);
     setProcesso(loadJson<ProcessoRSC>(keys.processo, INITIAL_PROCESSO));
-    setWizardRecommendedIds(loadJson<string[]>(keys.wizardIds, []));
+    setTriagem(loadJson<EstadoTriagem | null>(keys.triagem, null));
+    setAuditoria(loadJson<EstadoAuditoria | null>(keys.auditoria, null));
   };
 
   const deleteSession = async (id: string) => {
@@ -420,7 +460,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDocumentos([]);
       setLancamentos([]);
       setProcesso(INITIAL_PROCESSO);
-      setWizardRecommendedIds([]);
+      setTriagem(null);
+      setAuditoria(null);
     }
 
     // Clean up IndexedDB blobs for this session
@@ -445,7 +486,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notifyMigration(stats);
     setLancamentos(migratedLancamentos);
     setProcesso(session.processo ?? INITIAL_PROCESSO);
-    setWizardRecommendedIds(session.wizardIds);
+    setTriagem(session.triagem ?? null);
+    setAuditoria(session.auditoria ?? null);
   };
 
   const importSessionAsNew = (restored: RestoredSession) => {
@@ -465,7 +507,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.localStorage.setItem(keys.documentos, JSON.stringify(restored.documentos));
     window.localStorage.setItem(keys.lancamentos, JSON.stringify(restored.lancamentos));
     window.localStorage.setItem(keys.processo, JSON.stringify(restored.processo ?? INITIAL_PROCESSO));
-    window.localStorage.setItem(keys.wizardIds, JSON.stringify(restored.wizardIds));
+    if (restored.triagem) {
+      window.localStorage.setItem(keys.triagem, JSON.stringify(restored.triagem));
+    }
+    if (restored.auditoria) {
+      window.localStorage.setItem(keys.auditoria, JSON.stringify(restored.auditoria));
+    }
     window.localStorage.setItem(GLOBAL_KEYS.active, id);
 
     setSessions((prev) => {
@@ -482,7 +529,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     notifyMigration(stats);
     setLancamentos(migratedLancamentos);
     setProcesso(restored.processo ?? INITIAL_PROCESSO);
-    setWizardRecommendedIds(restored.wizardIds);
+    setTriagem(restored.triagem ?? null);
+    setAuditoria(restored.auditoria ?? null);
   };
 
   // ── Document & lançamento actions ────────────────────────────────────────────
@@ -506,6 +554,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     transcription,
     componentHashes,
     componentFiles,
+    tipoDocumento,
+    categoriaInstrucao,
+    allowDuplicate,
   }: {
     servidorId: string;
     file: File;
@@ -515,6 +566,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     transcription?: string;
     componentHashes?: string[];
     componentFiles?: Documento['arquivos_componentes'];
+    tipoDocumento?: Documento['tipo_documento'];
+    categoriaInstrucao?: Documento['categoria_instrucao'];
+    allowDuplicate?: boolean;
   }) => {
     const fileHash = await computeDocumentHash(file);
     const normalizedName = normalizeFileName(file.name);
@@ -523,7 +577,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // because two distinct merges can legitimately share source files.
     const isMultiFileMerge = (componentHashes?.length ?? 0) > 1;
 
-    const duplicatedDocument = documentos.find((doc) => {
+    const duplicatedDocument = allowDuplicate ? undefined : documentos.find((doc) => {
       if (doc.servidor_id !== servidorId || !doc.caminho_storage) {
         return false;
       }
@@ -548,10 +602,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     if (duplicatedDocument) {
-      if (transcription && !duplicatedDocument.transcricao) {
-        updateDocumento(duplicatedDocument.id, { transcricao: transcription });
+      const classificationUpdates: Partial<Documento> = {
+        ...(transcription && !duplicatedDocument.transcricao ? { transcricao: transcription } : {}),
+        ...(tipoDocumento ? { tipo_documento: tipoDocumento } : {}),
+        ...(categoriaInstrucao ? { categoria_instrucao: categoriaInstrucao } : {}),
+      };
+      if (Object.keys(classificationUpdates).length > 0) {
+        updateDocumento(duplicatedDocument.id, classificationUpdates);
       }
-      return { doc: duplicatedDocument, exists: true };
+      return { doc: { ...duplicatedDocument, ...classificationUpdates }, exists: true };
     }
 
     const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -572,6 +631,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       arquivo_origem_nome: sourceName,
       arquivo_origem_mime: sourceMimeType,
       transcricao: transcription,
+      tipo_documento: tipoDocumento,
+      categoria_instrucao: categoriaInstrucao,
     };
 
     setDocumentos((current) => [...current, newDoc]);
@@ -604,11 +665,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const addLancamento = (lancamento: Omit<Lancamento, 'id' | 'status_auditoria'>) => {
     const newLancamento: Lancamento = {
       ...lancamento,
-      id: `lanc-${Date.now()}`,
+      id: gerarLancamentoId(),
       status_auditoria: 'Pendente',
     };
     setLancamentos((current) => [...current, newLancamento]);
-    return true;
+    return newLancamento;
   };
 
   const updateLancamento = (lancamentoId: string, updates: Partial<Omit<Lancamento, 'id'>>) => {
@@ -674,6 +735,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await deleteDocumentFile(docId);
   };
 
+  const atualizarSugestao = (id: string, updates: Partial<SugestaoTriagem>) => {
+    setTriagem((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        sugestoes: current.sugestoes.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+      };
+    });
+  };
+
+  const limparTriagem = () => {
+    setTriagem(null);
+  };
+
+  const atualizarOperacaoAuditoria = (id: string, updates: Partial<OperacaoAuditoria>) => {
+    setAuditoria((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        operacoes: current.operacoes.map((op) => (op.id === id ? { ...op, ...updates } : op)),
+      };
+    });
+  };
+
+  const limparAuditoria = () => {
+    setAuditoria(null);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -684,7 +773,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
         documentos,
         lancamentos,
         processo,
-        wizardRecommendedIds,
         createSession,
         loadSession,
         deleteSession,
@@ -702,7 +790,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
         addDocumentoFromGedocLinks,
         updateDocumento,
         deleteDocumento,
-        setWizardRecommendedIds,
+        triagem,
+        setTriagem,
+        atualizarSugestao,
+        limparTriagem,
+        auditoria,
+        setAuditoria,
+        atualizarOperacaoAuditoria,
+        limparAuditoria,
       }}
     >
       {children}

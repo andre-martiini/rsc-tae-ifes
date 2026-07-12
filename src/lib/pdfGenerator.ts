@@ -864,18 +864,16 @@ export async function generateMemorialDescritivo(
   const doc = await PDFDocument.create();
   const writer = new Writer({
     doc,
-    title: 'Memorial Descritivo - RSC-PCCTAE',
-    subtitle: 'Consolidação documental dos fatos, atividades e comprovações',
+    title: 'Memorial - RSC-PCCTAE',
+    subtitle: 'Trajetória profissional, saberes, competências e experiências',
     footerRight: `${servidor.siape} · Memorial`,
   });
   await writer.init();
 
-  writer.text('ANEXO IV', { align: 'center', bold: true, size: 14, lineHeight: 18 });
-  writer.text('MODELO DE MEMORIAL - RSC-PCCTAE', { align: 'center', bold: true, size: 11 });
+  writer.text('MEMORIAL - RSC-PCCTAE', { align: 'center', bold: true, size: 14, lineHeight: 18 });
   writer.gap(12);
 
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
-  const itensDistintos = getDistinctRscCriterionCount(lancamentos, itensRSC);
 
   writer.section('1. Identificação do Servidor');
   const nivelClass = servidor.nivel_classificacao ?? 'C';
@@ -891,103 +889,32 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
   writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
+  writer.keyValue('Nível de RSC pleiteado:', sanitize(nivelElegivel?.label ?? processo?.nivel_pleiteado_id ?? '-'));
 
-  writer.section('2. Informações do Requerimento');
-  const excedente = nivelElegivel ? Math.max(0, totalPontos - nivelElegivel.pontosMinimos) : 0;
-  writer.keyValue('Pontuação mínima:', nivelElegivel ? `${nivelElegivel.pontosMinimos}` : '-');
-  writer.keyValue('Pontuação total apresentada:', `${formatNumber(totalPontos)} pts`);
-  writer.keyValue('Quantidade de critérios:', `${itensDistintos}`);
-  writer.keyValue('Pontuação excedente:', excedente > 0 ? `${formatNumber(excedente)} pts` : '-');
-  writer.keyValue('Saldo não aproveitado anterior:', processo?.saldo_concessao_anterior ? `${formatNumber(processo.saldo_concessao_anterior)} pts` : '0 pts');
-  writer.keyValue('Data da última concessão:', sanitize(formatDate(processo?.data_ultima_concessao)));
+  writer.section('2. Trajetória profissional, saberes e competências');
+  writer.text(
+    'Memorial apresentado nos termos do art. 13, inciso II e § 1º, do Decreto nº 13.048, de 3 de julho de 2026.',
+    { size: 8, color: COLORS.muted },
+  );
+  writer.gap(8);
 
-  writer.section('3. Declaração do Servidor');
-  writer.text('Este memorial consolida os fatos, atividades e documentos informados pelo servidor para composição do dossiê do pedido de RSC-PCCTAE, observadas a não duplicidade entre critérios e a vedação de pontuação de atividades exclusivamente ordinárias do cargo.', { size: 9 });
-
-  writer.addPage();
-  writer.section('4. Memorial e Descrição das Atividades');
-  writer.gap(4);
-  writer.text('Descrição detalhada das atividades vinculadas aos requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026.', { size: 8, color: COLORS.muted });
-
-  const COL_WIDTHS = [0.05, 0.38, 0.12, 0.10, 0.10, 0.25];
-  const colSubtotalLabelStart = 0.05 + 0.38 + 0.12;
-  const colSubtotalValueStart = 0.05 + 0.38 + 0.12 + 0.10;
-
-  const docsById = new Map(documentos.map((d) => [d.id, d]));
-  const documentOrder = buildDossierDocumentOrder({ lancamentos, itensRSC });
-  const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
-
-  for (const inciso of RSC_IDS) {
-    const incisoLancamentos = sortedLancamentos.filter((l) => {
-      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
-      return item?.inciso === inciso;
-    });
-
-    writer.criterioHeader(`Critério ${inciso} - ${CRITERIO_LABELS[inciso]}`);
-
-    const groupedRows = new Map<string, { item: ItemRSC; points: number; quantidadeTotal: number; docs: string[] }>();
-    incisoLancamentos.forEach((l) => {
-      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
-      if (!item) return;
-      const entry = groupedRows.get(item.id) || { item, points: 0, quantidadeTotal: 0, docs: [] };
-      entry.points = addPointValues(entry.points, l.pontos_calculados);
-      entry.quantidadeTotal += l.quantidade_informada ?? 1;
-      getLancamentoDocumentIds(l).forEach((docId) => {
-        const doc = docsById.get(docId);
-        if (!doc) return;
-        const dossierEntry = documentOrder.get(docId);
-        const docLabel = dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : 'Documento sem ordem';
-        entry.docs.push(`[${docLabel}] ${doc.nome_arquivo}`);
-      });
-      groupedRows.set(item.id, entry);
-    });
-
-    const sortedGroups = Array.from(groupedRows.values()).sort((a, b) => a.item.numero - b.item.numero);
-    const tableRows = sortedGroups.map((g) => [
-      `${g.item.numero}`,
-      g.item.descricao,
-      `${formatNumber(g.quantidadeTotal)} ${g.item.unidade_medida ? `(${g.item.unidade_medida})` : 'unid.'}`,
-      formatNumber(g.item.pontos_por_unidade),
-      formatNumber(g.points),
-      g.docs.join('\n'),
-    ]);
-
-    writer.table(
-      ['Nº', 'Critério específico', 'Unidade', 'Pts/Un', 'Subtotal', 'Documentos'],
-      tableRows.length > 0 ? tableRows : [['-', 'Sem lançamentos neste critério', '-', '-', '-', '-']],
-      COL_WIDTHS,
-    );
-
-    const subtotal = sortedGroups.reduce((acc, g) => addPointValues(acc, g.points), 0);
-    writer.subtotalRow(`Subtotal CRITÉRIO ${inciso}`, formatNumber(subtotal), [colSubtotalLabelStart, colSubtotalValueStart]);
-    writer.gap(8);
-  }
-
-  writer.subtotalRow('TOTAL ACUMULADO', formatNumber(totalPontos), [colSubtotalLabelStart, colSubtotalValueStart], true);
-
-  writer.gap(18);
-  writer.section('5. Notas e Observações Complementares');
-  const lancamentosComObs = lancamentos.filter((l) => l.observacao);
-  if (lancamentosComObs.length === 0) {
-    writer.text('Nenhuma observação complementar registrada para os itens deste dossiê.', { size: 9, color: COLORS.muted });
+  const memorialText = processo?.memorial_texto?.trim();
+  if (!memorialText) {
+    writer.text('Memorial textual não informado.', { size: 10, color: COLORS.muted });
   } else {
-    lancamentosComObs.forEach((l) => {
-      const item = itensRSC.find((i) => i.id === l.item_rsc_id);
-      if (item) {
-        writer.text(`Item ${item.numero} — ${item.descricao}`, { bold: true, size: 8.5 });
-        const periodosL = periodosDoLancamento(l);
-        const periodStr = periodosL.length > 0 ? ` (Período: ${periodosL.map((p) => `${formatDate(p.inicio)} a ${formatDate(p.fim)}`).join('; ')})` : '';
-        writer.text(`Observação${periodStr}: ${l.observacao}`, { indent: 8, size: 8.5 });
-        writer.gap(4);
-      }
-    });
+    const paragraphs = memorialText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
+    for (const paragraph of paragraphs) {
+      writer.text(paragraph, { size: 10, lineHeight: 15 });
+      writer.gap(8);
+    }
   }
 
   writer.gap(18);
-  writer.section('6. Conclusão do Servidor');
-  writer.text(`À vista das informações apresentadas, este memorial consolida ${formatPointValue(totalPontos)} pontos para instrução documental do pedido de RSC-PCCTAE.`, { size: 9 });
+  writer.section('3. Assinatura do Servidor');
   writer.gap(22);
   writer.text('Assinatura: ___________________________________________________', { size: 9 });
+  writer.gap(8);
+  writer.text('Data: ______ / ______ / __________', { size: 9 });
 
   // Injeção de página de metadados dedicada (Extrato Estruturado de Dados) para o Sistema 2
   writer.addPage();

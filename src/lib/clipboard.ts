@@ -21,11 +21,15 @@ function copyTextWithHiddenTextarea(text: string) {
 export async function copyTextToClipboard(text: string) {
   if (!text) return false;
 
+  // Remove caracteres de controle invisíveis (null bytes, etc.) que podem
+  // truncar silenciosamente a cópia no navegador.
+  const cleanText = text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+
   const clipboard = navigator.clipboard;
 
   if (clipboard?.writeText) {
     try {
-      await clipboard.writeText(text);
+      await clipboard.writeText(cleanText);
       return true;
     } catch {
       // Fall through to ClipboardItem and legacy copy.
@@ -34,7 +38,7 @@ export async function copyTextToClipboard(text: string) {
 
   if (clipboard?.write && typeof ClipboardItem !== 'undefined') {
     try {
-      const blob = new Blob([text], { type: 'text/plain' });
+      const blob = new Blob([cleanText], { type: 'text/plain' });
       await clipboard.write([new ClipboardItem({ 'text/plain': blob })]);
       return true;
     } catch {
@@ -43,7 +47,7 @@ export async function copyTextToClipboard(text: string) {
   }
 
   try {
-    return copyTextWithHiddenTextarea(text);
+    return copyTextWithHiddenTextarea(cleanText);
   } catch {
     return false;
   }

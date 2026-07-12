@@ -18,7 +18,8 @@ const EXPORT_KEY_NAMES = {
   documentos: 'rsc-tae-documentos',
   lancamentos: 'rsc-tae-lancamentos',
   processo: 'rsc-tae-processo',
-  wizardIds: 'rsc-tae-wizard-ids',
+  triagem: 'rsc-tae-triagem',
+  auditoria: 'rsc-tae-auditoria',
 };
 
 function triggerDownload(blob: Blob, filename: string) {
@@ -43,7 +44,8 @@ export async function exportSession(activeSessionId: string): Promise<void> {
     [keys.documentos]: EXPORT_KEY_NAMES.documentos,
     [keys.lancamentos]: EXPORT_KEY_NAMES.lancamentos,
     [keys.processo]: EXPORT_KEY_NAMES.processo,
-    [keys.wizardIds]: EXPORT_KEY_NAMES.wizardIds,
+    [keys.triagem]: EXPORT_KEY_NAMES.triagem,
+    [keys.auditoria]: EXPORT_KEY_NAMES.auditoria,
   };
 
   const metadata: Record<string, unknown> = {};
