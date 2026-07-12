@@ -109,7 +109,7 @@ export default function AppHeader({
               {/* Alinhamento ao Decreto */}
               <div className="group relative flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50/50 px-2.5 py-1 text-[9px] font-bold text-blue-700 shadow-inner cursor-help">
                 <CheckCircle2 className="h-3 w-3 text-blue-500" />
-                <span>RSC-PCCTAE</span>
+                <span>Assistente RSC-TAE</span>
 
                 {/* Tooltip Mobile */}
                 <div className="absolute top-full right-0 mt-2 w-48 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">
@@ -150,12 +150,16 @@ export default function AppHeader({
           <div className="flex items-center justify-around gap-2 rounded-full bg-gray-50/50 border border-gray-100 px-4 py-1.5 shadow-inner sm:justify-center sm:gap-6">
             <div className="flex items-center gap-1.5 text-[10px] font-bold">
               <span className="text-emerald-600 uppercase tracking-widest opacity-80">Total:</span>
-              <span className="text-gray-900 tabular-nums">{formatPointValue(totalPontos)} pts</span>
+              <span className="text-gray-900 tabular-nums">
+                {formatPointValue(totalPontos)}{nivelElegivel ? ` de ${nivelElegivel.pontosMinimos}` : ''} pts
+              </span>
             </div>
             <div className="w-px h-2.5 bg-gray-200" />
             <div className="flex items-center gap-1.5 text-[10px] font-bold">
               <span className="text-blue-600 uppercase tracking-widest opacity-80">Itens:</span>
-              <span className="text-gray-900 tabular-nums">{itensDistintos}</span>
+              <span className="text-gray-900 tabular-nums">
+                {itensDistintos}{nivelElegivel ? ` de ${nivelElegivel.itensMinimos}` : ''}
+              </span>
             </div>
             <div className="w-px h-2.5 bg-gray-200" />
             <div className="flex items-center gap-1.5 text-[10px] font-bold">
@@ -168,7 +172,7 @@ export default function AppHeader({
           <div className="flex items-center">
             <div className="group relative flex items-center gap-1.5 rounded-full border border-blue-100 bg-blue-50/50 px-3 py-1 text-[10px] font-bold text-blue-700 shadow-inner cursor-help">
               <CheckCircle2 className="h-3 w-3 text-blue-500" />
-              <span className="uppercase tracking-widest">RSC-PCCTAE</span>
+              <span className="uppercase tracking-widest">Assistente RSC-TAE</span>
 
               {/* Tooltip Desktop */}
               <div className="absolute top-full left-1/2 mt-2 w-64 -translate-x-1/2 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">

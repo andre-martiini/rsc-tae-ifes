@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, FileText, Send, AlertCircle, Loader2, XCircle, Info, SearchCheck } from 'lucide-react';
+import { CheckCircle2, Download, AlertCircle, Loader2, Info, SearchCheck, Sparkles, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
 import AuditPromptModal from '../components/AuditPromptModal';
+import InstructionDocumentsPanel from '../components/InstructionDocumentsPanel';
 import MainLayout from '../components/MainLayout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -18,6 +19,7 @@ import {
   sortLancamentosByDossierOrder,
 } from '../lib/documentOrdering';
 import { exportPacoteRSC } from '../lib/pacoteExport';
+import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import {
   getEligibleRscLevel,
@@ -40,7 +42,7 @@ const CRITERIO_LABELS: Record<string, string> = {
 };
 
 export default function Consolidation() {
-  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso, updateDocumento } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso, updateDocumento, removeLancamento, updateLancamento } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -56,11 +58,6 @@ export default function Consolidation() {
     () => sumPointValues(lancamentosDoServidor.map((entry) => entry.pontos_calculados)),
     [lancamentosDoServidor],
   );
-  const docUtilizadosSet = useMemo(
-    () => new Set(lancamentosDoServidor.flatMap((l) => l.comprovantes_ids ?? (l.documento_id ? [l.documento_id] : []))),
-    [lancamentosDoServidor],
-  );
-
   const itensDistintos = useMemo(
     () => getDistinctRscCriterionCount(lancamentosDoServidor, itensRSC),
     [itensRSC, lancamentosDoServidor],
@@ -69,6 +66,7 @@ export default function Consolidation() {
   const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
   const [declaracaoNaoDuplicidade, setDeclaracaoNaoDuplicidade] = useState(false);
   const [declaracaoExcedeAtribuicoes, setDeclaracaoExcedeAtribuicoes] = useState(false);
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const niveisPleiteaveis = useMemo(
     () => getEligibleRscLevels(servidor.escolaridade_atual),
     [servidor.escolaridade_atual],
@@ -104,12 +102,6 @@ export default function Consolidation() {
     [nivelPleiteado, lancamentosDoServidor, itensRSC],
   );
 
-  const metasAtingidas =
-    !!nivelPleiteado &&
-    totalPontos >= nivelPleiteado.pontosMinimos &&
-    itensDistintos >= nivelPleiteado.itensMinimos &&
-    incisoViolations.length === 0;
-
   const resumoItens = useMemo(() => {
     const map = new Map<string, { itemId: string; numero: number; inciso: string; descricao: string; unidade_medida: string; pontos_por_unidade: number; pontos: number; docCount: number; quantidadeTotal: number }>();
     lancamentosDoServidor.forEach((l) => {
@@ -132,21 +124,25 @@ export default function Consolidation() {
     return Array.from(map.values()).sort((a, b) => a.numero - b.numero);
   }, [itensRSC, lancamentosDoServidor]);
 
-  const resumoByInciso = useMemo(() => {
-    const groups = new Map<string, typeof resumoItens>();
-    for (const row of resumoItens) {
-      const group = groups.get(row.inciso) ?? [];
-      group.push(row);
-      groups.set(row.inciso, group);
-    }
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [resumoItens]);
-
   const documentOrder = useMemo(
     () => buildDossierDocumentOrder({ lancamentos: lancamentosDoServidor, itensRSC }),
     [itensRSC, lancamentosDoServidor],
   );
   const docsById = useMemo(() => new Map(documentos.map((doc) => [doc.id, doc])), [documentos]);
+  const instructionCategories = useMemo(
+    () => new Set(
+      documentos
+        .filter((doc) => doc.servidor_id === servidor.id && doc.categoria_instrucao && doc.caminho_storage)
+        .map((doc) => doc.categoria_instrucao),
+    ),
+    [documentos, servidor.id],
+  );
+  const requiredInstructionCount = REQUIRED_INSTRUCTION_CATEGORIES.filter((categoria) =>
+    instructionCategories.has(categoria),
+  ).length;
+  const instructionDocumentsOk = requiredInstructionCount === REQUIRED_INSTRUCTION_CATEGORIES.length;
+  const memorialTexto = processo.memorial_texto ?? '';
+  const memorialOk = memorialTexto.trim().length > 0;
   const lancamentosOrdenados = useMemo(
     () => sortLancamentosByDossierOrder(lancamentosDoServidor, itensRSC),
     [itensRSC, lancamentosDoServidor],
@@ -176,13 +172,6 @@ export default function Consolidation() {
     temConcessaoAnterior,
     updateProcesso,
   ]);
-
-  const possuiDadosConcessaoAnterior =
-    temConcessaoAnterior && (
-      !!numeroProcessoAnterior.trim() ||
-      !!saldoConcessaoAnterior.trim() ||
-      !!dataUltimaConcessao
-    );
 
   const intersticioOk = useMemo(() => {
     if (!temConcessaoAnterior) return true;
@@ -287,6 +276,22 @@ export default function Consolidation() {
             : 'Sem concessão anterior informada.',
       },
       {
+        ok: instructionDocumentsOk,
+        label: 'Documentos de instrução',
+        detail: instructionDocumentsOk
+          ? 'Portaria de estabilidade e três extratos SIAPE anexados.'
+          : `${requiredInstructionCount}/${REQUIRED_INSTRUCTION_CATEGORIES.length} documentos obrigatórios anexados.`,
+        action: instructionDocumentsOk ? undefined : { label: 'Anexar documentos', onClick: () => scrollToSection('instruction-documents-section') },
+      },
+      {
+        ok: memorialOk,
+        label: 'Memorial textual',
+        detail: memorialOk
+          ? `${memorialTexto.trim().length.toLocaleString('pt-BR')} caracteres registrados.`
+          : 'Falta redigir e revisar o memorial narrativo exigido pelo Decreto nº 13.048/2026.',
+        action: memorialOk ? undefined : { label: 'Redigir memorial', onClick: () => scrollToSection('memorial-editor-section') },
+      },
+      {
         ok: autodeclaracaoGeral,
         label: 'Veracidade das Informações',
         detail: autodeclaracaoGeral
@@ -311,39 +316,12 @@ export default function Consolidation() {
         action: declaracaoExcedeAtribuicoes ? undefined : { label: 'Ver declaração', onClick: () => scrollToSection('autodeclaracao-section') },
       },
     ];
-  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor, nivelPleiteado, servidor, totalPontos, temConcessaoAnterior]);
-
-  const pendencias = useMemo(() => {
-    const issues: string[] = [];
-    if (!nivelPleiteado) issues.push('Selecione o nível que será levado para o requerimento.');
-    if (lancamentosDoServidor.length === 0) issues.push('Nenhum lançamento foi registrado ainda.');
-    if (nivelPleiteado && totalPontos < nivelPleiteado.pontosMinimos)
-      issues.push(`Ainda faltam ${formatPointValue(nivelPleiteado.pontosMinimos - totalPontos)} pontos para liberar o envio.`);
-    if (nivelPleiteado && itensDistintos < nivelPleiteado.itensMinimos)
-      issues.push(`Ainda faltam ${nivelPleiteado.itensMinimos - itensDistintos} itens distintos para liberar o envio.`);
-    for (const v of incisoViolations)
-      issues.push(`Falta ao menos um lançamento em algum dos Incisos: ${[...v.requiredIncisos].join('/')}.`);
-    if (!functionalEligibility.ok)
-      issues.push(...functionalEligibility.reasons);
-    if (!intersticioOk)
-      issues.push(temConcessaoAnterior && !dataUltimaConcessao
-        ? 'Informe a data da última concessão para validar o interstício de 3 anos.'
-        : 'A data informada da última concessão ainda não completa o interstício de 3 anos.');
-    if (!autodeclaracaoGeral)
-      issues.push('Você precisa concordar com a Autodeclaração de veracidade das informações.');
-    if (!declaracaoNaoDuplicidade)
-      issues.push('Você precisa confirmar a declaração de não-duplicidade de itens.');
-    if (!declaracaoExcedeAtribuicoes)
-      issues.push('Você precisa confirmar a declaração de atividade não ordinária.');
-    return issues;
-  }, [autodeclaracaoGeral, dataUltimaConcessao, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, functionalEligibility, incisoViolations, intersticioOk, itensDistintos, lancamentosDoServidor.length, nivelPleiteado, temConcessaoAnterior, totalPontos]);
+  }, [autodeclaracaoGeral, declaracaoNaoDuplicidade, declaracaoExcedeAtribuicoes, dataUltimaConcessao, functionalEligibility, incisoViolations, instructionDocumentsOk, intersticioOk, itensDistintos, lancamentosDoServidor, memorialOk, memorialTexto, nivelPleiteado, requiredInstructionCount, servidor, totalPontos, temConcessaoAnterior]);
 
   const canGenerate = checks.every((c) => c.ok);
-  const today = new Date().toLocaleDateString('pt-BR');
   const [isGenerating, setIsGenerating] = useState(false);
   const [auditPromptOpen, setAuditPromptOpen] = useState(false);
-
-  const handleExport = () => window.print();
+  const [memorialPromptOpen, setMemorialPromptOpen] = useState(false);
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -407,6 +385,23 @@ export default function Consolidation() {
         itensRSC={itensRSC}
         documentos={documentos}
         updateDocumento={updateDocumento}
+        removeLancamento={removeLancamento}
+        updateLancamento={updateLancamento}
+      />
+      <AuditPromptModal
+        mode="memorial"
+        open={memorialPromptOpen}
+        onClose={() => setMemorialPromptOpen(false)}
+        servidor={servidor}
+        nivelPleiteado={nivelPleiteado}
+        processo={{
+          ...processo,
+          nivel_pleiteado_id: nivelPleiteado?.id,
+        }}
+        lancamentos={lancamentosDoServidor}
+        itensRSC={itensRSC}
+        documentos={documentos}
+        updateDocumento={updateDocumento}
       />
       <main className="mx-auto max-w-4xl px-4 py-6 print:max-w-none print:p-0 sm:py-8">
         {/* Pre-flight checklist — hidden on print */}
@@ -415,10 +410,11 @@ export default function Consolidation() {
             "rounded-2xl border bg-white shadow-sm overflow-hidden",
             canGenerate ? "border-emerald-100" : "border-amber-100"
           )}>
-            <div className={cn(
-              "flex flex-col items-start gap-3 px-4 py-4 sm:flex-row sm:items-center sm:px-6",
-              canGenerate ? "bg-emerald-50/50" : "bg-amber-50/50"
-            )}>
+            <button
+              type="button"
+              onClick={() => setChecklistOpen((prev) => !prev)}
+              className="flex w-full flex-col items-start gap-3 px-4 py-4 text-left sm:flex-row sm:items-center sm:px-6"
+            >
               <div className={cn(
                 "rounded-full p-1.5",
                 canGenerate ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
@@ -439,8 +435,21 @@ export default function Consolidation() {
               )}>
                 {checks.filter((c) => c.ok).length}/{checks.length} REQUISITOS
               </span>
-            </div>
-            <ul className="divide-y divide-gray-100 px-4 py-2 sm:px-6">
+              <ChevronDown className={cn(
+                "h-4 w-4 shrink-0 transition-transform duration-200",
+                canGenerate ? "text-emerald-600" : "text-amber-600",
+                checklistOpen && "rotate-180"
+              )} />
+            </button>
+            <AnimatePresence initial={false}>
+              {checklistOpen && (
+                <motion.ul
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  className="divide-y divide-gray-100 overflow-hidden px-4 sm:px-6"
+                >
               {checks.map((check) => (
                 <li key={check.label} className={cn(
                   "flex items-center gap-4 py-3.5 transition-colors group",
@@ -482,7 +491,9 @@ export default function Consolidation() {
                   )}
                 </li>
               ))}
-            </ul>
+                </motion.ul>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
@@ -498,7 +509,20 @@ export default function Consolidation() {
             <div className="space-y-8">
               {/* Nível - Sempre visível */}
               <div className="max-w-md space-y-1.5">
-                <Label htmlFor="nivel-pleiteado" className="text-xs font-bold uppercase tracking-widest text-gray-400">Nível pleiteado no Requerimento</Label>
+                <div className="flex items-center gap-1.5">
+                  <Label htmlFor="nivel-pleiteado" className="text-xs font-bold uppercase tracking-widest text-gray-400">Nível pleiteado no Requerimento</Label>
+                  <div className="group relative flex items-center">
+                    <Info className="h-3.5 w-3.5 text-gray-300 hover:text-gray-400 cursor-help" />
+                    <div className="absolute bottom-full left-1/2 mb-2 w-56 -translate-x-1/2 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100 pointer-events-none z-[60]">
+                      <div className="rounded-lg border border-gray-200 bg-white p-2.5 shadow-xl">
+                        <p className="text-[11px] leading-relaxed text-gray-600 font-normal normal-case">
+                          Este é o nível que você <strong>deseja alcançar</strong>, não o nível em que você está atualmente. Escolha o RSC que será solicitado no requerimento.
+                        </p>
+                      </div>
+                      <div className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b border-r border-gray-200 bg-white"></div>
+                    </div>
+                  </div>
+                </div>
                 <select
                   id="nivel-pleiteado"
                   value={nivelPleiteadoId}
@@ -597,6 +621,52 @@ export default function Consolidation() {
           </div>
         </div>
 
+        <InstructionDocumentsPanel />
+
+        <section id="memorial-editor-section" className="mb-6 print:hidden">
+          <div className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-base font-black uppercase tracking-tight text-gray-900">Memorial textual</h3>
+                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
+                  Apresente de forma breve e objetiva sua trajetória, as atividades relevantes, os saberes e competências
+                  demonstrados, as contribuições para a instituição e o alinhamento ao nível de RSC pleiteado.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMemorialPromptOpen(true)}
+                disabled={lancamentosDoServidor.length === 0}
+                className="h-10 shrink-0 rounded-xl border-violet-200 bg-violet-50 px-4 text-xs font-black uppercase tracking-widest text-violet-700 hover:bg-violet-100"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Gerar base com IA
+              </Button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3 text-xs leading-relaxed text-violet-900">
+              A IA gera apenas uma minuta. Confira cada afirmação nos comprovantes, complemente os impactos que somente
+              você conhece e remova dados pessoais desnecessários, pois o memorial poderá ser publicado antes da decisão.
+            </div>
+
+            <label htmlFor="memorial-texto" className="mt-5 block text-xs font-black uppercase tracking-widest text-gray-400">
+              Texto final revisado pelo servidor
+            </label>
+            <textarea
+              id="memorial-texto"
+              value={memorialTexto}
+              onChange={(event) => updateProcesso({ memorial_texto: event.target.value })}
+              placeholder="Ex.: Iniciei minha trajetória profissional... Ao longo da carreira, desenvolvi... Essas experiências contribuíram... Por esse conjunto, considero que minha trajetória se alinha ao nível..."
+              className="mt-2 min-h-[320px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-7 text-gray-800 outline-none transition-all focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+            />
+            <div className="mt-2 flex flex-col gap-1 text-[11px] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+              <span>O texto é salvo automaticamente nesta sessão.</span>
+              <span className="font-bold tabular-nums">{memorialTexto.length.toLocaleString('pt-BR')} caracteres</span>
+            </div>
+          </div>
+        </section>
+
         <div id="autodeclaracao-section" className="mb-6 print:hidden">
           <div className="rounded-2xl border border-violet-100 bg-violet-50/50 p-6 shadow-sm">
             <h3 className="text-base font-black tracking-tight text-gray-900 uppercase">Autodeclaração Legal</h3>
@@ -675,7 +745,7 @@ export default function Consolidation() {
                   activeTab === 'memorial' ? "text-primary" : "text-gray-400 hover:text-gray-600"
                 )}
               >
-                2. Memorial Descritivo
+                2. Memorial
                 {activeTab === 'memorial' && (
                   <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
                 )}
@@ -826,6 +896,10 @@ export default function Consolidation() {
                     <p className="text-[12px] leading-relaxed text-gray-600">
                       Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das contribuições institucionais e conforme os requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026, vinculando cada atividade ao número correspondente aos critérios específicos.
                     </p>
+                    <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[10px] leading-relaxed text-amber-800 print:hidden">
+                      Nota de conferência normativa: este trecho reproduz literalmente o formulário padrão do MEC. No Decreto nº 13.048/2026,
+                      os requisitos I a VI estão materialmente enumerados no art. 3º. A referência deverá ser revista se o MEC publicar retificação do modelo.
+                    </div>
                     <div className="space-y-5">
                       {RSC_IDS.map((inciso) => {
                         const items = resumoItens.filter((item) => item.inciso === inciso);
@@ -948,123 +1022,50 @@ export default function Consolidation() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="space-y-12 text-gray-900"
+                  className="space-y-10 text-gray-900"
                 >
-                  <div className="text-center space-y-2 border-b-2 border-gray-900 pb-8">
-                    <h1 className="text-lg font-black uppercase tracking-tight decoration-2">Memorial e Descrição das Atividades</h1>
-                    <p className="max-w-3xl mx-auto text-[11px] leading-relaxed text-gray-500 italic pt-4">
-                      Organize os itens de acordo com a sua trajetória, contexto de atuação, principais funções e síntese das
-                      contribuições institucionais e conforme os requisitos do art. 4º, incisos I a VI, do Decreto nº 13.048, de 3 de julho de 2026, vinculando cada
-                      atividade ao número correspondente aos critérios específicos.
-                    </p>
+                  <div className="border-b-2 border-gray-900 pb-8 text-center">
+                    <AppLogo className="mx-auto mb-4 h-16 w-16" />
+                    <h2 className="text-base font-bold uppercase tracking-tight">{institutionConfig.networkName}</h2>
+                    <h1 className="mt-1 text-xl font-black uppercase">Memorial - RSC-PCCTAE</h1>
                   </div>
 
-                  <div className="space-y-12">
-                    {resumoByInciso.map(([inciso, items], index) => {
-                      const incisoSubtotal = sumPointValues(items.map((i) => i.pontos));
-                      const isLast = index === resumoByInciso.length - 1;
+                  <section className="space-y-4">
+                    <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">1. Identificação do Servidor</h3>
+                    <div className="grid gap-x-12 gap-y-4 text-[13px] md:grid-cols-2">
+                      <div><span className="block text-[10px] font-bold uppercase text-gray-500">Nome:</span><p className="min-h-[20px] border-b border-gray-300">{servidor.nome_completo}</p></div>
+                      <div><span className="block text-[10px] font-bold uppercase text-gray-500">SIAPE:</span><p className="min-h-[20px] border-b border-gray-300">{servidor.siape}</p></div>
+                      <div><span className="block text-[10px] font-bold uppercase text-gray-500">Cargo:</span><p className="min-h-[20px] border-b border-gray-300">{servidor.cargo || '—'}</p></div>
+                      <div><span className="block text-[10px] font-bold uppercase text-gray-500">Lotação:</span><p className="min-h-[20px] border-b border-gray-300">{servidor.lotacao || '—'}</p></div>
+                      <div className="md:col-span-2"><span className="block text-[10px] font-bold uppercase text-gray-500">Nível pleiteado:</span><p className="min-h-[20px] border-b border-gray-300">{nivelPleiteado?.label || '—'}</p></div>
+                    </div>
+                  </section>
 
-                      return (
-                        <div key={inciso} className="space-y-2">
-                          <h2 className="bg-gray-100 px-4 py-1.5 text-[11px] font-black uppercase ring-1 ring-gray-900/10">
-                            Critério {inciso} - {CRITERIO_LABELS[inciso] ?? 'Produção, prospecção e difusão de conhecimento'}
-                          </h2>
-
-                          <div className="overflow-x-auto">
-                          <table className="min-w-[760px] w-full table-fixed border-collapse border border-gray-900 text-[10px]">
-                            <thead>
-                              <tr className="bg-gray-50 text-center">
-                                <th className="border border-gray-900 px-2 py-2 w-[5%] font-black italic uppercase">Nº</th>
-                                <th className="border border-gray-900 px-2 py-2 text-left w-[38%] font-black italic uppercase">Critério específico</th>
-                                <th className="border border-gray-900 px-2 py-2 w-[12%] font-black italic uppercase">Unidade Medida</th>
-                                <th className="border border-gray-900 px-2 py-2 w-[10%] font-black italic uppercase leading-tight">Pontuação (Base)</th>
-                                <th className="border border-gray-900 px-2 py-2 w-[10%] font-black italic uppercase leading-tight">Pontuação Obtida</th>
-                                <th className="border border-gray-900 px-2 py-2 w-[25%] font-black italic uppercase leading-tight">Documentos Comprobatórios</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {items.map((item) => {
-                                const itemLancamentos = lancamentosOrdenados.filter(l => l.item_rsc_id === item.itemId);
-                                return (
-                                  <tr key={item.itemId}>
-                                    <td className="border border-gray-900 px-2 py-2 text-center font-bold text-sm">{item.numero}</td>
-                                    <td className="border border-gray-900 px-2 py-2 leading-tight">{item.descricao}</td>
-                                    <td className="border border-gray-900 px-2 py-2 text-center">{item.quantidadeTotal} {item.unidade_medida ? `(${item.unidade_medida})` : 'unid.'}</td>
-                                    <td className="border border-gray-900 px-2 py-2 text-center">{formatPointValue(item.pontos_por_unidade)}</td>
-                                    <td className="border border-gray-900 px-2 py-2 text-center font-black bg-gray-50/50">{formatPointValue(item.pontos)}</td>
-                                    <td className="border border-gray-900 px-2 py-2 align-top">
-                                      <div className="flex flex-col gap-1.5">
-                                        {itemLancamentos.map((l) =>
-                                          getLancamentoDocumentIds(l).map((docId) => {
-                                            const docItem = docsById.get(docId);
-                                            const dossierEntry = documentOrder.get(docId);
-                                            const docLabel = dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : 'Documento sem ordem';
-                                            return (
-                                              <span key={`${l.id}-${docId}`} className="text-[8px] leading-tight text-gray-500 break-all bg-gray-50 p-1 block border border-gray-100 rounded-sm">
-                                                [{docLabel}] {docItem?.nome_arquivo ?? 'Documento não encontrado'}
-                                              </span>
-                                            );
-                                          })
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              <tr className="bg-gray-100 font-black">
-                                <td colSpan={4} className="border border-gray-900 px-4 py-2 text-right uppercase italic tracking-widest">Subtotal CRITÉRIO {inciso}</td>
-                                <td className="border border-gray-900 px-2 py-2 text-center text-sm bg-gray-200 ring-2 ring-inset ring-gray-900/5">{formatPointValue(incisoSubtotal)}</td>
-                                <td className="border border-gray-900 px-2 py-2"></td>
-                              </tr>
-                            </tbody>
-                          </table>
-                          </div>
-
-                          {isLast && (
-                            <div className="mt-8 border-t-2 border-gray-900 pt-4">
-                              <div className="overflow-x-auto">
-                              <table className="min-w-[560px] w-full border-collapse border border-gray-900 text-xs font-black">
-                                <tbody>
-                                  <tr className="bg-gray-200/50">
-                                    <td className="border border-gray-900 px-6 py-4 text-right uppercase italic tracking-widest leading-relaxed">
-                                      (Critério I + Critério II + Critério III + Critério IV + Critério V + Critério VI)
-                                      <br />
-                                      <span className="text-base font-black">TOTAL ACUMULADO</span>
-                                    </td>
-                                    <td className="border border-gray-900 px-4 py-4 text-center text-xl w-40 bg-gray-900 text-white tabular-nums">
-                                      {formatPointValue(totalPontos)}
-                                    </td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* 6. Conclusão */}
-                  <section className="space-y-6 pt-12 border-t-2 border-gray-900 mt-16">
-                    <h3 className="bg-gray-100 px-4 py-1.5 text-xs font-black uppercase ring-1 ring-gray-900/10 w-fit">6. Conclusão do Servidor</h3>
-                    <div className="text-[14px] leading-relaxed">
-                      <p>
-                        À vista das informações apresentadas, este memorial consolida <strong>{formatPointValue(totalPontos)}</strong> pontos para
-                        instrução documental do pedido no nível <strong>{nivelPleiteado?.label || '—'}</strong> do RSC‑PCCTAE.
+                  <section className="space-y-5">
+                    <div>
+                      <h3 className="bg-gray-100 px-3 py-1 text-sm font-black uppercase ring-1 ring-gray-900/10">2. Trajetória profissional, saberes e competências</h3>
+                      <p className="mt-3 text-[11px] leading-relaxed text-gray-500">
+                        Memorial elaborado nos termos do art. 13, inciso II e § 1º, do Decreto nº 13.048, de 3 de julho de 2026.
                       </p>
                     </div>
+                    {memorialOk ? (
+                      <div className="whitespace-pre-wrap text-justify text-[14px] leading-7 text-gray-800">{memorialTexto.trim()}</div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-6 text-center text-sm font-semibold text-amber-800">
+                        Redija o memorial textual no campo acima para visualizar a versão final.
+                      </div>
+                    )}
+                  </section>
 
-                    <div className="pt-12 space-y-12">
-                      <div className="flex flex-col items-start translate-y-4">
-                        <span className="text-[10px] font-bold uppercase text-gray-400">Assinatura:</span>
-                        <div className="mt-8 h-px w-full max-w-md bg-gray-900" />
-                        <span className="mt-1 text-[11px] font-bold uppercase">{servidor.nome_completo}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase text-gray-400">Data:</span>
-                        <span className="ml-2 font-bold px-4 border-b border-gray-900">{new Date().toLocaleDateString('pt-BR')}</span>
-                      </div>
+                  <section className="space-y-8 border-t-2 border-gray-900 pt-10">
+                    <div className="flex flex-col items-start">
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Assinatura:</span>
+                      <div className="mt-8 h-px w-full max-w-md bg-gray-900" />
+                      <span className="mt-1 text-[11px] font-bold uppercase">{servidor.nome_completo}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-gray-400">Data:</span>
+                      <span className="ml-2 border-b border-gray-900 px-4 font-bold">{new Date().toLocaleDateString('pt-BR')}</span>
                     </div>
                   </section>
                 </motion.div>

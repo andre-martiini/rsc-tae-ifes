@@ -14,8 +14,8 @@ import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
 import Documents from './pages/Documents';
 import Consolidation from './pages/Consolidation';
-import Legislation from './pages/Legislation';
 import HelpAndUpdates from './pages/HelpAndUpdates';
+import Triagem from './pages/Triagem';
 import FeedbackWidget from './components/FeedbackWidget';
 
 // Protects routes that require an active session
@@ -73,18 +73,18 @@ export default function App() {
             }
           />
           <Route
-            path="/legislacao"
-            element={
-              <RequireSession>
-                <Legislation />
-              </RequireSession>
-            }
-          />
-          <Route
             path="/ajuda"
             element={
               <RequireSession>
                 <HelpAndUpdates />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="/triagem"
+            element={
+              <RequireSession>
+                <Triagem />
               </RequireSession>
             }
           />

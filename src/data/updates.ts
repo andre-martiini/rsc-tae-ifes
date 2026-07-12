@@ -14,6 +14,59 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '10 de julho de 2026',
+    title: 'Dossiê Inteligente de Documentos',
+    description: 'Nova ferramenta que ajuda o servidor a descobrir onde cada documento se encaixa no rol de itens RSC, revisar as sugestões e fazer a auditoria IA — tudo em um fluxo só, usando uma IA externa no padrão copiar/colar já praticado pelo sistema.',
+    features: [
+      'Upload em massa de documentos com transcrição automática (PDF, OCR e texto) e marcação de arquivos potencialmente ilegíveis.',
+      'Geração de prompt de classificação com o catálogo de itens e as transcrições, com loteamento automático para respeitar o limite de contexto da IA externa.',
+      'Colagem da resposta JSON da IA com parser tolerante — aceita cercas de código, texto ao redor e múltiplas colagens.',
+      'Revisão de sugestões com badges de confiança, preview de pontos, edição inline de item e períodos, detecção de conflitos e confirmação em lote das sugestões de alta confiança.',
+      'Quarta etapa: Auditoria IA estruturada que retorna operações automáticas (remover, reclassificar, ajustar períodos/quantidade, sinalizar) em JSON, com revisão e aplicação em lote das operações aprovadas.',
+      'Onboarding visual: ao entrar pela primeira vez em uma sessão, um spotlight destaca o botão do Dossiê Inteligente no menu lateral e um tutorial em vídeo (4 etapas) explica o fluxo completo — desde o upload até a auditoria.',
+    ],
+    improvements: [
+      'A extração de transcrição foi refatorada para um módulo compartilhado, beneficiando também a Auditoria IA.',
+      'O estado da triagem é incluído no export/import de sessão, permitindo retomar o trabalho em outra máquina.',
+      'O catálogo normativo embutido no prompt passou a incluir critérios de enquadramento, fatos mínimos, documentos típicos, documentos insuficientes e hipóteses de exclusão por item, aumentando a precisão das sugestões da IA.',
+      'O prompt da Auditoria IA agora informa o modo de cálculo de cada lançamento e orienta a IA a diferenciar correções de quantidade (itens manuais) de correções de datas (itens calculados por tempo).',
+      'A aba Documentos ganhou o filtro "Instrução processual" para isolar os documentos funcionais (portarias e extratos SIAPE) dos comprovantes de atividades.',
+    ],
+    fixes: [
+      'A cópia para a área de transferência agora remove caracteres de controle invisíveis (null bytes etc.) que podiam truncar silenciosamente o prompt copiado.',
+      'Lançamentos criados em sessões antigas com identificadores duplicados passam a receber novos IDs automaticamente, evitando conflitos com as sugestões e operações da triagem/auditoria.',
+    ],
+  },
+  {
+    date: '10 de julho de 2026',
+    title: 'Memorial textual e documentos funcionais no pacote RSC',
+    description: 'O fluxo de consolidação foi ajustado às definições da comissão e passou a separar o requerimento tabular do memorial narrativo.',
+    features: [
+      'Novo editor de Memorial, com salvamento automático e geração de prompt para criar uma minuta baseada nos lançamentos e comprovantes.',
+      'Inclusão da portaria de estabilidade e dos extratos SIAPE CDCOINDFUN, CACOPOSPRO e CACODETPFU como documentos próprios de instrução.',
+      'O pacote final reúne as fichas funcionais em um único PDF e mantém separadas a portaria de estabilidade, a eventual concessão anterior e as comprovações.',
+    ],
+    improvements: [
+      'O cabeçalho do sistema passa a exibir as metas de pontos e de itens do nível elegível ao lado dos totais já lançados, facilitando o acompanhamento do progresso.',
+      'O checklist de requisitos da tela Consolidar agora é recolhível/expansível, deixando a tela mais limpa quando todas as exigências já foram atendidas.',
+      'O rótulo do sistema no cabeçalho foi ajustado de "RSC-PCCTAE" para "Assistente RSC-TAE" para diferenciar a ferramenta do próprio regime de concessão.',
+    ],
+    fixes: [
+      'A listagem de critérios e pontuação deixou de ser repetida no Memorial e permanece exclusivamente na seção apropriada do requerimento.',
+      'O requerimento preserva a redação literal do formulário MEC e o sistema sinaliza a divergência entre a remissão ao art. 4º do modelo e a enumeração material dos requisitos no art. 3º do Decreto.',
+      'A exclusão de uma sessão na tela inicial agora exige confirmação em modal, evitando perda acidental de todos os dados.',
+    ],
+  },
+  {
+    date: '10 de julho de 2026',
+    title: 'Navegação reorganizada e fim do Wizard',
+    description: 'O Wizard de Mapeamento Objetivado foi substituído pelo Dossiê Inteligente e a página de Legislação passou a integrar a aba Ajuda & Novidades, unificando as informações de apoio em um único local.',
+    improvements: [
+      'Wizard substituído: a ferramenta de Mapeamento Objetivado (perguntas objetivas) foi retirada e substituída pelo Dossiê Inteligente, que descobre os itens por IA a partir dos próprios documentos — sem necessidade de responder a questionários.',
+      'Legislação integrada a Ajuda & Novidades: a página isolada de Legislação foi movida para uma aba dentro de Ajuda & Novidades, concentrando legislação, FAQ, comparativo de mudanças e novidades do sistema em um só lugar.',
+    ],
+  },
+  {
     date: '08 de julho de 2026',
     title: 'Requerimento atualizado conforme a Portaria MEC nº 608/2026',
     description: 'O modelo de requerimento do pacote RSC foi adequado ao formulário padrão estabelecido pelo Ministério da Educação para solicitação do RSC-PCCTAE.',

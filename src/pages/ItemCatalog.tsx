@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, ChevronRight, LayoutGrid, List, Search, ShieldAlert, Sparkles, Wand2, X } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ChevronRight, LayoutGrid, List, Search, ShieldAlert, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AppHeader from '../components/AppHeader';
 import { Card, CardContent } from '../components/ui/card';
@@ -47,13 +47,12 @@ function getItemStatus(pontosLancados: number): StatusFilter {
 }
 
 export default function ItemCatalog() {
-  const { servidor, itensRSC, lancamentos, processo, wizardRecommendedIds } = useAppContext();
+  const { servidor, itensRSC, lancamentos, processo } = useAppContext();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [selectedIncisos, setSelectedIncisos] = useState<Set<Inciso>>(new Set());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
-  const [wizardOnly, setWizardOnly] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const servidorId = servidor?.id ?? '';
@@ -141,15 +140,8 @@ export default function ItemCatalog() {
       });
     }
 
-    // wizard filter
-    if (wizardOnly) {
-      items = items.filter((item) => wizardRecommendedIds.includes(item.id));
-    }
-
     return items;
-  }, [itensRSC, query, selectedIncisos, statusFilter, wizardOnly, lancamentosByItemId, wizardRecommendedIds]);
-
-  const hasWizardRecs = wizardRecommendedIds.length > 0;
+  }, [itensRSC, query, selectedIncisos, statusFilter, lancamentosByItemId]);
 
   if (!servidor) {
     return <Navigate to="/" replace />;
@@ -249,34 +241,6 @@ export default function ItemCatalog() {
                       );
                     })}
                   </div>
-
-                  {/* Wizard filter */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                      Wizard
-                    </span>
-                    <button
-                      type="button"
-                      disabled={!hasWizardRecs}
-                      onClick={() => setWizardOnly((prev) => !prev)}
-                      title={
-                        hasWizardRecs
-                          ? `${wizardRecommendedIds.length} itens recomendados pelo wizard`
-                          : 'Execute o Wizard de Mapeamento para ver recomendações personalizadas'
-                      }
-                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${!hasWizardRecs
-                        ? 'cursor-not-allowed border-gray-100 bg-gray-50 text-gray-300'
-                        : wizardOnly
-                          ? 'border-violet-400 bg-violet-500 text-white'
-                          : 'border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400 hover:bg-violet-100'
-                        }`}
-                    >
-                      <Wand2 className="h-3 w-3" />
-                      {hasWizardRecs
-                        ? `Recomendados (${wizardRecommendedIds.length})`
-                        : 'Recomendados pelo Wizard (sem resultados)'}
-                    </button>
-                  </div>
                 </div>
 
                 <div className="flex flex-col gap-2 text-xs text-gray-500 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -357,12 +321,6 @@ export default function ItemCatalog() {
                                     <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
                                       <ShieldAlert className="h-3 w-3" />
                                       Enquadramento sensível
-                                    </span>
-                                  )}
-                                  {wizardRecommendedIds.includes(item.id) && (
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700">
-                                      <Wand2 className="h-3 w-3" />
-                                      Recomendado
                                     </span>
                                   )}
                                   {hasLancamentos && (
@@ -459,12 +417,6 @@ export default function ItemCatalog() {
                                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
                                   <ShieldAlert className="h-2.5 w-2.5" />
                                   Enquadramento sensível
-                                </span>
-                              )}
-                              {wizardRecommendedIds.includes(item.id) && (
-                                <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
-                                  <Wand2 className="h-2.5 w-2.5" />
-                                  Recomendado
                                 </span>
                               )}
                             </div>

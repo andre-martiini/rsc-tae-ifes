@@ -63,7 +63,14 @@ export interface Documento {
     | 'autodeclaracao'
     | 'referencia_institucional'
     | 'evidencia_vinculada'
-    | 'documento_apoio';
+    | 'documento_apoio'
+    | 'instrucao_processual';
+  categoria_instrucao?:
+    | 'portaria_estabilidade'
+    | 'siape_dados_funcionais'
+    | 'siape_posicao_carreira'
+    | 'siape_cargo_confianca'
+    | 'portaria_concessao_anterior';
   hash_arquivo?: string;
   hashes_componentes?: string[];
   arquivos_componentes?: Array<{
@@ -115,6 +122,8 @@ export interface ProcessoRSC {
   saldo_concessao_anterior?: number;
   numero_processo_anterior?: string;
   data_ultima_concessao?: string;
+  /** Memorial narrativo exigido pelo art. 13, II e § 1º, do Decreto nº 13.048/2026. */
+  memorial_texto?: string;
 }
 
 export { rolItensRSC as mockItensRSC };

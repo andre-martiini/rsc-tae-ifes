@@ -40,7 +40,7 @@ type DocumentUsage = {
   item?: ItemRSC;
 };
 
-type DocumentSource = 'upload' | 'reference' | 'converted' | 'merged' | 'metadata';
+type DocumentSource = 'upload' | 'reference' | 'converted' | 'merged' | 'metadata' | 'instruction';
 
 type DocumentAlert = {
   key: string;
@@ -68,7 +68,8 @@ type StatusFilter =
   | 'duplicados'
   | 'referencias'
   | 'uploads'
-  | 'mesclados';
+  | 'mesclados'
+  | 'instrucao';
 
 const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: 'todos', label: 'Todos' },
@@ -79,6 +80,7 @@ const statusFilters: { value: StatusFilter; label: string }[] = [
   { value: 'referencias', label: 'Referências' },
   { value: 'uploads', label: 'Uploads' },
   { value: 'mesclados', label: 'Mesclados' },
+  { value: 'instrucao', label: 'Instrução processual' },
 ];
 
 const sourceLabels: Record<DocumentSource, string> = {
@@ -87,6 +89,7 @@ const sourceLabels: Record<DocumentSource, string> = {
   converted: 'Convertido',
   merged: 'Mesclado',
   metadata: 'Metadado',
+  instruction: 'Instrução processual',
 };
 
 function normalizeSearch(value: string) {
@@ -140,6 +143,7 @@ function formatDate(value: string) {
 }
 
 function getDocumentSource(doc: Documento): DocumentSource {
+  if (doc.categoria_instrucao) return 'instruction';
   if ((doc.arquivos_componentes?.length ?? 0) > 1) return 'merged';
   if (doc.convertido_para_pdf) return 'converted';
   if ((doc.gedoc_links?.length ?? 0) > 0 && !doc.caminho_storage) return 'reference';
@@ -253,7 +257,11 @@ function buildInventoryRows(params: {
         duplicateHashDocs: Array.from(new Map(duplicateHashDocs.map((entry) => [entry.id, entry])).values()),
         duplicateLinkDocs: Array.from(new Map(duplicateLinkDocs.map((entry) => [entry.id, entry])).values()),
         dossierIndex: dossierEntry?.index,
-        dossierLabel: dossierEntry ? formatDossierDocumentLabel(dossierEntry.index) : undefined,
+        dossierLabel: dossierEntry
+          ? formatDossierDocumentLabel(dossierEntry.index)
+          : doc.categoria_instrucao
+            ? 'Instrução processual'
+            : undefined,
       };
     })
     .sort((a, b) => compareDocumentsByDossierOrder(a.doc, b.doc, dossierOrder));
@@ -263,11 +271,12 @@ function matchesFilter(row: InventoryRow, filter: StatusFilter) {
   if (filter === 'todos') return true;
   if (filter === 'alertas') return row.alerts.length > 0;
   if (filter === 'reutilizados') return row.itemCount > 1 || row.usages.length > 1;
-  if (filter === 'sem_vinculo') return row.usages.length === 0;
+  if (filter === 'sem_vinculo') return row.usages.length === 0 && !row.doc.categoria_instrucao;
   if (filter === 'duplicados') return row.duplicateHashDocs.length > 0 || row.duplicateLinkDocs.length > 0;
   if (filter === 'referencias') return (row.doc.gedoc_links?.length ?? 0) > 0;
   if (filter === 'uploads') return !!row.doc.caminho_storage;
   if (filter === 'mesclados') return (row.doc.arquivos_componentes?.length ?? 0) > 1;
+  if (filter === 'instrucao') return !!row.doc.categoria_instrucao;
   return true;
 }
 
@@ -334,6 +343,7 @@ export default function Documents() {
         row.doc.nome_arquivo,
         row.doc.hash_arquivo,
         row.doc.arquivo_origem_nome,
+        row.doc.categoria_instrucao,
         row.doc.gedoc_links?.join(' '),
         row.doc.arquivos_componentes?.map((entry) => entry.nome_arquivo).join(' '),
         row.usages.map((usage) => usage.item?.descricao).join(' '),
@@ -354,7 +364,7 @@ export default function Documents() {
 
   const stats = useMemo(() => {
     const linked = rows.filter((row) => row.usages.length > 0).length;
-    const orphan = rows.filter((row) => row.usages.length === 0).length;
+    const orphan = rows.filter((row) => row.usages.length === 0 && !row.doc.categoria_instrucao).length;
     const reused = rows.filter((row) => row.itemCount > 1 || row.usages.length > 1).length;
     const references = rows.filter((row) => (row.doc.gedoc_links?.length ?? 0) > 0).length;
     const merged = rows.filter((row) => (row.doc.arquivos_componentes?.length ?? 0) > 1).length;

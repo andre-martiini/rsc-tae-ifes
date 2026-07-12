@@ -163,6 +163,7 @@ export default function LandingScreen() {
   const [showForm, setShowForm] = useState(false);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<SessionSummary | null>(null);
 
   const [form, setForm] = useState({
     siape: '',
@@ -232,8 +233,15 @@ export default function LandingScreen() {
     navigate('/dashboard');
   };
 
-  const handleDeleteSession = async (id: string) => {
+  const handleDeleteSession = (session: SessionSummary) => {
+    setPendingDelete(session);
+  };
+
+  const confirmDeleteSession = async () => {
+    if (!pendingDelete) return;
+    const id = pendingDelete.id;
     setDeletingId(id);
+    setPendingDelete(null);
     try {
       await deleteSession(id);
       toast.success('Sessão removida.');
@@ -607,7 +615,7 @@ export default function LandingScreen() {
                               <button
                                 type="button"
                                 disabled={deletingId === session.id}
-                                onClick={() => handleDeleteSession(session.id)}
+                                onClick={() => handleDeleteSession(session)}
                                 className="text-outline-variant hover:text-error transition-colors p-2 rounded-full hover:bg-error-container/50 sm:text-outline sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 disabled:opacity-40"
                                 title="Remover sessão"
                               >
@@ -742,6 +750,43 @@ export default function LandingScreen() {
               >
                 Entendi
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Session Confirmation Modal */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={(e) => e.target === e.currentTarget && setPendingDelete(null)}
+        >
+          <div className="w-full max-w-md rounded-3xl border border-gray-200 bg-white shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] overflow-hidden">
+            <div className="p-6 sm:p-8 text-center">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-600">
+                <AlertTriangle className="h-7 w-7" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Remover sessão</h3>
+              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+                Tem certeza que deseja remover a sessão de{' '}
+                <span className="font-semibold text-gray-900">{pendingDelete.nome_completo}</span>{' '}
+                (SIAPE {pendingDelete.siape})? Todos os dados desta sessão serão apagados permanentemente.
+              </p>
+              <div className="mt-6 flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-gray-200 text-gray-700"
+                  onClick={() => setPendingDelete(null)}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1 bg-red-600 text-white hover:bg-red-700"
+                  onClick={confirmDeleteSession}
+                >
+                  Remover
+                </Button>
+              </div>
             </div>
           </div>
         </div>

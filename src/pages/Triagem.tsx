@@ -1,0 +1,1967 @@
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  Eye,
+  FileText,
+  Loader2,
+  Trash2,
+  UploadCloud,
+  X,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Clipboard,
+  ExternalLink,
+  AlertCircle,
+  CheckCircle,
+  PencilLine,
+  Sparkles,
+  ShieldCheck,
+  SearchCheck,
+  Wrench,
+  PlayCircle,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import MainLayout from '../components/MainLayout';
+import DossieTutorialModal from '../components/DossieTutorialModal';
+import { Card, CardContent } from '../components/ui/card';
+import { Button } from '../components/ui/button';
+import { useAppContext } from '../context/AppContext';
+import type { Documento } from '../data/mock';
+import type { EstadoTriagem, SugestaoTriagem } from '../data/triagem';
+import type { EstadoAuditoria, OperacaoAuditoria, TipoOperacao } from '../data/auditoria';
+import { needsTranscription, transcribeDocument, type PrepStatus } from '../lib/transcricao';
+import { estimatePromptTokens } from '../lib/auditPrompt';
+import { calculateLancamentoPoints, formatPointValue } from '../lib/points';
+import { abrangenciaPeriodos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, periodoValido, periodosDoLancamento } from '../lib/periodos';
+import { gerarLotesTriagem } from '../lib/triagemPrompt';
+import { parseResultadoTriagem } from '../lib/triagemParser';
+import { pareceJson } from '../lib/jsonDetect';
+import { gerarPromptAuditoriaEstruturada, excedeLimiteTokens } from '../lib/auditoriaPrompt';
+import { parseResultadoAuditoria } from '../lib/auditoriaParser';
+import { getEligibleRscLevel } from '../lib/rsc';
+import { getLancamentoDocumentIds, itemDossierCode } from '../lib/documentOrdering';
+import { getDocumentBlob } from '../lib/documentStorage';
+import { cn } from '../lib/utils';
+
+const MIN_CHARS_LEGIVEL = 80;
+
+function baixarPromptArquivo(prompt: string, siape: string, loteIndex: number, totalLotes: number) {
+  const siapeLimpo = siape.replace(/\D/g, '') || 'servidor';
+  const date = new Date().toISOString().slice(0, 10);
+  const sufixo = totalLotes > 1 ? `-lote-${loteIndex + 1}` : '';
+  const blob = new Blob([prompt], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `prompt-triagem-rsc-${siapeLimpo}-${date}${sufixo}.md`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+type Etapa = 'documentos' | 'analise' | 'revisao' | 'auditoria';
+
+type DocUploadStatus = {
+  docId: string;
+  status: 'pendente' | 'transcrevendo' | 'transcrito' | 'falha' | 'ilegivel';
+  transcricao_len?: number;
+  erro?: string;
+};
+
+export default function Triagem() {
+  const {
+    servidor,
+    documentos,
+    itensRSC,
+    triagem,
+    setTriagem,
+    atualizarSugestao,
+    limparTriagem,
+    addDocumentoFromFile,
+    updateDocumento,
+    addLancamento,
+    removeLancamento,
+    updateLancamento,
+    lancamentos,
+    processo,
+    auditoria,
+    setAuditoria,
+    atualizarOperacaoAuditoria,
+    limparAuditoria,
+  } = useAppContext();
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, DocUploadStatus>>({});
+  const [prepStatus, setPrepStatus] = useState<PrepStatus>({ total: 0, current: 0, failures: [] });
+  const [etapa, setEtapa] = useState<Etapa>('documentos');
+  const [respostaColada, setRespostaColada] = useState('');
+  const [errosColagem, setErrosColagem] = useState<string[]>([]);
+  const [editingSugestaoId, setEditingSugestaoId] = useState<string | null>(null);
+  const [editItemRscId, setEditItemRscId] = useState<string>('');
+  const [editPeriodos, setEditPeriodos] = useState<Array<{ inicio: string; fim: string }>>([{ inicio: '', fim: '' }]);
+  const [editQuantidade, setEditQuantidade] = useState('1');
+  const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'confirmada' | 'descartada'>('todos');
+  const [viewerDoc, setViewerDoc] = useState<Documento | null>(null);
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerError, setViewerError] = useState<string | null>(null);
+  const [faseAuditoria, setFaseAuditoria] = useState<'prompt' | 'revisao'>('prompt');
+  const [respostaAuditoria, setRespostaAuditoria] = useState('');
+  const [errosAuditoria, setErrosAuditoria] = useState<string[]>([]);
+  const [filtroOpStatus, setFiltroOpStatus] = useState<'todos' | 'pendente' | 'aprovada' | 'rejeitada'>('todos');
+  const [aplicandoOps, setAplicandoOps] = useState(false);
+  const [docsExpandidos, setDocsExpandidos] = useState<Set<string>>(new Set());
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+
+  if (!servidor) {
+    return <Navigate to="/" replace />;
+  }
+
+  // ── Visualização de documento ──────────────────────────────────────────
+  const handleViewDoc = useCallback(async (doc: Documento) => {
+    setViewerDoc(doc);
+    setViewerUrl(null);
+    setViewerError(null);
+    setViewerLoading(true);
+
+    try {
+      const blob = await getDocumentBlob(doc.id);
+      if (!blob) {
+        setViewerError('Arquivo local não encontrado neste navegador.');
+        return;
+      }
+      const isPdf = blob.type.toLowerCase().includes('pdf') || doc.nome_arquivo.toLowerCase().endsWith('.pdf');
+      const viewerBlob = isPdf && blob.type !== 'application/pdf'
+        ? new Blob([blob], { type: 'application/pdf' })
+        : blob;
+      setViewerUrl(URL.createObjectURL(viewerBlob));
+    } catch {
+      setViewerError('Não foi possível carregar a visualização do arquivo.');
+    } finally {
+      setViewerLoading(false);
+    }
+  }, []);
+
+  // Revogar URL do objeto quando o visualizador fechar
+  useEffect(() => {
+    if (viewerUrl && !viewerDoc) {
+      URL.revokeObjectURL(viewerUrl);
+      setViewerUrl(null);
+    }
+  }, [viewerUrl, viewerDoc]);
+
+  // ── Documentos da triagem ──────────────────────────────────────────────
+  const triagemDocs = useMemo(() => {
+    const ids = triagem?.documento_ids ?? [];
+    return ids.map((id) => documentos.find((d) => d.id === id)).filter((d): d is Documento => !!d);
+  }, [triagem, documentos]);
+
+  const documentosIlegiveis = useMemo(() => {
+    return new Set(
+      triagemDocs
+        .filter((d) => (d.transcricao?.trim().length ?? 0) < MIN_CHARS_LEGIVEL)
+        .map((d) => d.id),
+    );
+  }, [triagemDocs]);
+
+  // ── Upload handler ─────────────────────────────────────────────────────
+  const handleFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    setIsUploading(true);
+    const newDocIds: string[] = [];
+    const newDocs: Documento[] = [];
+    const newStatuses: Record<string, DocUploadStatus> = {};
+    let duplicadosCount = 0;
+
+    for (const file of fileArray) {
+      try {
+        const { doc, exists } = await addDocumentoFromFile({
+          servidorId: servidor.id,
+          file,
+          tipoDocumento: 'comprobatorio_principal',
+        });
+        if (exists) {
+          // Já está no sistema — inclui na triagem mas não re-transcreve
+          duplicadosCount++;
+          // Só adiciona à triagem se ainda não estiver lá
+          const jaNaTriagem = (triagem?.documento_ids ?? []).includes(doc.id) || newDocIds.includes(doc.id);
+          if (!jaNaTriagem) {
+            newDocIds.push(doc.id);
+            newDocs.push(doc);
+            newStatuses[doc.id] = { docId: doc.id, status: 'transcrito', transcricao_len: doc.transcricao?.trim().length ?? 0 };
+          }
+          continue;
+        }
+        newDocIds.push(doc.id);
+        newDocs.push(doc);
+        newStatuses[doc.id] = { docId: doc.id, status: 'pendente' };
+      } catch (error) {
+        toast.error(`Falha ao enviar ${file.name}: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+      }
+    }
+
+    if (duplicadosCount > 0) {
+      toast.info(`${duplicadosCount} documento(s) duplicado(s) já existente(s) no sistema — adicionado(s) à triagem sem re-enviar.`);
+    }
+
+    setUploadStatuses((prev) => ({ ...prev, ...newStatuses }));
+
+    // Atualizar estado da triagem
+    setTriagem((current) => ({
+      schema_version: 1,
+      documento_ids: [...(current?.documento_ids ?? []), ...newDocIds],
+      sugestoes: current?.sugestoes ?? [],
+      ultima_colagem_em: current?.ultima_colagem_em,
+      erros_ultima_colagem: current?.erros_ultima_colagem,
+    }));
+
+    // Transcrever em série usando os docs retornados diretamente
+    for (let i = 0; i < newDocs.length; i++) {
+      const doc = newDocs[i];
+
+      setUploadStatuses((prev) => ({ ...prev, [doc.id]: { ...prev[doc.id], status: 'transcrevendo' } }));
+      setPrepStatus((prev) => ({ ...prev, total: newDocs.length, current: i + 1, currentName: doc.nome_arquivo }));
+
+      try {
+        const text = await transcribeDocument(doc);
+        updateDocumento(doc.id, { transcricao: text });
+
+        const usefulChars = text.trim().length;
+        const isIlegivel = usefulChars < MIN_CHARS_LEGIVEL;
+        setUploadStatuses((prev) => ({
+          ...prev,
+          [doc.id]: {
+            docId: doc.id,
+            status: isIlegivel ? 'ilegivel' : 'transcrito',
+            transcricao_len: usefulChars,
+          },
+        }));
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'falha desconhecida';
+        setUploadStatuses((prev) => ({ ...prev, [doc.id]: { docId: doc.id, status: 'falha', erro: msg } }));
+        setPrepStatus((prev) => ({ ...prev, failures: [...prev.failures, `${doc.nome_arquivo}: ${msg}`] }));
+      }
+    }
+
+    setIsUploading(false);
+    setPrepStatus({ total: 0, current: 0, failures: [] });
+  }, [servidor, addDocumentoFromFile, setTriagem, updateDocumento, triagem]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files.length > 0) {
+      void handleFiles(e.dataTransfer.files);
+    }
+  }, [handleFiles]);
+
+  const handleRemoveDoc = useCallback((docId: string) => {
+    setTriagem((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        documento_ids: current.documento_ids.filter((id) => id !== docId),
+      };
+    });
+    setUploadStatuses((prev) => {
+      const next = { ...prev };
+      delete next[docId];
+      return next;
+    });
+  }, [setTriagem]);
+
+  const handleLimparTudo = useCallback(() => {
+    setTriagem((current) => {
+      if (!current) return null;
+      return {
+        ...current,
+        documento_ids: [],
+        sugestoes: [],
+      };
+    });
+    setUploadStatuses({});
+    setErrosColagem([]);
+    setRespostaColada('');
+    toast.info('Documentos da triagem removidos. Você pode subir novamente.');
+  }, [setTriagem]);
+
+  // ── Lotes do prompt ────────────────────────────────────────────────────
+  const lotes = useMemo(() => {
+    if (triagemDocs.length === 0) return [];
+    return gerarLotesTriagem({
+      itensRSC,
+      documentos: triagemDocs,
+      ilegiveis: documentosIlegiveis,
+    });
+  }, [triagemDocs, itensRSC, documentosIlegiveis]);
+
+  // ── Colagem da resposta ────────────────────────────────────────────────
+  const handleProcessarResposta = useCallback(() => {
+    if (!respostaColada.trim()) {
+      toast.error('Cole a resposta da IA primeiro.');
+      return;
+    }
+
+    const resultado = parseResultadoTriagem(respostaColada, {
+      documentos: triagemDocs,
+      itensRSC,
+    });
+
+    setErrosColagem(resultado.erros);
+
+    setTriagem((current) => ({
+      schema_version: 1,
+      documento_ids: current?.documento_ids ?? [],
+      sugestoes: [...(current?.sugestoes ?? []), ...resultado.sugestoes],
+      ultima_colagem_em: new Date().toISOString(),
+      erros_ultima_colagem: resultado.erros,
+    }));
+
+    if (resultado.sugestoes.length > 0) {
+      toast.success(`${resultado.sugestoes.length} sugestão(ões) processada(s).`);
+      setEtapa('revisao');
+    } else {
+      toast.warning('Nenhuma sugestão válida encontrada na resposta colada.');
+    }
+
+    if (resultado.erros.length > 0) {
+      toast.warning(`${resultado.erros.length} aviso(s) na validação. Verifique abaixo.`);
+    }
+
+    setRespostaColada('');
+  }, [respostaColada, triagemDocs, itensRSC, setTriagem]);
+
+  // ── Preview de pontos ──────────────────────────────────────────────────
+  const previewPontos = useCallback((sugestao: SugestaoTriagem): number => {
+    if (!sugestao.item_rsc_id) return 0;
+    const item = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
+    if (!item) return 0;
+
+    if (item.modo_calculo === 'auto_ano_fracao' || item.modo_calculo === 'auto_mes') {
+      const dias = totalDiasPeriodos(sugestao.periodos);
+      const qtd = item.modo_calculo === 'auto_ano_fracao' ? unidadesAnoFracao(dias) : unidadesMes(dias);
+      return calculateLancamentoPoints(qtd, item.pontos_por_unidade);
+    }
+    // Manual: usa a quantidade informada pela IA quando disponível;
+    // senão, cada documento = 1 unidade (Por designação, Por produto, etc.)
+    const qtdManual = sugestao.quantidade_sugerida ?? Math.max(1, sugestao.documentos_ids.length);
+    return calculateLancamentoPoints(qtdManual, item.pontos_por_unidade);
+  }, [itensRSC]);
+
+  // ── Confirmar sugestão ─────────────────────────────────────────────────
+  const handleConfirmar = useCallback((sugestao: SugestaoTriagem, editado = false, quantidadeOverride?: number) => {
+    if (!sugestao.item_rsc_id || !servidor) return;
+
+    const item = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
+    if (!item) return;
+
+    // Períodos são persistidos também em itens manuais: documentam as datas
+    // reais das designações no dossiê e no prompt de auditoria (sem isso,
+    // data_inicio/fim cairiam na data de hoje e induziriam a IA auditora a
+    // apontar "período incorreto" em todo lançamento).
+    const periodos = sugestao.periodos.filter((p) => periodoValido(p));
+    const abrang = abrangenciaPeriodos(periodos);
+
+    let quantidade: number;
+    if (item.modo_calculo === 'auto_ano_fracao') {
+      quantidade = unidadesAnoFracao(totalDiasPeriodos(periodos));
+    } else if (item.modo_calculo === 'auto_mes') {
+      quantidade = unidadesMes(totalDiasPeriodos(periodos));
+    } else {
+      quantidade = quantidadeOverride ?? sugestao.quantidade_sugerida ?? Math.max(1, sugestao.documentos_ids.length);
+    }
+
+    const pontos = calculateLancamentoPoints(quantidade, item.pontos_por_unidade);
+
+    const lancamentoData = {
+      servidor_id: servidor.id,
+      item_rsc_id: sugestao.item_rsc_id,
+      comprovantes_ids: sugestao.documentos_ids,
+      periodos: periodos.length > 0 ? periodos : undefined,
+      data_inicio: abrang?.inicio ?? new Date().toISOString().slice(0, 10),
+      data_fim: abrang?.fim ?? new Date().toISOString().slice(0, 10),
+      quantidade_informada: quantidade,
+      pontos_calculados: pontos,
+    };
+
+    const novoLancamento = addLancamento(lancamentoData);
+    atualizarSugestao(sugestao.id, {
+      status: editado ? 'editada' : 'confirmada',
+      lancamento_id: novoLancamento.id,
+    });
+    toast.success(`Lançamento criado: +${formatPointValue(pontos)} pts`);
+  }, [servidor, itensRSC, addLancamento, atualizarSugestao]);
+
+  // ── Confirmar editada ─────────────────────────────────────────────────
+  const handleConfirmarEditada = useCallback((sugestao: SugestaoTriagem) => {
+    const item = itensRSC.find((i) => i.id === editItemRscId);
+    if (!item || !servidor) return;
+
+    const isDateBased = item.modo_calculo === 'auto_ano_fracao' || item.modo_calculo === 'auto_mes';
+    // Em itens manuais o diálogo não edita períodos — preserva os da sugestão.
+    const periodos = isDateBased ? editPeriodos.filter((p) => p.inicio && p.fim) : sugestao.periodos;
+    const qtdManual = isDateBased ? undefined : (parseInt(editQuantidade) || 1);
+
+    const sugestaoEditada: SugestaoTriagem = {
+      ...sugestao,
+      item_rsc_id: editItemRscId,
+      periodos,
+    };
+
+    handleConfirmar(sugestaoEditada, true, qtdManual);
+    setEditingSugestaoId(null);
+  }, [editItemRscId, editPeriodos, editQuantidade, itensRSC, servidor, handleConfirmar]);
+
+  // ── Descartar sugestão ────────────────────────────────────────────────
+  const handleDescartar = useCallback((sugestao: SugestaoTriagem) => {
+    atualizarSugestao(sugestao.id, { status: 'descartada' });
+    toast.info('Sugestão descartada.');
+  }, [atualizarSugestao]);
+
+  // ── Confirmar todas com confiança alta ────────────────────────────────
+  const handleConfirmarTodasAltas = useCallback(() => {
+    const pendentesAltas = (triagem?.sugestoes ?? []).filter(
+      (s) => s.status === 'pendente' && s.confianca === 'alta' && s.item_rsc_id,
+    );
+    for (const s of pendentesAltas) {
+      handleConfirmar(s);
+    }
+    toast.success(`${pendentesAltas.length} sugestão(ões) confirmada(s).`);
+  }, [triagem, handleConfirmar]);
+
+  // ── Sugestões agrupadas por item ──────────────────────────────────────
+  const sugestoesAgrupadas = useMemo(() => {
+    const todas = triagem?.sugestoes ?? [];
+    const filtradas = todas.filter((s) => {
+      if (filtroStatus === 'todos') return true;
+      if (filtroStatus === 'confirmada') return s.status === 'confirmada' || s.status === 'editada';
+      return s.status === filtroStatus;
+    });
+    const grupos = new Map<string, SugestaoTriagem[]>();
+    for (const s of filtradas) {
+      const key = s.item_rsc_id ?? '__nao_classificavel__';
+      const arr = grupos.get(key) ?? [];
+      arr.push(s);
+      grupos.set(key, arr);
+    }
+    return Array.from(grupos.entries()).sort((a, b) => {
+      if (a[0] === '__nao_classificavel__') return 1;
+      if (b[0] === '__nao_classificavel__') return -1;
+      return a[0].localeCompare(b[0]);
+    });
+  }, [triagem, filtroStatus]);
+
+  const pendentesCount = (triagem?.sugestoes ?? []).filter((s) => s.status === 'pendente').length;
+  const confirmadasCount = (triagem?.sugestoes ?? []).filter((s) => s.status === 'confirmada' || s.status === 'editada').length;
+  const descartadasCount = (triagem?.sugestoes ?? []).filter((s) => s.status === 'descartada').length;
+
+  // ── Detecção de documentos duplicados entre sugestões ──────────────────
+  const docsDuplicados = useMemo(() => {
+    const todas = triagem?.sugestoes ?? [];
+    if (todas.length < 2) return new Set<string>();
+    const contador = new Map<string, number>();
+    for (const s of todas) {
+      if (s.status === 'descartada') continue;
+      for (const docId of s.documentos_ids) {
+        contador.set(docId, (contador.get(docId) ?? 0) + 1);
+      }
+    }
+    return new Set(
+      Array.from(contador.entries()).filter(([, count]) => count > 1).map(([docId]) => docId),
+    );
+  }, [triagem]);
+
+  /** Retorna os documentos de uma sugestão que também aparecem em outras. */
+  const duplicadosNaSugestao = useCallback((sugestao: SugestaoTriagem): string[] => {
+    if (docsDuplicados.size === 0) return [];
+    return sugestao.documentos_ids.filter((id) => docsDuplicados.has(id));
+  }, [docsDuplicados]);
+
+  // ── Auditoria IA estruturada ───────────────────────────────────────────
+  const lancamentosDoServidor = useMemo(
+    () => lancamentos.filter((l) => l.servidor_id === servidor?.id),
+    [lancamentos, servidor],
+  );
+
+  const nivelPleiteado = useMemo(() => {
+    if (!servidor) return null;
+    const fromProcesso = processo?.nivel_pleiteado_id
+      ? null
+      : getEligibleRscLevel(servidor.escolaridade_atual);
+    return fromProcesso;
+  }, [servidor, processo]);
+
+  const promptAuditoria = useMemo(() => {
+    if (!servidor || lancamentosDoServidor.length === 0) return '';
+    return gerarPromptAuditoriaEstruturada({
+      servidor,
+      nivelPleiteado,
+      processo,
+      lancamentos: lancamentosDoServidor,
+      itensRSC,
+      documentos,
+    });
+  }, [servidor, nivelPleiteado, processo, lancamentosDoServidor, itensRSC, documentos]);
+
+  const temIdsDuplicados = useMemo(
+    () => new Set(lancamentosDoServidor.map((l) => l.id)).size < lancamentosDoServidor.length,
+    [lancamentosDoServidor],
+  );
+
+  const handleProcessarRespostaAuditoria = useCallback(() => {
+    if (!respostaAuditoria.trim()) {
+      toast.error('Cole a resposta da IA primeiro.');
+      return;
+    }
+    const resultado = parseResultadoAuditoria(respostaAuditoria, {
+      lancamentos: lancamentosDoServidor,
+      itensRSC,
+    });
+    setErrosAuditoria(resultado.erros);
+    setAuditoria({
+      schema_version: 1,
+      operacoes: resultado.operacoes,
+      ultima_colagem_em: new Date().toISOString(),
+      erros_ultima_colagem: resultado.erros,
+    });
+    if (resultado.operacoes.length > 0) {
+      toast.success(`${resultado.operacoes.length} operação(ões) processada(s).`);
+      setFaseAuditoria('revisao');
+    } else {
+      toast.info('Nenhuma operação encontrada — o processo parece estar em ordem.');
+      setFaseAuditoria('revisao');
+    }
+    if (resultado.erros.length > 0) {
+      toast.warning(`${resultado.erros.length} aviso(s) na validação.`);
+    }
+    setRespostaAuditoria('');
+  }, [respostaAuditoria, lancamentosDoServidor, itensRSC, setAuditoria]);
+
+  const opsAgrupadas = useMemo(() => {
+    const ops = auditoria?.operacoes ?? [];
+    const filtradas = filtroOpStatus === 'todos'
+      ? ops
+      : ops.filter((o) => o.status === filtroOpStatus);
+    const grupos = new Map<TipoOperacao, OperacaoAuditoria[]>();
+    const ordem: TipoOperacao[] = ['remover_lancamento', 'reclassificar', 'ajustar_periodos', 'ajustar_quantidade', 'sinalizar'];
+    for (const op of filtradas) {
+      const arr = grupos.get(op.tipo) ?? [];
+      arr.push(op);
+      grupos.set(op.tipo, arr);
+    }
+    return ordem
+      .filter((t) => grupos.has(t))
+      .map((t) => [t, grupos.get(t)!] as const);
+  }, [auditoria, filtroOpStatus]);
+
+  const opsPendentes = (auditoria?.operacoes ?? []).filter((o) => o.status === 'pendente').length;
+  const opsAprovadas = (auditoria?.operacoes ?? []).filter((o) => o.status === 'aprovada').length;
+  const opsRejeitadas = (auditoria?.operacoes ?? []).filter((o) => o.status === 'rejeitada').length;
+
+  const handleAplicarOperacoes = useCallback(() => {
+    const ops = auditoria?.operacoes ?? [];
+    const aprovadas = ops.filter((o) => o.status === 'aprovada');
+    if (aprovadas.length === 0) {
+      toast.info('Nenhuma operação aprovada para aplicar.');
+      return;
+    }
+    setAplicandoOps(true);
+    let aplicadas = 0;
+    let puladas = 0;
+    const ordem: TipoOperacao[] = ['remover_lancamento', 'reclassificar', 'ajustar_periodos', 'ajustar_quantidade'];
+
+    for (const tipo of ordem) {
+      const opsDoTipo = aprovadas.filter((o) => o.tipo === tipo);
+      for (const op of opsDoTipo) {
+        const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
+        if (!lanc) {
+          puladas++;
+          continue;
+        }
+        if (tipo === 'remover_lancamento') {
+          removeLancamento(op.lancamento_id);
+          aplicadas++;
+        } else if (tipo === 'reclassificar' && op.novo_item_rsc_id) {
+          const novoItem = itensRSC.find((i) => i.id === op.novo_item_rsc_id);
+          if (!novoItem) {
+            puladas++;
+            continue;
+          }
+          let periodos = op.novos_periodos ?? periodosDoLancamento(lanc);
+          let quantidade = op.nova_quantidade ?? lanc.quantidade_informada;
+          if (novoItem.modo_calculo !== 'manual') {
+            const dias = totalDiasPeriodos(periodos);
+            quantidade = novoItem.modo_calculo === 'auto_mes'
+              ? unidadesMes(dias)
+              : unidadesAnoFracao(dias);
+          }
+          const abr = abrangenciaPeriodos(periodos);
+          const pontos = calculateLancamentoPoints(quantidade, novoItem.pontos_por_unidade);
+          updateLancamento(op.lancamento_id, {
+            item_rsc_id: op.novo_item_rsc_id,
+            periodos,
+            quantidade_informada: quantidade,
+            pontos_calculados: pontos,
+            data_inicio: abr?.inicio ?? lanc.data_inicio,
+            data_fim: abr?.fim ?? lanc.data_fim,
+          });
+          aplicadas++;
+        } else if (tipo === 'ajustar_periodos' && op.novos_periodos) {
+          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
+          const periodos = op.novos_periodos;
+          const dias = totalDiasPeriodos(periodos);
+          let quantidade = lanc.quantidade_informada;
+          if (item && item.modo_calculo !== 'manual') {
+            quantidade = item.modo_calculo === 'auto_mes'
+              ? unidadesMes(dias)
+              : unidadesAnoFracao(dias);
+          }
+          const abr = abrangenciaPeriodos(periodos);
+          const pontos = item
+            ? calculateLancamentoPoints(quantidade, item.pontos_por_unidade)
+            : lanc.pontos_calculados;
+          updateLancamento(op.lancamento_id, {
+            periodos,
+            quantidade_informada: quantidade,
+            pontos_calculados: pontos,
+            data_inicio: abr?.inicio ?? lanc.data_inicio,
+            data_fim: abr?.fim ?? lanc.data_fim,
+          });
+          aplicadas++;
+        } else if (tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined) {
+          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
+          const pontos = item
+            ? calculateLancamentoPoints(op.nova_quantidade, item.pontos_por_unidade)
+            : lanc.pontos_calculados;
+          updateLancamento(op.lancamento_id, {
+            quantidade_informada: op.nova_quantidade,
+            pontos_calculados: pontos,
+          });
+          aplicadas++;
+        }
+      }
+    }
+    // Marcar sinalizar como rejeitada (no-op aplicado)
+    for (const op of aprovadas.filter((o) => o.tipo === 'sinalizar')) {
+      atualizarOperacaoAuditoria(op.id, { status: 'rejeitada' });
+    }
+    setAplicandoOps(false);
+    toast.success(`${aplicadas} operação(ões) aplicada(s), ${puladas} pulada(s).`);
+  }, [auditoria, lancamentos, itensRSC, removeLancamento, updateLancamento, atualizarOperacaoAuditoria]);
+
+  // ── Stepper visual ─────────────────────────────────────────────────────
+  const stepLabels = [
+    { key: 'documentos', label: 'Documentos', num: 1 },
+    { key: 'analise', label: 'Análise externa', num: 2 },
+    { key: 'revisao', label: 'Revisão', num: 3 },
+    { key: 'auditoria', label: 'Auditoria IA', num: 4 },
+  ] as const;
+
+  return (
+    <MainLayout activeView="triagem">
+      <div className="mx-auto max-w-5xl space-y-6 p-4 sm:p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl bg-primary/10 p-3 text-primary">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-gray-900">Dossiê Inteligente</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Carregue os documentos, descubra onde cada um se encaixa, revise as sugestões e faça a auditoria IA — tudo em um fluxo só.
+              </p>
+              <p className="mt-1 text-xs font-medium text-amber-600">
+                Recurso experimental: a IA pode cometer erros ou gerar informações incorretas (alucinações). Utilize com cautela e revise criticamente cada resultado.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0"
+            onClick={() => setTutorialOpen(true)}
+          >
+            <PlayCircle className="mr-2 h-4 w-4" />
+            Como funciona
+          </Button>
+        </div>
+
+        {/* Stepper */}
+        <div className="flex items-center gap-2">
+          {stepLabels.map((step, idx) => (
+            <React.Fragment key={step.key}>
+              <button
+                type="button"
+                onClick={() => setEtapa(step.key)}
+                className={cn(
+                  'flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition-all',
+                  etapa === step.key
+                    ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                    : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200',
+                )}
+              >
+                <span className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-full text-xs font-black',
+                  etapa === step.key ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-400',
+                )}>
+                  {step.num}
+                </span>
+                {step.label}
+              </button>
+              {idx < stepLabels.length - 1 && (
+                <ChevronRight className="h-4 w-4 text-gray-300" />
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* ── Etapa 1: Documentos ───────────────────────────────────── */}
+        {etapa === 'documentos' && (
+          <div className="space-y-4">
+            {/* Dropzone */}
+            <Card className="border-gray-200 bg-white shadow-sm">
+              <CardContent className="p-6">
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                  onDragLeave={() => setDragActive(false)}
+                  onDrop={handleDrop}
+                  className={cn(
+                    'flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-8 text-center transition-all',
+                    dragActive ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300',
+                  )}
+                >
+                  <UploadCloud className={cn('h-10 w-10', dragActive ? 'text-primary' : 'text-gray-300')} />
+                  <p className="mt-3 text-sm font-bold text-gray-700">
+                    Arraste seus documentos aqui ou clique para selecionar
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    PDF, imagens (JPG, PNG) ou texto — todos os formatos suportados
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-4"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                  >
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    Selecionar arquivos
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.txt,.md,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files?.length) void handleFiles(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+
+                {isUploading && (
+                  <div className="mt-4 flex items-center gap-3 text-sm text-gray-600">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+                    <span className="min-w-0 flex-1 break-all">
+                      Transcrevendo documento {prepStatus.current}/{prepStatus.total}
+                      {prepStatus.currentName ? ` — ${prepStatus.currentName}` : ''}
+                    </span>
+                  </div>
+                )}
+
+                {prepStatus.failures.length > 0 && (
+                  <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">
+                    <p className="font-bold">Falhas na transcrição:</p>
+                    <ul className="mt-1 list-disc space-y-1 pl-5">
+                      {prepStatus.failures.map((f, i) => <li key={i}>{f}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Lista de documentos */}
+            {triagemDocs.length > 0 && (
+              <Card className="border-gray-200 bg-white shadow-sm">
+                <CardContent className="p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-gray-900">
+                      Documentos enviados ({triagemDocs.length})
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleLimparTudo}
+                        disabled={isUploading}
+                        className="text-xs text-red-600 hover:bg-red-50 hover:border-red-300"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" />
+                        Limpar tudo
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setEtapa('analise')}
+                        className="text-xs"
+                      >
+                        Avançar para análise
+                        <ChevronRight className="ml-1 h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {triagemDocs.map((doc) => {
+                      const st = uploadStatuses[doc.id];
+                      const isIlegivel = documentosIlegiveis.has(doc.id);
+                      const transcLen = doc.transcricao?.trim().length ?? 0;
+
+                      return (
+                        <div
+                          key={doc.id}
+                          className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/50 p-3"
+                        >
+                          <FileText className="h-5 w-5 shrink-0 text-gray-400" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-gray-800">{doc.nome_arquivo}</p>
+                            <div className="mt-0.5 flex items-center gap-2">
+                              {st?.status === 'transcrevendo' && (
+                                <span className="flex items-center gap-1 text-xs text-blue-600">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  Transcrevendo…
+                                </span>
+                              )}
+                              {st?.status === 'transcrito' && !isIlegivel && (
+                                <span className="flex items-center gap-1 text-xs text-emerald-600">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Transcrito ({transcLen} caracteres)
+                                </span>
+                              )}
+                              {isIlegivel && (
+                                <span className="flex items-center gap-1 text-xs text-amber-600">
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Possivelmente ilegível ({transcLen} caracteres)
+                                </span>
+                              )}
+                              {st?.status === 'falha' && (
+                                <span className="flex items-center gap-1 text-xs text-red-600">
+                                  <AlertCircle className="h-3 w-3" />
+                                  Falha: {st.erro}
+                                </span>
+                              )}
+                              {!st && transcLen > 0 && !isIlegivel && (
+                                <span className="flex items-center gap-1 text-xs text-emerald-600">
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  Transcrito ({transcLen} caracteres)
+                                </span>
+                              )}
+                              {!st && transcLen === 0 && (
+                                <span className="text-xs text-gray-400">Pendente</span>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveDoc(doc.id)}
+                            className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                            title="Remover da triagem"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* ── Etapa 2: Análise externa ────────────────────────────────── */}
+        {etapa === 'analise' && (
+          <div className="space-y-4">
+            {triagemDocs.length === 0 ? (
+              <Card className="border-gray-200 bg-white shadow-sm">
+                <CardContent className="p-6 text-center text-sm text-gray-500">
+                  Nenhum documento enviado. Volte à etapa anterior para subir seus documentos.
+                  <div className="mt-4">
+                    <Button type="button" variant="outline" onClick={() => setEtapa('documentos')}>
+                      Voltar para documentos
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Prompt por lote */}
+                {lotes.map((lote, idx) => {
+                  const tokens = estimatePromptTokens(lote.prompt);
+                  return (
+                    <Card key={idx} className="border-gray-200 bg-white shadow-sm">
+                      <CardContent className="p-5">
+                        <div className="mb-3 flex items-center justify-between">
+                          <h3 className="text-sm font-bold text-gray-900">
+                            {lotes.length > 1 ? `Prompt — Lote ${lote.indice + 1} de ${lote.total}` : 'Prompt de classificação'}
+                          </h3>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span>~{tokens.toLocaleString('pt-BR')} tokens</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const ta = document.getElementById(`prompt-lote-${idx}`) as HTMLTextAreaElement | null;
+                                if (ta) { ta.focus(); ta.select(); }
+                              }}
+                            >
+                              <Clipboard className="mr-1 h-3.5 w-3.5" />
+                              Selecionar tudo
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => baixarPromptArquivo(lote.prompt, servidor.siape, lote.indice, lote.total)}
+                            >
+                              <Download className="mr-1 h-3.5 w-3.5" />
+                              Baixar .md
+                            </Button>
+                          </div>
+                        </div>
+                        <textarea
+                          id={`prompt-lote-${idx}`}
+                          readOnly
+                          value={lote.prompt}
+                          className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-950 p-4 font-mono text-xs leading-relaxed text-gray-100 shadow-inner focus:outline-none"
+                          onClick={(e) => e.currentTarget.select()}
+                        />
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+
+                {/* Links IA externa */}
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="text-gray-500">Abrir IA externa:</span>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://gemini.google.com" target="_blank" rel="noreferrer">
+                    Gemini <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://claude.ai" target="_blank" rel="noreferrer">
+                    Claude <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://chat.openai.com" target="_blank" rel="noreferrer">
+                    ChatGPT <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://chat.deepseek.com" target="_blank" rel="noreferrer">
+                    DeepSeek <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+
+                {/* Orientação ilegíveis */}
+                {documentosIlegiveis.size > 0 && (
+                  <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900">
+                    <p className="flex items-start gap-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span>
+                        {documentosIlegiveis.size} documento(s) marcado(s) como ilegível. Anexe os arquivos originais
+                        diretamente no chat da IA junto com o prompt — ela conseguirá ler os arquivos mesmo sem a transcrição.
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Área de colagem */}
+                <Card className="border-gray-200 bg-white shadow-sm">
+                  <CardContent className="p-5">
+                    <h3 className="mb-3 text-sm font-bold text-gray-900">Cole aqui a resposta da IA</h3>
+                    <textarea
+                      value={respostaColada}
+                      onChange={(e) => setRespostaColada(e.target.value)}
+                      placeholder='Cole a resposta JSON da IA aqui. Pode incluir cercas ```json e texto em volta.'
+                      className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    {respostaColada.trim() && !pareceJson(respostaColada) && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        <p className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>O texto colado não parece ser JSON. Verifique se você copiou a resposta da IA (que deve conter <code className="rounded bg-red-100 px-1">{`{ ... }`}</code>) e não o prompt.</span>
+                        </p>
+                      </div>
+                    )}
+                    {errosColagem.length > 0 && (
+                      <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900">
+                        <p className="font-bold">Avisos da última colagem:</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-5">
+                          {errosColagem.map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="mt-4 flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setEtapa('documentos')}>
+                        Voltar
+                      </Button>
+                      <Button type="button" onClick={handleProcessarResposta} disabled={!respostaColada.trim()}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Processar resposta
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Etapa 3: Revisão ────────────────────────────────────────── */}
+        {etapa === 'revisao' && (
+          <div className="space-y-4">
+            {/* Disclaimer */}
+            <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  As sugestões abaixo são preliminares, geradas por IA externa a partir das transcrições.
+                  Confira cada uma antes de confirmar — a responsabilidade pelas informações do requerimento é do servidor.
+                </span>
+              </p>
+            </div>
+
+            {/* Progresso + Filtros */}
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatus('todos')}
+                  className={cn(
+                    'rounded-full px-3 py-1 font-bold transition-colors',
+                    filtroStatus === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                  )}
+                >
+                  Todas ({(triagem?.sugestoes ?? []).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatus('pendente')}
+                  className={cn(
+                    'rounded-full px-3 py-1 font-bold transition-colors',
+                    filtroStatus === 'pendente' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                  )}
+                >
+                  Pendentes ({pendentesCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatus('confirmada')}
+                  className={cn(
+                    'rounded-full px-3 py-1 font-bold transition-colors',
+                    filtroStatus === 'confirmada' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                  )}
+                >
+                  Confirmadas ({confirmadasCount})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroStatus('descartada')}
+                  className={cn(
+                    'rounded-full px-3 py-1 font-bold transition-colors',
+                    filtroStatus === 'descartada' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100',
+                  )}
+                >
+                  Descartadas ({descartadasCount})
+                </button>
+              </div>
+              {pendentesCount > 0 && (
+                <Button type="button" size="sm" variant="outline" onClick={handleConfirmarTodasAltas}>
+                  Confirmar todas com confiança alta
+                </Button>
+              )}
+            </div>
+
+            {/* Sugestões agrupadas */}
+            {sugestoesAgrupadas.length === 0 && (triagem?.sugestoes ?? []).length === 0 && (
+              <Card className="border-gray-200 bg-white shadow-sm">
+                <CardContent className="p-6 text-center text-sm text-gray-500">
+                  Nenhuma sugestão disponível. Processe a resposta da IA na etapa anterior.
+                  <div className="mt-4">
+                    <Button type="button" variant="outline" onClick={() => setEtapa('analise')}>
+                      Ir para análise
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {sugestoesAgrupadas.length === 0 && (triagem?.sugestoes ?? []).length > 0 && (
+              <Card className="border-gray-200 bg-white shadow-sm">
+                <CardContent className="p-6 text-center text-sm text-gray-500">
+                  Nenhuma sugestão neste filtro.
+                </CardContent>
+              </Card>
+            )}
+
+            {sugestoesAgrupadas.map(([grupoKey, sugestoes]) => {
+              const item = grupoKey !== '__nao_classificavel__' ? itensRSC.find((i) => i.id === grupoKey) : null;
+              const grupoLabel = item
+                ? `${item.inciso}-${item.numero}: ${item.descricao}`
+                : 'Não classificáveis';
+
+              return (
+                <div key={grupoKey} className="space-y-2">
+                  <h3 className="px-1 text-xs font-black uppercase tracking-wider text-gray-400">
+                    {grupoLabel}
+                  </h3>
+                  {sugestoes.map((sugestao) => {
+                    const sugestaoDocs = sugestao.documentos_ids
+                      .map((id) => documentos.find((d) => d.id === id))
+                      .filter((d): d is Documento => !!d);
+                    const pontos = previewPontos(sugestao);
+                    const isEditing = editingSugestaoId === sugestao.id;
+                    const isDescartada = sugestao.status === 'descartada';
+
+                    return (
+                      <Card key={sugestao.id} className={cn(
+                        'border shadow-sm transition-all',
+                        isDescartada ? 'border-gray-100 bg-gray-50/50 opacity-60' : 'border-gray-200 bg-white',
+                      )}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <FileText className="mt-0.5 h-5 w-5 shrink-0 text-gray-400" />
+                            <div className="min-w-0 flex-1 space-y-2">
+                              {/* Linha 1: arquivo(s) + confiança + status */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-bold text-gray-800">
+                                  {sugestaoDocs.length === 1
+                                    ? <span className="break-all">{sugestaoDocs[0].nome_arquivo}</span>
+                                    : sugestaoDocs.length > 1
+                                      ? <span>{sugestaoDocs.length} documentos</span>
+                                      : <span className="break-all">{sugestao.documentos_ids.join(', ')}</span>}
+                                </p>
+                                <span className={cn(
+                                  'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                                  sugestao.confianca === 'alta' && 'bg-emerald-50 text-emerald-700',
+                                  sugestao.confianca === 'media' && 'bg-amber-50 text-amber-700',
+                                  sugestao.confianca === 'baixa' && 'bg-gray-100 text-gray-600',
+                                )}>
+                                  {sugestao.confianca}
+                                </span>
+                                {sugestao.status === 'confirmada' && (
+                                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                    <CheckCircle className="mr-1 inline h-3 w-3" />Confirmada
+                                  </span>
+                                )}
+                                {sugestao.status === 'editada' && (
+                                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                                    <CheckCircle className="mr-1 inline h-3 w-3" />Editada
+                                  </span>
+                                )}
+                                {isDescartada && (
+                                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                                    Descartada
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Lista de documentos (quando agrupados) */}
+                              {sugestaoDocs.length > 1 && (() => {
+                                const MAX_PREVIEW = 5;
+                                const isExpanded = docsExpandidos.has(sugestao.id);
+                                const visibleDocs = isExpanded ? sugestaoDocs : sugestaoDocs.slice(0, MAX_PREVIEW);
+                                const hiddenCount = sugestaoDocs.length - MAX_PREVIEW;
+                                return (
+                                  <ul className="space-y-0.5 rounded-lg bg-gray-50 p-2 text-xs text-gray-600">
+                                    {visibleDocs.map((doc, i) => (
+                                      <li key={doc.id} className="flex items-start gap-1.5">
+                                        <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-gray-400" />
+                                        <span className="break-all">{doc.nome_arquivo}</span>
+                                      </li>
+                                    ))}
+                                    {hiddenCount > 0 && (
+                                      <li>
+                                        <button
+                                          type="button"
+                                          onClick={() => setDocsExpandidos((prev) => { const next = new Set(prev); next.add(sugestao.id); return next; })}
+                                          className="flex items-center gap-1 pt-0.5 text-xs font-semibold text-primary hover:underline"
+                                        >
+                                          <ChevronDown className="h-3 w-3" />
+                                          Ver mais {hiddenCount} documento(s)
+                                        </button>
+                                      </li>
+                                    )}
+                                    {isExpanded && sugestaoDocs.length > MAX_PREVIEW && (
+                                      <li>
+                                        <button
+                                          type="button"
+                                          onClick={() => setDocsExpandidos((prev) => { const next = new Set(prev); next.delete(sugestao.id); return next; })}
+                                          className="flex items-center gap-1 pt-0.5 text-xs font-semibold text-primary hover:underline"
+                                        >
+                                          <ChevronUp className="h-3 w-3" />
+                                          Ver menos
+                                        </button>
+                                      </li>
+                                    )}
+                                  </ul>
+                                );
+                              })()}
+
+                              {/* Aviso de documentos duplicados em outras sugestões */}
+                              {(() => {
+                                const dups = duplicadosNaSugestao(sugestao);
+                                if (dups.length === 0) return null;
+                                const dupDocs = dups.map((id) => documentos.find((d) => d.id === id)).filter((d): d is Documento => !!d);
+                                return (
+                                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                                    <p className="flex items-start gap-1.5">
+                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                      <span>
+                                        <strong>{dups.length} documento(s) repetido(s)</strong> em outra(s) sugestão(ões):
+                                        {dupDocs.slice(0, 3).map((d, i) => (
+                                          <span key={d.id} className="ml-1 break-all">{i > 0 && ', '}{d.nome_arquivo}</span>
+                                        ))}
+                                        {dupDocs.length > 3 && <span className="ml-1">e mais {dupDocs.length - 3}…</span>}
+                                        . Verifique se a classificação está correta — o mesmo documento não deve pontuar em itens diferentes.
+                                      </span>
+                                    </p>
+                                  </div>
+                                );
+                              })()}
+
+                              {sugestao.periodos.length > 0 && (() => {
+                                const item = sugestao.item_rsc_id ? itensRSC.find((i) => i.id === sugestao.item_rsc_id) : null;
+                                const isDateBased = item?.modo_calculo === 'auto_ano_fracao' || item?.modo_calculo === 'auto_mes';
+                                if (!isDateBased) return null;
+                                return (
+                                  <p className="text-xs text-gray-500">
+                                    Períodos: {sugestao.periodos.map((p) => `${p.inicio} a ${p.fim}`).join('; ')}
+                                  </p>
+                                );
+                              })()}
+
+                              {/* Justificativa */}
+                              <p className="text-xs text-gray-600">
+                                <span className="font-semibold">Justificativa:</span> {sugestao.justificativa}
+                              </p>
+
+                              {/* Observações */}
+                              {sugestao.observacoes && (
+                                <p className="text-xs text-gray-500">
+                                  <span className="font-semibold">Observações:</span> {sugestao.observacoes}
+                                </p>
+                              )}
+
+                              {/* Preview de pontos */}
+                              {sugestao.item_rsc_id && (
+                                <p className="text-sm font-black text-primary">
+                                  +{formatPointValue(pontos)} pts (preview)
+                                </p>
+                              )}
+
+                              {/* Edição inline */}
+                              {isEditing && (
+                                <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3 space-y-3">
+                                  <div>
+                                    <label className="text-xs font-bold text-gray-700">Item do catálogo</label>
+                                    <select
+                                      value={editItemRscId}
+                                      onChange={(e) => setEditItemRscId(e.target.value)}
+                                      className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                                    >
+                                      <option value="">— Selecione —</option>
+                                      {itensRSC.map((i) => (
+                                        <option key={i.id} value={i.id}>
+                                          {i.inciso}-{i.numero}: {i.descricao}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  {(() => {
+                                    const editItem = itensRSC.find((i) => i.id === editItemRscId);
+                                    const isDateBased = editItem?.modo_calculo === 'auto_ano_fracao' || editItem?.modo_calculo === 'auto_mes';
+                                    if (!isDateBased) {
+                                      return (
+                                        <div>
+                                          <label className="text-xs font-bold text-gray-700">
+                                            Quantidade de {editItem?.unidade_medida ?? 'unidades'}
+                                          </label>
+                                          <p className="mt-0.5 text-[11px] text-gray-500">
+                                            {sugestao.documentos_ids.length} documento(s) neste grupo. Ajuste se necessário.
+                                          </p>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            value={editQuantidade}
+                                            onChange={(e) => setEditQuantidade(e.target.value)}
+                                            className="mt-1 w-24 rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+                                          />
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div>
+                                        <label className="text-xs font-bold text-gray-700">Períodos</label>
+                                        {editPeriodos.map((p, pi) => (
+                                          <div key={pi} className="mt-1 flex gap-2">
+                                            <input
+                                              type="date"
+                                              value={p.inicio}
+                                              onChange={(e) => setEditPeriodos((prev) => prev.map((x, xi) => xi === pi ? { ...x, inicio: e.target.value } : x))}
+                                              className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+                                            />
+                                            <input
+                                              type="date"
+                                              value={p.fim}
+                                              onChange={(e) => setEditPeriodos((prev) => prev.map((x, xi) => xi === pi ? { ...x, fim: e.target.value } : x))}
+                                              className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+                                            />
+                                            {editPeriodos.length > 1 && (
+                                              <button onClick={() => setEditPeriodos((prev) => prev.filter((_, xi) => xi !== pi))} className="text-red-400 hover:text-red-600">
+                                                <X className="h-4 w-4" />
+                                              </button>
+                                            )}
+                                          </div>
+                                        ))}
+                                        <button
+                                          onClick={() => setEditPeriodos((prev) => [...prev, { inicio: '', fim: '' }])}
+                                          className="mt-1 text-xs font-bold text-primary hover:underline"
+                                        >
+                                          + Adicionar período
+                                        </button>
+                                      </div>
+                                    );
+                                  })()}
+                                  <div className="flex justify-end gap-2">
+                                    <Button size="sm" variant="outline" onClick={() => setEditingSugestaoId(null)}>
+                                      Cancelar
+                                    </Button>
+                                    <Button size="sm" onClick={() => handleConfirmarEditada(sugestao)}>
+                                      Confirmar editada
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Ações */}
+                              {!isEditing && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {sugestaoDocs.length > 0 && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleViewDoc(sugestaoDocs[0])}
+                                    >
+                                      <Eye className="mr-1 h-3.5 w-3.5" />
+                                      Visualizar{sugestaoDocs.length > 1 ? ` (1 de ${sugestaoDocs.length})` : ''}
+                                    </Button>
+                                  )}
+                                  {sugestao.status === 'pendente' && sugestao.item_rsc_id && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleConfirmar(sugestao)}
+                                      >
+                                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                        Confirmar
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                          setEditingSugestaoId(sugestao.id);
+                                          setEditItemRscId(sugestao.item_rsc_id ?? '');
+                                          setEditPeriodos(sugestao.periodos.length > 0 ? [...sugestao.periodos] : [{ inicio: '', fim: '' }]);
+                                          setEditQuantidade(String(sugestao.quantidade_sugerida ?? (sugestao.documentos_ids.length || 1)));
+                                        }}
+                                      >
+                                        <PencilLine className="mr-1 h-3.5 w-3.5" />
+                                        Editar e confirmar
+                                      </Button>
+                                    </>
+                                  )}
+                                  {sugestao.status === 'pendente' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleDescartar(sugestao)}
+                                    >
+                                      <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                      Descartar
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+
+                              {isDescartada && (
+                                <div className="pt-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => atualizarSugestao(sugestao.id, { status: 'pendente' })}
+                                  >
+                                    Restaurar
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              );
+            })}
+
+            {/* Pós-triagem */}
+            {pendentesCount === 0 && (triagem?.sugestoes ?? []).length > 0 && (
+              <Card className="border-emerald-200 bg-emerald-50/30 shadow-sm">
+                <CardContent className="p-6 text-center">
+                  <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
+                  <h3 className="mt-3 text-lg font-bold text-gray-900">Triagem concluída!</h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {confirmadasCount} lançamento(s) criado(s). {descartadasCount} sugestão(ões) descartada(s).
+                  </p>
+                  <div className="mt-4 flex flex-wrap justify-center gap-2">
+                    <Button onClick={() => navigate('/dashboard')}>
+                      Ir para o Dashboard
+                      <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                    {lancamentosDoServidor.length > 0 && (
+                      <Button variant="outline" onClick={() => { setFaseAuditoria('prompt'); setEtapa('auditoria'); }}>
+                        <ShieldCheck className="mr-1 h-4 w-4" />
+                        Auditoria IA
+                      </Button>
+                    )}
+                    <Button variant="outline" onClick={limparTriagem}>
+                      Novo dossiê
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {triagem && (triagem.sugestoes.length === 0 || pendentesCount > 0) && (
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setEtapa('analise')}>
+                  Voltar para análise
+                </Button>
+                {(triagem?.sugestoes ?? []).length > 0 && (
+                  <Button variant="outline" onClick={limparTriagem}>
+                    Novo dossiê
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Etapa 4: Auditoria IA estruturada ──────────────────────── */}
+        {etapa === 'auditoria' && (
+          <div className="space-y-4">
+            {lancamentosDoServidor.length === 0 ? (
+              <Card className="border-gray-200 bg-white shadow-sm">
+                <CardContent className="p-6 text-center text-sm text-gray-500">
+                  Você ainda não tem lançamentos. Complete a triagem e revisão primeiro.
+                  <div className="mt-4">
+                    <Button type="button" variant="outline" onClick={() => setEtapa('documentos')}>
+                      Voltar para documentos
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : faseAuditoria === 'prompt' ? (
+              <>
+                {/* Prompt de auditoria */}
+                <Card className="border-gray-200 bg-white shadow-sm">
+                  <CardContent className="p-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-gray-900">
+                        Prompt de auditoria estruturada
+                      </h3>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>~{promptAuditoria ? estimatePromptTokens(promptAuditoria).toLocaleString('pt-BR') : 0} tokens</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const ta = document.getElementById('prompt-auditoria') as HTMLTextAreaElement | null;
+                            if (ta) { ta.focus(); ta.select(); }
+                          }}
+                        >
+                          <Clipboard className="mr-1 h-3.5 w-3.5" />
+                          Selecionar tudo
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => baixarPromptArquivo(promptAuditoria, servidor.siape, 0, 1)}
+                        >
+                          <Download className="mr-1 h-3.5 w-3.5" />
+                          Baixar .md
+                        </Button>
+                      </div>
+                    </div>
+                    {temIdsDuplicados && (
+                      <div className="mb-3 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-900">
+                        <p className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            Há lançamentos com identificadores duplicados nesta sessão — a auditoria não
+                            conseguiria atribuir as correções ao lançamento certo. Recarregue a página para
+                            corrigir os identificadores automaticamente e gere este prompt novamente.
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                    {promptAuditoria && excedeLimiteTokens(promptAuditoria) && (
+                      <div className="mb-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900">
+                        <p className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>
+                            Este prompt é grande ({estimatePromptTokens(promptAuditoria).toLocaleString('pt-BR')} tokens estimados).
+                            Recomendamos usar um modelo de contexto longo (Gemini 2.5 Pro, Claude Sonnet, etc.).
+                          </span>
+                        </p>
+                      </div>
+                    )}
+                    <textarea
+                      id="prompt-auditoria"
+                      readOnly
+                      value={promptAuditoria}
+                      className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-950 p-4 font-mono text-xs leading-relaxed text-gray-100 shadow-inner focus:outline-none"
+                      onClick={(e) => e.currentTarget.select()}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Links IA externa */}
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="text-gray-500">Abrir IA externa:</span>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://gemini.google.com" target="_blank" rel="noreferrer">
+                    Gemini <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://claude.ai" target="_blank" rel="noreferrer">
+                    Claude <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://chat.openai.com" target="_blank" rel="noreferrer">
+                    ChatGPT <ExternalLink className="h-3 w-3" />
+                  </a>
+                  <a className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-gray-600 hover:text-primary" href="https://chat.deepseek.com" target="_blank" rel="noreferrer">
+                    DeepSeek <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+
+                {/* Área de colagem */}
+                <Card className="border-gray-200 bg-white shadow-sm">
+                  <CardContent className="p-5">
+                    <h3 className="mb-3 text-sm font-bold text-gray-900">Cole aqui a resposta da IA</h3>
+                    <textarea
+                      value={respostaAuditoria}
+                      onChange={(e) => setRespostaAuditoria(e.target.value)}
+                      placeholder='Cole a resposta JSON da IA aqui. Pode incluir cercas ```json e texto em volta.'
+                      className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    {respostaAuditoria.trim() && !pareceJson(respostaAuditoria) && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        <p className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>O texto colado não parece ser JSON. Verifique se você copiou a resposta da IA (que deve conter <code className="rounded bg-red-100 px-1">{`{ ... }`}</code>) e não o prompt.</span>
+                        </p>
+                      </div>
+                    )}
+                    {errosAuditoria.length > 0 && (
+                      <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-900">
+                        <p className="font-bold">Avisos da última colagem:</p>
+                        <ul className="mt-1 list-disc space-y-1 pl-5">
+                          {errosAuditoria.map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    <div className="mt-4 flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setEtapa('revisao')}>
+                        Voltar
+                      </Button>
+                      <Button type="button" onClick={handleProcessarRespostaAuditoria} disabled={!respostaAuditoria.trim()}>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Processar resposta
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <>
+                {/* Revisão de operações */}
+                <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+                  <p className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                      As operações abaixo foram propostas pela IA externa. Aprove ou rejeite cada uma antes de aplicar.
+                      A responsabilidade pelas alterações é do servidor.
+                    </span>
+                  </p>
+                </div>
+
+                {/* Filtros + Aplicar */}
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroOpStatus('todos')}
+                      className={cn(
+                        'rounded-full px-3 py-1 font-bold transition-colors',
+                        filtroOpStatus === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                      )}
+                    >
+                      Todas ({(auditoria?.operacoes ?? []).length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroOpStatus('pendente')}
+                      className={cn(
+                        'rounded-full px-3 py-1 font-bold transition-colors',
+                        filtroOpStatus === 'pendente' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                      )}
+                    >
+                      Pendentes ({opsPendentes})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroOpStatus('aprovada')}
+                      className={cn(
+                        'rounded-full px-3 py-1 font-bold transition-colors',
+                        filtroOpStatus === 'aprovada' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                      )}
+                    >
+                      Aprovadas ({opsAprovadas})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroOpStatus('rejeitada')}
+                      className={cn(
+                        'rounded-full px-3 py-1 font-bold transition-colors',
+                        filtroOpStatus === 'rejeitada' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100',
+                      )}
+                    >
+                      Rejeitadas ({opsRejeitadas})
+                    </button>
+                  </div>
+                  {opsAprovadas > 0 && (
+                    <Button type="button" size="sm" onClick={handleAplicarOperacoes} disabled={aplicandoOps}>
+                      {aplicandoOps ? (
+                        <>
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          Aplicando...
+                        </>
+                      ) : (
+                        <>
+                          <Wrench className="mr-1 h-3.5 w-3.5" />
+                          Aplicar aprovadas ({opsAprovadas})
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+
+                {/* Lista de operações */}
+                {opsAgrupadas.length === 0 && (auditoria?.operacoes ?? []).length === 0 && (
+                  <Card className="border-gray-200 bg-white shadow-sm">
+                    <CardContent className="p-6 text-center text-sm text-gray-500">
+                      Nenhuma operação disponível. Processe a resposta da IA na etapa anterior.
+                      <div className="mt-4 flex justify-center gap-2">
+                        <Button type="button" variant="outline" onClick={() => setFaseAuditoria('prompt')}>
+                          Voltar para o prompt
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {opsAgrupadas.length === 0 && (auditoria?.operacoes ?? []).length > 0 && (
+                  <Card className="border-gray-200 bg-white shadow-sm">
+                    <CardContent className="p-6 text-center text-sm text-gray-500">
+                      Nenhuma operação neste filtro.
+                    </CardContent>
+                  </Card>
+                )}
+
+                {opsAgrupadas.map(([tipo, ops]) => {
+                  const tipoLabel: Record<TipoOperacao, string> = {
+                    remover_lancamento: 'Remover lançamento',
+                    reclassificar: 'Reclassificar',
+                    ajustar_periodos: 'Ajustar períodos',
+                    ajustar_quantidade: 'Ajustar quantidade',
+                    sinalizar: 'Sinalizar',
+                  };
+                  const tipoIcon: Record<TipoOperacao, string> = {
+                    remover_lancamento: 'text-red-600 bg-red-50',
+                    reclassificar: 'text-blue-600 bg-blue-50',
+                    ajustar_periodos: 'text-amber-600 bg-amber-50',
+                    ajustar_quantidade: 'text-amber-600 bg-amber-50',
+                    sinalizar: 'text-gray-600 bg-gray-100',
+                  };
+
+                  return (
+                    <div key={tipo} className="space-y-2">
+                      <h3 className="px-1 text-xs font-black uppercase tracking-wider text-gray-400">
+                        {tipoLabel[tipo]} ({ops.length})
+                      </h3>
+                      {ops.map((op) => {
+                        const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
+                        const item = lanc ? itensRSC.find((i) => i.id === lanc.item_rsc_id) : null;
+                        const novoItem = op.novo_item_rsc_id ? itensRSC.find((i) => i.id === op.novo_item_rsc_id) : null;
+                        const isRejeitada = op.status === 'rejeitada';
+
+                        return (
+                          <Card key={op.id} className={cn(
+                            'border shadow-sm transition-all',
+                            isRejeitada ? 'border-gray-100 bg-gray-50/50 opacity-60' : 'border-gray-200 bg-white',
+                          )}>
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className={cn('mt-0.5 rounded-lg p-1.5', tipoIcon[op.tipo])}>
+                                  {op.tipo === 'remover_lancamento' ? <Trash2 className="h-4 w-4" /> :
+                                   op.tipo === 'reclassificar' ? <SearchCheck className="h-4 w-4" /> :
+                                   op.tipo === 'sinalizar' ? <AlertCircle className="h-4 w-4" /> :
+                                   <Wrench className="h-4 w-4" />}
+                                </div>
+                                <div className="min-w-0 flex-1 space-y-2">
+                                  {/* Linha 1: tipo + severidade + status */}
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    <span className={cn(
+                                      'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
+                                      op.severidade === 'alta' && 'bg-red-50 text-red-700',
+                                      op.severidade === 'media' && 'bg-amber-50 text-amber-700',
+                                      op.severidade === 'baixa' && 'bg-gray-100 text-gray-600',
+                                    )}>
+                                      {op.severidade}
+                                    </span>
+                                    {op.status === 'aprovada' && (
+                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                                        <CheckCircle className="mr-1 inline h-3 w-3" />Aprovada
+                                      </span>
+                                    )}
+                                    {isRejeitada && (
+                                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
+                                        Rejeitada
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  {/* Lançamento alvo */}
+                                  {lanc && item && (
+                                    <p className="text-sm font-bold text-gray-800">
+                                      {itemDossierCode(item)} — {item.descricao}
+                                    </p>
+                                  )}
+
+                                  {/* Detalhes da operação */}
+                                  {op.tipo === 'reclassificar' && novoItem && (
+                                    <p className="text-xs text-gray-600">
+                                      <span className="font-semibold">Reclassificar para:</span>{' '}
+                                      {itemDossierCode(novoItem)} — {novoItem.descricao}
+                                    </p>
+                                  )}
+                                  {op.tipo === 'ajustar_periodos' && op.novos_periodos && (
+                                    <p className="text-xs text-gray-600">
+                                      <span className="font-semibold">Novos períodos:</span>{' '}
+                                      {op.novos_periodos.map((p) => `${p.inicio} a ${p.fim}`).join('; ')}
+                                    </p>
+                                  )}
+                                  {op.tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined && (
+                                    <p className="text-xs text-gray-600">
+                                      <span className="font-semibold">Nova quantidade:</span> {op.nova_quantidade}
+                                    </p>
+                                  )}
+                                  {op.tipo === 'sinalizar' && op.descricao && (
+                                    <p className="text-xs text-gray-600">
+                                      <span className="font-semibold">Problema:</span> {op.descricao}
+                                    </p>
+                                  )}
+
+                                  {/* Justificativa */}
+                                  <p className="text-xs text-gray-500">
+                                    <span className="font-semibold">Justificativa:</span> {op.justificativa}
+                                  </p>
+
+                                  {/* Ações */}
+                                  <div className="flex flex-wrap gap-2 pt-1">
+                                    {op.status === 'pendente' && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'aprovada' })}
+                                        >
+                                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
+                                          Aprovar
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'rejeitada' })}
+                                        >
+                                          <X className="mr-1 h-3.5 w-3.5" />
+                                          Rejeitar
+                                        </Button>
+                                      </>
+                                    )}
+                                    {op.status === 'aprovada' && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'pendente' })}
+                                      >
+                                        Desfazer aprovação
+                                      </Button>
+                                    )}
+                                    {isRejeitada && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'pendente' })}
+                                      >
+                                        Restaurar
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                {/* Pós-auditoria */}
+                {opsPendentes === 0 && (auditoria?.operacoes ?? []).length > 0 && (
+                  <Card className="border-emerald-200 bg-emerald-50/30 shadow-sm">
+                    <CardContent className="p-6 text-center">
+                      <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
+                      <h3 className="mt-3 text-lg font-bold text-gray-900">Auditoria concluída!</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        {opsAprovadas} operação(ões) aprovada(s), {opsRejeitadas} rejeitada(s).
+                      </p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        <Button onClick={() => navigate('/dashboard')}>
+                          Ir para o Dashboard
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" onClick={() => navigate('/consolidar')}>
+                          Ir para Consolidar
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" onClick={() => { limparAuditoria(); setFaseAuditoria('prompt'); }}>
+                          Nova auditoria
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {(!auditoria || (auditoria.operacoes.length === 0)) && (
+                  <Card className="border-emerald-200 bg-emerald-50/30 shadow-sm">
+                    <CardContent className="p-6 text-center">
+                      <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
+                      <h3 className="mt-3 text-lg font-bold text-gray-900">Nenhum problema encontrado!</h3>
+                      <p className="mt-1 text-sm text-gray-500">
+                        A IA não identificou operações de correção para os lançamentos atuais.
+                      </p>
+                      <div className="mt-4 flex flex-wrap justify-center gap-2">
+                        <Button onClick={() => navigate('/dashboard')}>
+                          Ir para o Dashboard
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" onClick={() => navigate('/consolidar')}>
+                          Ir para Consolidar
+                          <ChevronRight className="ml-1 h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" onClick={() => { limparAuditoria(); setFaseAuditoria('prompt'); }}>
+                          Nova auditoria
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Navegação */}
+                {auditoria && auditoria.operacoes.length > 0 && opsPendentes > 0 && (
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setFaseAuditoria('prompt')}>
+                      Voltar para o prompt
+                    </Button>
+                    <Button variant="outline" onClick={() => { limparAuditoria(); setFaseAuditoria('prompt'); }}>
+                      Limpar auditoria
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+      </div>
+
+      {/* Modal de visualização de documento */}
+      {viewerDoc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setViewerDoc(null)}
+        >
+          <div
+            className="flex h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-gray-900">{viewerDoc.nome_arquivo}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewerDoc(null)}
+                className="ml-3 rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto bg-gray-50">
+              {viewerLoading ? (
+                <div className="flex h-full items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : viewerError ? (
+                <div className="flex h-full items-center justify-center p-6 text-center text-sm text-red-600">
+                  <AlertCircle className="mr-2 h-5 w-5" />
+                  {viewerError}
+                </div>
+              ) : viewerUrl ? (
+                <iframe
+                  src={viewerUrl}
+                  title={viewerDoc.nome_arquivo}
+                  className="h-full w-full border-0 bg-white"
+                />
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DossieTutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
+    </MainLayout>
+  );
+}

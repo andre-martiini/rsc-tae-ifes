@@ -9,13 +9,16 @@
 import JSZip from 'jszip';
 import { deleteDocumentsByServidorId, persistDocumentBlob } from './documentStorage';
 import type { Servidor, Documento, Lancamento, ProcessoRSC } from '../data/mock';
+import type { EstadoTriagem } from '../data/triagem';
+import type { EstadoAuditoria } from '../data/auditoria';
 
 export interface RestoredSession {
   perfil: Servidor | null;
   documentos: Documento[];
   lancamentos: Lancamento[];
   processo: ProcessoRSC | null;
-  wizardIds: string[];
+  triagem: EstadoTriagem | null;
+  auditoria: EstadoAuditoria | null;
 }
 
 export async function importSession(file: File, currentServidorId?: string): Promise<RestoredSession> {
@@ -69,6 +72,7 @@ export async function importSession(file: File, currentServidorId?: string): Pro
     documentos: docs,
     lancamentos: (metadata['rsc-tae-lancamentos'] ?? []) as Lancamento[],
     processo: (metadata['rsc-tae-processo'] as ProcessoRSC) ?? null,
-    wizardIds: (metadata['rsc-tae-wizard-ids'] ?? []) as string[],
+    triagem: (metadata['rsc-tae-triagem'] as EstadoTriagem) ?? null,
+    auditoria: (metadata['rsc-tae-auditoria'] as EstadoAuditoria) ?? null,
   };
 }

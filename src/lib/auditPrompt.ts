@@ -191,6 +191,8 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
         `Item para ajuste   : ${itemReference(item)}`,
         `Item oficial       : ${item?.descricao ?? 'Item nao encontrado na tabela oficial'}`,
         `Inciso             : ${item?.inciso ?? 'Nao identificado'}`,
+        `Modo de calculo    : ${item?.modo_calculo ?? 'Nao informado'}`,
+        `Unidade de medida  : ${item?.unidade_medida ?? 'Nao informada'}`,
         `Pontuacao oficial  : ${item ? `${formatPointValue(item.pontos_por_unidade)} pts por ${item.unidade_medida}` : 'Nao mapeada'}`,
         `Quantidade         : ${entry.quantidade_informada}`,
         `Periodo declarado  : ${formatDateRange(entry)}`,
@@ -237,6 +239,7 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     '- Se NAO houver nenhum problema, escreva apenas: "Nenhuma correcao necessaria. Sua documentacao esta pronta para exportacao." e nao invente passos.',
     '- Se houver problemas, numere os passos em ordem de prioridade (1., 2., 3...), um passo por problema encontrado na tabela de conflitos.',
     '- Cada passo deve dizer: (a) O QUE fazer (ex.: excluir, substituir, anexar, corrigir data ou quantidade); (b) ONDE fazer (cite o item do sistema, ex.: "abra a aba Itens e localize o II-11 - Item 11"); (c) QUAL documento esta envolvido (cite a chave Documento N e o nome do arquivo); (d) POR QUE isso e necessario, em uma frase simples.',
+    '- ATENCAO AO TIPO DE CORRECAO: Verifique o campo "Modo de calculo" de cada lancamento. Para itens com modo_calculo "manual" (ex.: Por designacao, Por premio, Por projeto, Por produto), a pontuacao depende da QUANTIDADE, nao de datas. Nao recomende correcao de datas para esses itens; se a contagem estiver errada, recomende corrigir a quantidade. Para itens com modo_calculo "auto_ano_fracao" ou "auto_mes" (ex.: Por ano ou fracao), a pontuacao depende de PERIODOS; nestes casos, recomende correcao de datas.',
     '- Exemplo de passo bem escrito: "1. Exclua o lancamento duplicado do item I-3 - Item 3: os Documentos 4 e 7 tratam da mesma comissao, entao apenas um pode pontuar. Mantenha o mais recente e remova o outro lancamento na aba Itens."',
     '- Ao final do plano, acrescente uma frase de fechamento indicando o que o servidor deve fazer depois das correcoes (ex.: rodar novamente esta auditoria e so entao gerar o pacote final).',
   ].join('\n');
