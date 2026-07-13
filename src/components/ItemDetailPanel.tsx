@@ -38,6 +38,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { generateLLMPrompt } from '../lib/llmPrompt';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
+import { mapearUsoDocumentos, codigosItensDosUsos, type UsoDocumento } from '../lib/duplicateDetection';
 
 type UploadMeta = {
   converted: boolean;
@@ -63,7 +64,7 @@ const removePeriodo = (setter: PeriodoSetter, index: number) =>
   setter((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
 
 export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSaved: () => void }) {
-  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, addComprovanteToLancamento, removeComprovanteFromLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento } = useAppContext();
+  const { addDocumentoFromFile, addDocumentoFromGedocLinks, addLancamento, updateLancamento, removeLancamento, addComprovanteToLancamento, removeComprovanteFromLancamento, documentos, servidor, lancamentos, processo, updateDocumento, deleteDocumento, itensRSC } = useAppContext();
   const [tab, setTab] = useState<'form' | 'history'>('form');
   const [docMode, setDocMode] = useState<'upload' | 'reference'>('upload');
   const [pendingFiles, setPendingFiles] = useState<Array<{ file: File; meta: UploadMeta }>>([]);
@@ -99,6 +100,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     doc: Documento;
     lancamentoParaPrompt: any;
     newDoc: Documento;
+    usos: UsoDocumento[];
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -504,13 +506,21 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       };
 
       if (isDuplicate && newDoc) {
-        setDuplicateWarning({
-          doc: newDoc,
-          lancamentoParaPrompt,
-          newDoc,
-        });
-        setSaving(false);
-        return;
+        // O arquivo já existe — o registro é sempre reaproveitado (nunca é
+        // criada uma cópia). Só pede confirmação quando o documento já pontua
+        // em algum lançamento, pois aí há risco real de dupla contagem.
+        const usos = mapearUsoDocumentos(lancamentos, itensRSC).get(newDoc.id) ?? [];
+        if (usos.length > 0) {
+          setDuplicateWarning({
+            doc: newDoc,
+            lancamentoParaPrompt,
+            newDoc,
+            usos,
+          });
+          setSaving(false);
+          return;
+        }
+        toast.info(`O arquivo "${newDoc.nome_arquivo}" já estava no sistema — o documento existente foi reaproveitado, sem criar cópia.`);
       }
 
       finishSave(lancamentoParaPrompt, newDoc);
@@ -658,6 +668,16 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           componentHashes: [originalHash],
           componentFiles: [{ nome_arquivo: f.name, hash_arquivo: originalHash }],
         });
+        if (result.exists) {
+          const usos = (mapearUsoDocumentos(lancamentos, itensRSC).get(result.doc.id) ?? [])
+            .filter((u) => u.lancamento.id !== lancamentoId);
+          if (usos.length > 0) {
+            toast.warning(
+              `"${result.doc.nome_arquivo}" já pontua no(s) item(ns) ${codigosItensDosUsos(usos).join(', ')} — o mesmo documento não deve ser contado em duplicidade.`,
+              { duration: 10000 },
+            );
+          }
+        }
         addComprovanteToLancamento(lancamentoId, result.doc.id);
       }
       toast.success(`${files.length === 1 ? 'Arquivo adicionado' : `${files.length} arquivos adicionados`} ao lançamento.`);
@@ -1488,15 +1508,18 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                   <AlertCircle className="h-8 w-8" />
                 </div>
 
-                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Atenção: Arquivo Duplicado</h3>
-                
+                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Atenção: documento já pontua no processo</h3>
+
                 <div className="space-y-4">
                   <p className="text-sm leading-relaxed text-gray-600">
-                    O sistema identificou que o arquivo <strong className="text-gray-900">"{duplicateWarning.doc.nome_arquivo}"</strong> já foi carregado anteriormente.
+                    O arquivo <strong className="text-gray-900">"{duplicateWarning.doc.nome_arquivo}"</strong> já está no sistema
+                    e <strong className="text-gray-900">já pontua no(s) item(ns) {codigosItensDosUsos(duplicateWarning.usos).join(', ')}</strong>.
                   </p>
-                  
+
                   <p className="text-sm text-gray-500">
-                    Deseja prosseguir com o lançamento utilizando o documento já existente no sistema?
+                    O mesmo documento não deve ser contado em duplicidade. Se prosseguir, o registro existente
+                    será reaproveitado (não é criada cópia), mas o novo lançamento pode ser apontado como
+                    dupla contagem na auditoria.
                   </p>
                 </div>
 
@@ -1505,7 +1528,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     onClick={() => finishSave(duplicateWarning.lancamentoParaPrompt, duplicateWarning.newDoc)}
                     className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
                   >
-                    Sim, reaproveitar e salvar
+                    Prosseguir mesmo assim
                   </Button>
                   <Button
                     variant="ghost"

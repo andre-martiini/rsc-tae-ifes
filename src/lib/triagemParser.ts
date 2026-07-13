@@ -195,6 +195,10 @@ export function parseResultadoTriagem(texto: string, contexto: ContextoParse): R
           ? s.quantidade_sugerida
           : undefined;
 
+      // A IA sinaliza quando o fato já é coberto por um lançamento existente
+      // (bloco ITENS JÁ LANÇADOS do prompt) — exibido como alerta na revisão.
+      const ja_contemplado = s.ja_contemplado === true ? true : undefined;
+
       // Deduplicar por item_rsc_id (garante uma sugestão por item)
       // Se item_rsc_id é null (não classificável), dedup por documento individual
       const dedupKey = item_rsc_id ?? `__null__|${docsIds.sort().join(',')}`;
@@ -213,6 +217,9 @@ export function parseResultadoTriagem(texto: string, contexto: ContextoParse): R
         if (quantidade_sugerida !== undefined) {
           existente.quantidade_sugerida = (existente.quantidade_sugerida ?? 0) + quantidade_sugerida;
         }
+        if (ja_contemplado) {
+          existente.ja_contemplado = true;
+        }
         // Concatena justificativa
         if (justificativa && !existente.justificativa.includes(justificativa)) {
           existente.justificativa = [existente.justificativa, justificativa].filter(Boolean).join(' | ');
@@ -229,6 +236,7 @@ export function parseResultadoTriagem(texto: string, contexto: ContextoParse): R
         justificativa,
         observacoes,
         quantidade_sugerida,
+        ja_contemplado,
         status: 'pendente',
       };
 
