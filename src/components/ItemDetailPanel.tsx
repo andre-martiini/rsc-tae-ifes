@@ -462,6 +462,13 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         });
         documentoId = newDoc.id;
         allComprovanteIds = [newDoc.id];
+        // O mesmo conjunto de links reaproveita o documento de referência
+        // existente — se ele já pontua em outro lançamento, passa pelo mesmo
+        // aviso de dupla contagem do upload de arquivos.
+        const usosReferencia = mapearUsoDocumentos(lancamentos, itensRSC).get(newDoc.id) ?? [];
+        if (usosReferencia.length > 0) {
+          isDuplicate = true;
+        }
       } else if (pendingFiles.length > 0) {
         const uploadedIds: string[] = [];
         let duplicateDocFound: Documento | undefined = undefined;
@@ -476,7 +483,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
             componentHashes: meta.componentHashes,
             componentFiles: meta.componentFiles,
           });
-          uploadedIds.push(result.doc.id);
+          // O mesmo arquivo selecionado duas vezes retorna o mesmo doc.id —
+          // sem este guard o lançamento listaria o comprovante em duplicidade.
+          if (!uploadedIds.includes(result.doc.id)) uploadedIds.push(result.doc.id);
           if (!newDoc) newDoc = result.doc;
           if (result.exists && !duplicateDocFound) {
             duplicateDocFound = result.doc;

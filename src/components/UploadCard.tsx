@@ -76,7 +76,9 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
           servidorId: servidor.id,
           file: f,
         });
-        uploadedIds.push(doc.id);
+        // O mesmo arquivo selecionado duas vezes retorna o mesmo doc.id —
+        // sem este guard o lançamento listaria o comprovante em duplicidade.
+        if (!uploadedIds.includes(doc.id)) uploadedIds.push(doc.id);
         if (!firstDocId) firstDocId = doc.id;
         if (exists && !duplicateDocFound) {
           duplicateDocFound = doc;
