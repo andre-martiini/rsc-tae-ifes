@@ -22,6 +22,7 @@ import {
 } from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
 import { normalizePointValue } from '../lib/points';
+import { getLancamentoDocumentIds } from '../lib/documentOrdering';
 
 
 // ── Session types ─────────────────────────────────────────────────────────────
@@ -229,8 +230,7 @@ interface AppContextType {
     componentFiles?: Documento['arquivos_componentes'];
     tipoDocumento?: Documento['tipo_documento'];
     categoriaInstrucao?: Documento['categoria_instrucao'];
-    allowDuplicate?: boolean;
-  }) => Promise<{ doc: Documento; exists: boolean }>;
+  }) => Promise<{ doc: Documento; exists: boolean; conflitoClassificacao?: boolean }>;
   addDocumentoFromGedocLinks: (params: {
     servidorId: string;
     links: string[];
@@ -282,6 +282,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
     return id ? loadJson<Documento[]>(`rsc-tae-${id}-documentos`, []) : [];
   });
+
+  // Espelho síncrono de `documentos`: a deduplicação por hash precisa enxergar
+  // arquivos adicionados na mesma rajada de uploads, antes de o estado do React
+  // ser recalculado — sem isso, o mesmo arquivo selecionado duas vezes no mesmo
+  // lote seria persistido em duplicidade.
+  const documentosRef = useRef(documentos);
+  useEffect(() => {
+    documentosRef.current = documentos;
+  }, [documentos]);
 
   const initialMigrationStats = useRef<MigrationStats | null>(null);
   const [lancamentos, setLancamentos] = useState<Lancamento[]>(() => {
@@ -535,13 +544,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Document & lançamento actions ────────────────────────────────────────────
 
+  // Registra o documento no estado e no espelho síncrono na mesma passada,
+  // para que uploads subsequentes do mesmo lote já o encontrem na deduplicação.
+  const registrarDocumento = (newDoc: Documento) => {
+    documentosRef.current = [...documentosRef.current, newDoc];
+    setDocumentos((current) => [...current, newDoc]);
+  };
+
   const addDocumento = (doc: Omit<Documento, 'id' | 'data_upload'>) => {
     const newDoc: Documento = {
       ...doc,
       id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       data_upload: new Date().toISOString(),
     };
-    setDocumentos((current) => [...current, newDoc]);
+    registrarDocumento(newDoc);
     return newDoc;
   };
 
@@ -556,7 +572,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     componentFiles,
     tipoDocumento,
     categoriaInstrucao,
-    allowDuplicate,
   }: {
     servidorId: string;
     file: File;
@@ -568,7 +583,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     componentFiles?: Documento['arquivos_componentes'];
     tipoDocumento?: Documento['tipo_documento'];
     categoriaInstrucao?: Documento['categoria_instrucao'];
-    allowDuplicate?: boolean;
   }) => {
     const fileHash = await computeDocumentHash(file);
     const normalizedName = normalizeFileName(file.name);
@@ -577,7 +591,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // because two distinct merges can legitimately share source files.
     const isMultiFileMerge = (componentHashes?.length ?? 0) > 1;
 
-    const duplicatedDocument = allowDuplicate ? undefined : documentos.find((doc) => {
+    const duplicatedDocument = documentosRef.current.find((doc) => {
       if (doc.servidor_id !== servidorId || !doc.caminho_storage) {
         return false;
       }
@@ -602,6 +616,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     if (duplicatedDocument) {
+      // Reclassificar um comprobatório vinculado a lançamento como documento de
+      // instrução mudaria sua natureza no dossiê e afetaria os lançamentos que
+      // dependem dele — nesse caso, reporta o conflito sem alterar nada.
+      const mudaParaInstrucao =
+        tipoDocumento === 'instrucao_processual' &&
+        duplicatedDocument.tipo_documento !== 'instrucao_processual';
+      const usadoEmLancamento = lancamentos.some((l) =>
+        getLancamentoDocumentIds(l).includes(duplicatedDocument.id),
+      );
+      if (mudaParaInstrucao && usadoEmLancamento) {
+        return { doc: duplicatedDocument, exists: true, conflitoClassificacao: true };
+      }
+
       const classificationUpdates: Partial<Documento> = {
         ...(transcription && !duplicatedDocument.transcricao ? { transcricao: transcription } : {}),
         ...(tipoDocumento ? { tipo_documento: tipoDocumento } : {}),
@@ -635,7 +662,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       categoria_instrucao: categoriaInstrucao,
     };
 
-    setDocumentos((current) => [...current, newDoc]);
+    registrarDocumento(newDoc);
     return { doc: newDoc, exists: false };
   };
 
@@ -647,6 +674,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     links: string[];
   }): Promise<Documento> => {
     const normalizedLinks = links.map(normalizeInstitutionDocumentLink);
+
+    // Mesmo conjunto de links = mesmo documento de referência: reaproveita o
+    // registro existente em vez de criar uma cópia.
+    const chaveLinks = [...normalizedLinks].sort().join('\n');
+    const existente = documentosRef.current.find(
+      (doc) =>
+        doc.servidor_id === servidorId &&
+        (doc.gedoc_links?.length ?? 0) > 0 &&
+        [...(doc.gedoc_links ?? [])].sort().join('\n') === chaveLinks,
+    );
+    if (existente) return existente;
+
     const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
     const nomeArquivo = buildInstitutionReferenceFileName(normalizedLinks.length);
 
@@ -658,7 +697,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       gedoc_links: normalizedLinks,
     };
 
-    setDocumentos((current) => [...current, newDoc]);
+    registrarDocumento(newDoc);
     return newDoc;
   };
 
