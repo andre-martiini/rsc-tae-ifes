@@ -1,6 +1,8 @@
-import type { Documento, ItemRSC } from '../data/mock';
+import type { Documento, ItemRSC, Lancamento } from '../data/mock';
 import { CATALOG_VERSION } from '../data/normative/rsc-pcctae-2026';
 import { estimatePromptTokens } from './auditPrompt';
+import { getLancamentoDocumentIds, itemDossierCode, sortLancamentosByDossierOrder } from './documentOrdering';
+import { periodosDoLancamento } from './periodos';
 
 const TRUNCATE_CHARS = 4000;
 const MAX_TOKENS_PER_LOTE = 60000;
@@ -9,6 +11,10 @@ export interface TriagemPromptParams {
   itensRSC: ItemRSC[];
   documentos: Documento[];
   ilegiveis: Set<string>;
+  /** Lançamentos já registrados na sessão — a IA evita sugerir duplicações. */
+  lancamentosExistentes?: Lancamento[];
+  /** Todos os documentos da sessão, para nomear os comprovantes dos lançamentos. */
+  documentosDaSessao?: Documento[];
 }
 
 export interface LoteTriagem {
@@ -86,7 +92,7 @@ function gerarCatalogo(itensRSC: ItemRSC[]): string {
   return linhas.join('\n');
 }
 
-function gerarRegras(): string {
+function gerarRegras(incluirRegraJaContemplado = false): string {
   return [
     '',
     '=== REGRAS ===',
@@ -101,6 +107,9 @@ function gerarRegras(): string {
     '7. Se a transcrição estiver ilegível, marque `nao_analisavel: true` em vez de adivinhar.',
     '7a. Se os critérios fornecidos não permitem conclusão (documento legível mas ambíguo, faltam informações essenciais), use `resultado: "informacao_insuficiente"` em vez de forçar uma classificação. A IA não deve adivinhar quando não há evidência suficiente.',
     '8. **QUANTIDADE REAL (itens manuais):** Para itens cuja unidade de medida é "Por designação", "Por produto", "Por projeto", "Por evento" etc. (não baseados em data), informe `quantidade_sugerida` = número real de designações/produtos/eventos distintos. Portarias de ALTERAÇÃO, RETIFICAÇÃO ou EXCLUSÃO que não configuram uma nova designação NÃO contam — são apenas documentos acessórios de comprovação. Exemplo: 7 portarias no item I-3, mas 3 são alterações de comissão existente → `quantidade_sugerida: 4`.',
+    ...(incluirRegraJaContemplado
+      ? ['8a. **NÃO DUPLICIDADE COM LANÇAMENTOS EXISTENTES:** Compare cada documento com o bloco === ITENS JÁ LANÇADOS NO PROCESSO === abaixo. Se um documento comprovar o MESMO fato, designação ou período que um lançamento existente já cobre, ainda assim gere a sugestão normalmente, mas marque `"ja_contemplado": true` nela e explique em `observacoes` qual item já lançado cobre o fato. O mesmo documento ou fato não pode pontuar duas vezes.']
+      : []),
     '9. Retorne somente um objeto JSON válido. Não use cercas Markdown, comentários ou texto explicativo.',
     '',
     '=== SCHEMA DE SAÍDA ===',
@@ -118,7 +127,8 @@ function gerarRegras(): string {
     '      "periodos": [{ "inicio": "2019-03-01", "fim": "2021-06-30" }, { "inicio": "2021-07-01", "fim": "2023-12-31" }],',
     '      "justificativa": "Portarias de designação como responsável pelo setor X.",',
     '      "observacoes": "",',
-    '      "quantidade_sugerida": 3',
+    '      "quantidade_sugerida": 3,',
+    '      "ja_contemplado": false',
     '    }',
     '  ],',
     '  "nao_analisaveis": [',
@@ -137,6 +147,50 @@ function gerarRegras(): string {
     '6. Todos os campos obrigatórios estão presentes.',
     '7. Nenhum ponto foi calculado — o sistema é responsável pelos cálculos.',
   ].join('\n');
+}
+
+/**
+ * Bloco compacto com os lançamentos já registrados (apenas metadados, sem
+ * transcrições): dá contexto à IA para não sugerir classificações que
+ * dupliquem fatos ou períodos já pontuados.
+ */
+function gerarBlocoJaLancados(
+  lancamentos: Lancamento[],
+  itensRSC: ItemRSC[],
+  documentosDaSessao: Documento[],
+): string {
+  if (lancamentos.length === 0) return '';
+
+  const itemMap = new Map(itensRSC.map((i) => [i.id, i]));
+  const docMap = new Map(documentosDaSessao.map((d) => [d.id, d]));
+  const ordenados = sortLancamentosByDossierOrder(lancamentos, itensRSC);
+
+  const linhas: string[] = [
+    '',
+    '=== ITENS JÁ LANÇADOS NO PROCESSO ===',
+    '',
+    'O servidor já possui os lançamentos abaixo (de triagens anteriores ou registros manuais).',
+    'Use-os APENAS como referência de não duplicidade — não os reclassifique nem os inclua na resposta.',
+    'Se um documento analisado comprovar o mesmo fato/período de um lançamento abaixo, marque a sugestão com `ja_contemplado: true` (regra 8a).',
+    '',
+  ];
+
+  for (const lanc of ordenados) {
+    const item = itemMap.get(lanc.item_rsc_id);
+    const codigo = item ? `${itemDossierCode(item)} — ${item.descricao}` : lanc.item_rsc_id;
+    const periodos = periodosDoLancamento(lanc)
+      .map((p) => `${p.inicio} a ${p.fim}`)
+      .join('; ');
+    const nomesDocs = getLancamentoDocumentIds(lanc)
+      .map((id) => docMap.get(id)?.nome_arquivo ?? id)
+      .join(', ');
+    linhas.push(`- Item ${codigo}`);
+    linhas.push(`  quantidade: ${lanc.quantidade_informada}${item ? ` ${item.unidade_medida}` : ''}`);
+    if (periodos) linhas.push(`  periodos: ${periodos}`);
+    if (nomesDocs) linhas.push(`  documentos: ${nomesDocs}`);
+  }
+
+  return linhas.join('\n');
 }
 
 function gerarAvisoHierarquia(): string {
@@ -193,18 +247,24 @@ function gerarNotaIlegiveis(ilegiveis: Set<string>): string {
 }
 
 export function gerarPromptTriagem(params: TriagemPromptParams): string {
-  const { itensRSC, documentos, ilegiveis } = params;
+  const { itensRSC, documentos, ilegiveis, lancamentosExistentes, documentosDaSessao } = params;
+  const temJaLancados = (lancamentosExistentes?.length ?? 0) > 0;
   const cabecalho = gerarCabecalho();
   const catalogo = gerarCatalogo(itensRSC);
-  const regras = gerarRegras();
+  const regras = gerarRegras(temJaLancados);
+  const blocoJaLancados = gerarBlocoJaLancados(
+    lancamentosExistentes ?? [],
+    itensRSC,
+    documentosDaSessao ?? documentos,
+  );
   const blocoDocs = gerarBlocoDocumentos(documentos, ilegiveis);
   const notaIlegiveis = gerarNotaIlegiveis(ilegiveis);
 
-  return [cabecalho, catalogo, regras, blocoDocs, notaIlegiveis].filter(Boolean).join('\n');
+  return [cabecalho, catalogo, regras, blocoJaLancados, blocoDocs, notaIlegiveis].filter(Boolean).join('\n');
 }
 
 export function gerarLotesTriagem(params: TriagemPromptParams): LoteTriagem[] {
-  const { itensRSC, documentos, ilegiveis } = params;
+  const { itensRSC, documentos, ilegiveis, lancamentosExistentes, documentosDaSessao } = params;
 
   if (documentos.length === 0) return [];
 
@@ -226,9 +286,11 @@ export function gerarLotesTriagem(params: TriagemPromptParams): LoteTriagem[] {
   let loteAtual: Documento[] = [];
   let loteTokensEstimado = 0;
 
-  // Custo fixo (cabeçalho + catálogo + regras)
+  // Custo fixo (cabeçalho + catálogo + regras + itens já lançados)
   const custoFixo = estimatePromptTokens(
-    gerarCabecalho() + '\n' + gerarCatalogo(itensRSC) + '\n' + gerarRegras(),
+    gerarCabecalho() + '\n' + gerarCatalogo(itensRSC) + '\n' +
+    gerarRegras((lancamentosExistentes?.length ?? 0) > 0) + '\n' +
+    gerarBlocoJaLancados(lancamentosExistentes ?? [], itensRSC, documentosDaSessao ?? documentos),
   );
 
   for (const doc of documentos) {
@@ -269,6 +331,8 @@ export function gerarLotesTriagem(params: TriagemPromptParams): LoteTriagem[] {
       itensRSC,
       documentos: docsDoLote,
       ilegiveis,
+      lancamentosExistentes,
+      documentosDaSessao,
     });
 
     const notaLote = `\n\n[Este é o lote ${i + 1} de ${total}. Analise apenas os documentos listados acima.]`;

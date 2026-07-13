@@ -23,6 +23,10 @@ import {
   SearchCheck,
   Wrench,
   PlayCircle,
+  FolderOpen,
+  GitMerge,
+  PlusCircle,
+  Copy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import MainLayout from '../components/MainLayout';
@@ -36,7 +40,8 @@ import type { EstadoAuditoria, OperacaoAuditoria, TipoOperacao } from '../data/a
 import { needsTranscription, transcribeDocument, type PrepStatus } from '../lib/transcricao';
 import { estimatePromptTokens } from '../lib/auditPrompt';
 import { calculateLancamentoPoints, formatPointValue } from '../lib/points';
-import { abrangenciaPeriodos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, periodoValido, periodosDoLancamento } from '../lib/periodos';
+import { abrangenciaPeriodos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, periodoValido, periodosDoLancamento, mesclarPeriodos, intersecaoPeriodos } from '../lib/periodos';
+import { mapearUsoDocumentos, codigosItensDosUsos, encontrarDuplicatasPorConteudo, chaveConteudo } from '../lib/duplicateDetection';
 import { gerarLotesTriagem } from '../lib/triagemPrompt';
 import { parseResultadoTriagem } from '../lib/triagemParser';
 import { pareceJson } from '../lib/jsonDetect';
@@ -171,6 +176,85 @@ export default function Triagem() {
     );
   }, [triagemDocs]);
 
+  // ── Lançamentos do servidor e reuso de documentos ─────────────────────
+  const lancamentosDoServidor = useMemo(
+    () => lancamentos.filter((l) => l.servidor_id === servidor.id),
+    [lancamentos, servidor],
+  );
+
+  /** docId -> lançamentos em que o documento já pontua. */
+  const usoDocumentos = useMemo(
+    () => mapearUsoDocumentos(lancamentosDoServidor, itensRSC),
+    [lancamentosDoServidor, itensRSC],
+  );
+
+  const documentosDoServidor = useMemo(
+    () => documentos.filter((d) => d.servidor_id === servidor.id),
+    [documentos, servidor],
+  );
+
+  /** docId -> outros documentos com transcrição idêntica (re-scan/re-export). */
+  const duplicatasConteudo = useMemo(
+    () => encontrarDuplicatasPorConteudo(documentosDoServidor),
+    [documentosDoServidor],
+  );
+
+  /** Documentos da sessão que ainda não estão na triagem e podem ser analisados. */
+  const docsExistentesForaDaTriagem = useMemo(() => {
+    const naTriagem = new Set(triagem?.documento_ids ?? []);
+    return documentosDoServidor.filter(
+      (d) =>
+        d.tipo_documento !== 'instrucao_processual' &&
+        !naTriagem.has(d.id) &&
+        (!!d.caminho_storage || !!d.transcricao?.trim()),
+    );
+  }, [documentosDoServidor, triagem]);
+
+  // ── Transcrição em série (upload novo e documentos existentes) ────────
+  const transcreverEmSerie = useCallback(async (docs: Documento[]) => {
+    for (let i = 0; i < docs.length; i++) {
+      const doc = docs[i];
+
+      setUploadStatuses((prev) => ({ ...prev, [doc.id]: { ...prev[doc.id], docId: doc.id, status: 'transcrevendo' } }));
+      setPrepStatus((prev) => ({ ...prev, total: docs.length, current: i + 1, currentName: doc.nome_arquivo }));
+
+      try {
+        const text = await transcribeDocument(doc);
+        updateDocumento(doc.id, { transcricao: text });
+
+        const usefulChars = text.trim().length;
+        const isIlegivel = usefulChars < MIN_CHARS_LEGIVEL;
+        setUploadStatuses((prev) => ({
+          ...prev,
+          [doc.id]: {
+            docId: doc.id,
+            status: isIlegivel ? 'ilegivel' : 'transcrito',
+            transcricao_len: usefulChars,
+          },
+        }));
+
+        // Conteúdo idêntico a um documento já existente (arquivo binariamente
+        // diferente — re-scan/re-export — que o hash do upload não detecta).
+        const chaveNova = chaveConteudo({ transcricao: text });
+        if (chaveNova) {
+          const igual = documentosDoServidor.find(
+            (d) => d.id !== doc.id && chaveConteudo(d) === chaveNova,
+          );
+          if (igual) {
+            toast.warning(
+              `"${doc.nome_arquivo}" tem conteúdo idêntico a "${igual.nome_arquivo}", que já está no sistema. Verifique se não é o mesmo comprovante digitalizado duas vezes.`,
+              { duration: 10000 },
+            );
+          }
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'falha desconhecida';
+        setUploadStatuses((prev) => ({ ...prev, [doc.id]: { docId: doc.id, status: 'falha', erro: msg } }));
+        setPrepStatus((prev) => ({ ...prev, failures: [...prev.failures, `${doc.nome_arquivo}: ${msg}`] }));
+      }
+    }
+  }, [updateDocumento, documentosDoServidor]);
+
   // ── Upload handler ─────────────────────────────────────────────────────
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files);
@@ -181,6 +265,7 @@ export default function Triagem() {
     const newDocs: Documento[] = [];
     const newStatuses: Record<string, DocUploadStatus> = {};
     let duplicadosCount = 0;
+    const avisosJaPontua: string[] = [];
 
     for (const file of fileArray) {
       try {
@@ -192,6 +277,10 @@ export default function Triagem() {
         if (exists) {
           // Já está no sistema — inclui na triagem mas não re-transcreve
           duplicadosCount++;
+          const usos = usoDocumentos.get(doc.id);
+          if (usos && usos.length > 0) {
+            avisosJaPontua.push(`"${doc.nome_arquivo}" já pontua no(s) item(ns) ${codigosItensDosUsos(usos).join(', ')}`);
+          }
           // Só adiciona à triagem se ainda não estiver lá
           const jaNaTriagem = (triagem?.documento_ids ?? []).includes(doc.id) || newDocIds.includes(doc.id);
           if (!jaNaTriagem) {
@@ -210,7 +299,13 @@ export default function Triagem() {
     }
 
     if (duplicadosCount > 0) {
-      toast.info(`${duplicadosCount} documento(s) duplicado(s) já existente(s) no sistema — adicionado(s) à triagem sem re-enviar.`);
+      toast.info(`${duplicadosCount} documento(s) duplicado(s) já existente(s) no sistema — o registro original foi reaproveitado, sem criar cópia.`);
+    }
+    if (avisosJaPontua.length > 0) {
+      toast.warning(
+        `Atenção: ${avisosJaPontua.join('; ')}. Confirmar nova sugestão com o mesmo documento pode gerar dupla contagem.`,
+        { duration: 12000 },
+      );
     }
 
     setUploadStatuses((prev) => ({ ...prev, ...newStatuses }));
@@ -225,36 +320,45 @@ export default function Triagem() {
     }));
 
     // Transcrever em série usando os docs retornados diretamente
-    for (let i = 0; i < newDocs.length; i++) {
-      const doc = newDocs[i];
-
-      setUploadStatuses((prev) => ({ ...prev, [doc.id]: { ...prev[doc.id], status: 'transcrevendo' } }));
-      setPrepStatus((prev) => ({ ...prev, total: newDocs.length, current: i + 1, currentName: doc.nome_arquivo }));
-
-      try {
-        const text = await transcribeDocument(doc);
-        updateDocumento(doc.id, { transcricao: text });
-
-        const usefulChars = text.trim().length;
-        const isIlegivel = usefulChars < MIN_CHARS_LEGIVEL;
-        setUploadStatuses((prev) => ({
-          ...prev,
-          [doc.id]: {
-            docId: doc.id,
-            status: isIlegivel ? 'ilegivel' : 'transcrito',
-            transcricao_len: usefulChars,
-          },
-        }));
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : 'falha desconhecida';
-        setUploadStatuses((prev) => ({ ...prev, [doc.id]: { docId: doc.id, status: 'falha', erro: msg } }));
-        setPrepStatus((prev) => ({ ...prev, failures: [...prev.failures, `${doc.nome_arquivo}: ${msg}`] }));
-      }
-    }
+    await transcreverEmSerie(newDocs.filter((d) => !d.transcricao?.trim()));
 
     setIsUploading(false);
     setPrepStatus({ total: 0, current: 0, failures: [] });
-  }, [servidor, addDocumentoFromFile, setTriagem, updateDocumento, triagem]);
+  }, [servidor, addDocumentoFromFile, setTriagem, triagem, usoDocumentos, transcreverEmSerie]);
+
+  // ── Incluir documentos já existentes na triagem (sem re-upload) ────────
+  const handleIncluirExistentes = useCallback(async (docs: Documento[]) => {
+    if (docs.length === 0) return;
+
+    setTriagem((current) => ({
+      schema_version: 1,
+      documento_ids: [...(current?.documento_ids ?? []), ...docs.map((d) => d.id)],
+      sugestoes: current?.sugestoes ?? [],
+      ultima_colagem_em: current?.ultima_colagem_em,
+      erros_ultima_colagem: current?.erros_ultima_colagem,
+    }));
+
+    const comTranscricao = docs.filter((d) => !!d.transcricao?.trim());
+    setUploadStatuses((prev) => ({
+      ...prev,
+      ...Object.fromEntries(
+        comTranscricao.map((d) => [
+          d.id,
+          { docId: d.id, status: 'transcrito', transcricao_len: d.transcricao?.trim().length ?? 0 } satisfies DocUploadStatus,
+        ]),
+      ),
+    }));
+
+    const semTranscricao = docs.filter((d) => !d.transcricao?.trim() && !!d.caminho_storage);
+    if (semTranscricao.length > 0) {
+      setIsUploading(true);
+      await transcreverEmSerie(semTranscricao);
+      setIsUploading(false);
+      setPrepStatus({ total: 0, current: 0, failures: [] });
+    }
+
+    toast.success(`${docs.length} documento(s) já existente(s) incluído(s) na triagem — sem re-enviar arquivos.`);
+  }, [setTriagem, transcreverEmSerie]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -301,8 +405,10 @@ export default function Triagem() {
       itensRSC,
       documentos: triagemDocs,
       ilegiveis: documentosIlegiveis,
+      lancamentosExistentes: lancamentosDoServidor,
+      documentosDaSessao: documentos,
     });
-  }, [triagemDocs, itensRSC, documentosIlegiveis]);
+  }, [triagemDocs, itensRSC, documentosIlegiveis, lancamentosDoServidor, documentos]);
 
   // ── Colagem da resposta ────────────────────────────────────────────────
   const handleProcessarResposta = useCallback(() => {
@@ -358,11 +464,47 @@ export default function Triagem() {
   }, [itensRSC]);
 
   // ── Confirmar sugestão ─────────────────────────────────────────────────
-  const handleConfirmar = useCallback((sugestao: SugestaoTriagem, editado = false, quantidadeOverride?: number) => {
-    if (!sugestao.item_rsc_id || !servidor) return;
+  const handleConfirmar = useCallback((sugestao: SugestaoTriagem, editado = false, quantidadeOverride?: number, ignorarAvisoDuplicidade = false): boolean => {
+    if (!sugestao.item_rsc_id || !servidor) return false;
 
     const item = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
-    if (!item) return;
+    if (!item) return false;
+
+    // Guarda contra dupla contagem: documentos da sugestão que já sustentam
+    // lançamentos existentes (de triagens anteriores ou lançamentos manuais).
+    if (!ignorarAvisoDuplicidade && sugestao.documentos_ids.length > 0) {
+      const usosExternos = sugestao.documentos_ids.flatMap((id) =>
+        (usoDocumentos.get(id) ?? []).filter((u) => u.lancamento.id !== sugestao.lancamento_id),
+      );
+      const todosJaNoMesmoItem = sugestao.documentos_ids.every((id) =>
+        (usoDocumentos.get(id) ?? []).some(
+          (u) => u.lancamento.id !== sugestao.lancamento_id && u.lancamento.item_rsc_id === sugestao.item_rsc_id,
+        ),
+      );
+
+      if (todosJaNoMesmoItem) {
+        toast.error(
+          'Todos os documentos desta sugestão já pontuam em um lançamento existente deste mesmo item — confirmar criaria um lançamento duplicado. Use "Mesclar ao lançamento existente" para acrescentar períodos ou comprovantes.',
+          { duration: 12000 },
+        );
+        return false;
+      }
+
+      if (usosExternos.length > 0) {
+        const codigos = codigosItensDosUsos(usosExternos);
+        toast.warning(
+          `Documento(s) desta sugestão já pontua(m) no(s) item(ns) ${codigos.join(', ')}. O mesmo documento não deve ser contado em duplicidade.`,
+          {
+            duration: 12000,
+            action: {
+              label: 'Confirmar mesmo assim',
+              onClick: () => { handleConfirmar(sugestao, editado, quantidadeOverride, true); },
+            },
+          },
+        );
+        return false;
+      }
+    }
 
     // Períodos são persistidos também em itens manuais: documentam as datas
     // reais das designações no dossiê e no prompt de auditoria (sem isso,
@@ -399,7 +541,8 @@ export default function Triagem() {
       lancamento_id: novoLancamento.id,
     });
     toast.success(`Lançamento criado: +${formatPointValue(pontos)} pts`);
-  }, [servidor, itensRSC, addLancamento, atualizarSugestao]);
+    return true;
+  }, [servidor, itensRSC, addLancamento, atualizarSugestao, usoDocumentos]);
 
   // ── Confirmar editada ─────────────────────────────────────────────────
   const handleConfirmarEditada = useCallback((sugestao: SugestaoTriagem) => {
@@ -427,15 +570,76 @@ export default function Triagem() {
     toast.info('Sugestão descartada.');
   }, [atualizarSugestao]);
 
+  // ── Mesclar sugestão a lançamento existente do mesmo item ─────────────
+  const lancamentoExistenteParaMesclar = useCallback((sugestao: SugestaoTriagem) => {
+    if (!sugestao.item_rsc_id) return null;
+    const candidatos = lancamentosDoServidor.filter(
+      (l) => l.item_rsc_id === sugestao.item_rsc_id && l.id !== sugestao.lancamento_id,
+    );
+    if (candidatos.length === 0) return null;
+    // Prefere o lançamento que já compartilha documentos com a sugestão.
+    const comDocsEmComum = candidatos.find((l) =>
+      getLancamentoDocumentIds(l).some((id) => sugestao.documentos_ids.includes(id)),
+    );
+    return comDocsEmComum ?? candidatos[0];
+  }, [lancamentosDoServidor]);
+
+  const handleMesclar = useCallback((sugestao: SugestaoTriagem) => {
+    if (!sugestao.item_rsc_id) return;
+    const alvo = lancamentoExistenteParaMesclar(sugestao);
+    const item = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
+    if (!alvo || !item) return;
+
+    const docsAtuais = getLancamentoDocumentIds(alvo);
+    const novosDocs = sugestao.documentos_ids.filter((id) => !docsAtuais.includes(id));
+    const comprovantes = [...docsAtuais, ...novosDocs];
+    const periodos = mesclarPeriodos([
+      ...periodosDoLancamento(alvo),
+      ...sugestao.periodos.filter(periodoValido),
+    ]);
+
+    let quantidade = alvo.quantidade_informada;
+    if (item.modo_calculo === 'auto_ano_fracao') {
+      quantidade = unidadesAnoFracao(totalDiasPeriodos(periodos));
+    } else if (item.modo_calculo === 'auto_mes') {
+      quantidade = unidadesMes(totalDiasPeriodos(periodos));
+    } else if (novosDocs.length > 0) {
+      quantidade = alvo.quantidade_informada + (sugestao.quantidade_sugerida ?? novosDocs.length);
+    }
+
+    const pontos = calculateLancamentoPoints(quantidade, item.pontos_por_unidade);
+    const abr = abrangenciaPeriodos(periodos);
+    const delta = pontos - alvo.pontos_calculados;
+
+    updateLancamento(alvo.id, {
+      comprovantes_ids: comprovantes,
+      periodos: periodos.length > 0 ? periodos : undefined,
+      quantidade_informada: quantidade,
+      pontos_calculados: pontos,
+      data_inicio: abr?.inicio ?? alvo.data_inicio,
+      data_fim: abr?.fim ?? alvo.data_fim,
+    });
+    atualizarSugestao(sugestao.id, { status: 'confirmada', lancamento_id: alvo.id });
+    toast.success(
+      `Sugestão mesclada ao lançamento existente do item ${itemDossierCode(item)}: ` +
+      `${novosDocs.length} comprovante(s) novo(s), ${delta >= 0 ? '+' : ''}${formatPointValue(delta)} pts.`,
+    );
+  }, [lancamentoExistenteParaMesclar, itensRSC, updateLancamento, atualizarSugestao]);
+
   // ── Confirmar todas com confiança alta ────────────────────────────────
   const handleConfirmarTodasAltas = useCallback(() => {
     const pendentesAltas = (triagem?.sugestoes ?? []).filter(
       (s) => s.status === 'pendente' && s.confianca === 'alta' && s.item_rsc_id,
     );
+    let confirmadas = 0;
     for (const s of pendentesAltas) {
-      handleConfirmar(s);
+      if (handleConfirmar(s)) confirmadas++;
     }
-    toast.success(`${pendentesAltas.length} sugestão(ões) confirmada(s).`);
+    const retidas = pendentesAltas.length - confirmadas;
+    toast.success(
+      `${confirmadas} sugestão(ões) confirmada(s).` +
+      (retidas > 0 ? ` ${retidas} retida(s) por possível duplicidade — revise individualmente.` : ''),
+    );
   }, [triagem, handleConfirmar]);
 
   // ── Sugestões agrupadas por item ──────────────────────────────────────
@@ -487,11 +691,6 @@ export default function Triagem() {
   }, [docsDuplicados]);
 
   // ── Auditoria IA estruturada ───────────────────────────────────────────
-  const lancamentosDoServidor = useMemo(
-    () => lancamentos.filter((l) => l.servidor_id === servidor?.id),
-    [lancamentos, servidor],
-  );
-
   const nivelPleiteado = useMemo(() => {
     if (!servidor) return null;
     const fromProcesso = processo?.nivel_pleiteado_id
@@ -791,6 +990,67 @@ export default function Triagem() {
               </CardContent>
             </Card>
 
+            {/* Documentos já existentes na sessão — inclui sem re-upload */}
+            {docsExistentesForaDaTriagem.length > 0 && (
+              <Card className="border-sky-100 bg-sky-50/30 shadow-sm">
+                <CardContent className="p-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <FolderOpen className="h-4 w-4 text-sky-600" />
+                      <h3 className="text-sm font-bold text-gray-900">
+                        Documentos já no sistema ({docsExistentesForaDaTriagem.length})
+                      </h3>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={isUploading}
+                      onClick={() => void handleIncluirExistentes(docsExistentesForaDaTriagem)}
+                      className="text-xs"
+                    >
+                      <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                      Incluir todos na triagem
+                    </Button>
+                  </div>
+                  <p className="mb-3 text-xs text-gray-500">
+                    Estes documentos já foram enviados anteriormente (nesta ou em outra triagem). Inclua-os
+                    para que a IA os analise junto com os novos — sem re-enviar arquivos nem criar cópias.
+                  </p>
+                  <div className="space-y-1.5">
+                    {docsExistentesForaDaTriagem.map((doc) => {
+                      const usos = usoDocumentos.get(doc.id);
+                      return (
+                        <div key={doc.id} className="flex items-center gap-3 rounded-xl border border-sky-100 bg-white p-2.5">
+                          <FileText className="h-4 w-4 shrink-0 text-gray-400" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-semibold text-gray-800">{doc.nome_arquivo}</p>
+                            {usos && usos.length > 0 && (
+                              <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                <AlertTriangle className="h-3 w-3" />
+                                Já pontua no(s) item(ns) {codigosItensDosUsos(usos).join(', ')}
+                              </span>
+                            )}
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={isUploading}
+                            onClick={() => void handleIncluirExistentes([doc])}
+                            className="shrink-0 text-xs text-sky-700 hover:bg-sky-50"
+                          >
+                            <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                            Incluir
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Lista de documentos */}
             {triagemDocs.length > 0 && (
               <Card className="border-gray-200 bg-white shadow-sm">
@@ -872,6 +1132,27 @@ export default function Triagem() {
                                 <span className="text-xs text-gray-400">Pendente</span>
                               )}
                             </div>
+                            {(() => {
+                              const usos = usoDocumentos.get(doc.id);
+                              const iguais = duplicatasConteudo.get(doc.id);
+                              if ((!usos || usos.length === 0) && (!iguais || iguais.length === 0)) return null;
+                              return (
+                                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                                  {usos && usos.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                      <AlertTriangle className="h-3 w-3" />
+                                      Já pontua no(s) item(ns) {codigosItensDosUsos(usos).join(', ')}
+                                    </span>
+                                  )}
+                                  {iguais && iguais.length > 0 && (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700" title={iguais.map((d) => d.nome_arquivo).join(', ')}>
+                                      <Copy className="h-3 w-3" />
+                                      Conteúdo idêntico a {iguais[0].nome_arquivo}{iguais.length > 1 ? ` (+${iguais.length - 1})` : ''}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                           <button
                             type="button"
@@ -1158,6 +1439,11 @@ export default function Triagem() {
                                 )}>
                                   {sugestao.confianca}
                                 </span>
+                                {sugestao.ja_contemplado && (
+                                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-800">
+                                    <AlertTriangle className="mr-1 inline h-3 w-3" />IA: já contemplado
+                                  </span>
+                                )}
                                 {sugestao.status === 'confirmada' && (
                                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
                                     <CheckCircle className="mr-1 inline h-3 w-3" />Confirmada
@@ -1233,6 +1519,60 @@ export default function Triagem() {
                                         ))}
                                         {dupDocs.length > 3 && <span className="ml-1">e mais {dupDocs.length - 3}…</span>}
                                         . Verifique se a classificação está correta — o mesmo documento não deve pontuar em itens diferentes.
+                                      </span>
+                                    </p>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Aviso de documentos já vinculados a lançamentos existentes */}
+                              {(() => {
+                                const docsJaLancados = sugestao.documentos_ids
+                                  .flatMap((id) => {
+                                    const doc = documentos.find((d) => d.id === id);
+                                    const usos = (usoDocumentos.get(id) ?? []).filter((u) => u.lancamento.id !== sugestao.lancamento_id);
+                                    return doc && usos.length > 0 ? [{ doc, usos }] : [];
+                                  });
+                                if (docsJaLancados.length === 0) return null;
+                                return (
+                                  <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-xs text-red-900">
+                                    <p className="flex items-start gap-1.5">
+                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                      <span>
+                                        <strong>{docsJaLancados.length} documento(s) já pontua(m)</strong> em lançamento(s) existente(s):
+                                        {docsJaLancados.slice(0, 3).map((e, i) => (
+                                          <span key={e.doc.id} className="ml-1 break-all">
+                                            {i > 0 && '; '}{e.doc.nome_arquivo} (item {codigosItensDosUsos(e.usos).join(', ')})
+                                          </span>
+                                        ))}
+                                        {docsJaLancados.length > 3 && <span className="ml-1">e mais {docsJaLancados.length - 3}…</span>}
+                                        . Confirmar esta sugestão pode gerar dupla contagem.
+                                      </span>
+                                    </p>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Sobreposição de períodos com lançamento existente do mesmo item */}
+                              {(() => {
+                                if (!sugestao.item_rsc_id || sugestao.periodos.length === 0) return null;
+                                const itemSug = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
+                                const isDateBased = itemSug?.modo_calculo === 'auto_ano_fracao' || itemSug?.modo_calculo === 'auto_mes';
+                                if (!isDateBased) return null;
+                                const periodosExistentes = lancamentosDoServidor
+                                  .filter((l) => l.item_rsc_id === sugestao.item_rsc_id && l.id !== sugestao.lancamento_id)
+                                  .flatMap((l) => periodosDoLancamento(l));
+                                if (periodosExistentes.length === 0) return null;
+                                const sobreposicao = intersecaoPeriodos(sugestao.periodos, periodosExistentes);
+                                if (sobreposicao.length === 0) return null;
+                                return (
+                                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+                                    <p className="flex items-start gap-1.5">
+                                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                                      <span>
+                                        <strong>Período(s) já coberto(s)</strong> por lançamento existente deste item:{' '}
+                                        {sobreposicao.map((p) => `${p.inicio} a ${p.fim}`).join('; ')}.
+                                        Tempo sobreposto não conta em dobro — prefira mesclar ao lançamento existente.
                                       </span>
                                     </p>
                                   </div>
@@ -1375,6 +1715,17 @@ export default function Triagem() {
                                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
                                         Confirmar
                                       </Button>
+                                      {lancamentoExistenteParaMesclar(sugestao) && (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleMesclar(sugestao)}
+                                          title="Adiciona os comprovantes e períodos desta sugestão ao lançamento já existente deste item, em vez de criar um novo lançamento."
+                                        >
+                                          <GitMerge className="mr-1 h-3.5 w-3.5" />
+                                          Mesclar ao lançamento existente
+                                        </Button>
+                                      )}
                                       <Button
                                         size="sm"
                                         variant="outline"

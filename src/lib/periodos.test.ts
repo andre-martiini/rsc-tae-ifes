@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   periodoValido,
   mesclarPeriodos,
+  intersecaoPeriodos,
   totalDiasPeriodos,
   totalDiasBrutos,
   unidadesAnoFracao,
@@ -10,6 +11,38 @@ import {
   periodosDoLancamento,
   type Periodo,
 } from './periodos';
+
+describe('intersecaoPeriodos', () => {
+  it('retorna vazio quando não há sobreposição', () => {
+    expect(intersecaoPeriodos(
+      [{ inicio: '2020-01-01', fim: '2020-06-30' }],
+      [{ inicio: '2021-01-01', fim: '2021-12-31' }],
+    )).toEqual([]);
+  });
+
+  it('retorna o trecho coberto por ambos os conjuntos', () => {
+    expect(intersecaoPeriodos(
+      [{ inicio: '2020-01-01', fim: '2020-12-31' }],
+      [{ inicio: '2020-07-01', fim: '2021-06-30' }],
+    )).toEqual([{ inicio: '2020-07-01', fim: '2020-12-31' }]);
+  });
+
+  it('mescla períodos sobrepostos internos antes de comparar', () => {
+    const a: Periodo[] = [
+      { inicio: '2020-01-01', fim: '2020-04-30' },
+      { inicio: '2020-04-01', fim: '2020-12-31' },
+    ];
+    const b: Periodo[] = [{ inicio: '2020-02-01', fim: '2020-05-31' }];
+    expect(intersecaoPeriodos(a, b)).toEqual([{ inicio: '2020-02-01', fim: '2020-05-31' }]);
+  });
+
+  it('ignora períodos inválidos', () => {
+    expect(intersecaoPeriodos(
+      [{ inicio: '2020-12-31', fim: '2020-01-01' }],
+      [{ inicio: '2020-01-01', fim: '2020-12-31' }],
+    )).toEqual([]);
+  });
+});
 
 describe('periodoValido', () => {
   it('aceita período válido com inicio <= fim', () => {
