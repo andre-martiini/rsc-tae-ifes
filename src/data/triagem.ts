@@ -15,6 +15,7 @@ export interface SugestaoTriagem {
   justificativa: string;           // por que a IA sugeriu esse encaixe
   observacoes?: string;            // ressalvas da IA (ex.: "documento sem assinatura visível")
   quantidade_sugerida?: number;    // para itens manuais: nº real de designações/produtos (nem sempre = nº de documentos)
+  ja_contemplado?: boolean;        // a IA indicou que o fato já é coberto por lançamento existente
   status: StatusSugestao;
   lancamento_id?: string;          // preenchido ao confirmar
 }

@@ -42,6 +42,23 @@ export function totalDiasPeriodos(periodos: Periodo[]): number {
   );
 }
 
+/**
+ * Interseção entre dois conjuntos de períodos — os trechos cobertos por ambos.
+ * Usada para detectar quando uma sugestão repete tempo já contabilizado em um
+ * lançamento existente do mesmo item.
+ */
+export function intersecaoPeriodos(a: Periodo[], b: Periodo[]): Periodo[] {
+  const resultado: Periodo[] = [];
+  for (const pa of mesclarPeriodos(a)) {
+    for (const pb of mesclarPeriodos(b)) {
+      const inicio = pa.inicio > pb.inicio ? pa.inicio : pb.inicio;
+      const fim = pa.fim < pb.fim ? pa.fim : pb.fim;
+      if (inicio <= fim) resultado.push({ inicio, fim });
+    }
+  }
+  return mesclarPeriodos(resultado);
+}
+
 /** Soma bruta de dias, contando sobreposições em dobro (para detectar sobreposição). */
 export function totalDiasBrutos(periodos: Periodo[]): number {
   return periodos

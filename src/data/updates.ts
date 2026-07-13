@@ -14,6 +14,27 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '13 de julho de 2026',
+    title: 'Blindagem contra documentos duplicados e Dossiê incremental',
+    description: 'O sistema passou a garantir uma única cópia de cada documento, independentemente da origem do envio, e a prevenir dupla contagem de fatos já lançados. O Dossiê Inteligente agora também funciona para quem já tem documentos e lançamentos na sessão.',
+    features: [
+      'Dossiê incremental: nova seção "Documentos já no sistema" na etapa 1 permite incluir na triagem documentos enviados anteriormente, sem re-enviar arquivos.',
+      'Mesclar ao lançamento existente: sugestões do mesmo item de um lançamento já registrado podem ser fundidas a ele (comprovantes, períodos e pontos recalculados), em vez de criar lançamento duplicado.',
+      'O prompt de classificação passou a incluir um bloco compacto com os itens já lançados, e a IA sinaliza sugestões cujo fato já é coberto por lançamento existente (selo "IA: já contemplado").',
+      'Detecção de conteúdo idêntico: documentos com transcrição igual (mesmo comprovante re-escaneado ou re-exportado) são apontados no upload e na lista da triagem.',
+      'Aviso de período já coberto: sugestões de itens calculados por tempo mostram a sobreposição com períodos de lançamentos existentes do mesmo item.',
+    ],
+    improvements: [
+      'Ao confirmar uma sugestão cujos documentos já pontuam em outro lançamento, o sistema alerta (item diferente) ou bloqueia com orientação de mesclagem (mesmo item).',
+      'Uploads de arquivos repetidos em qualquer tela (Dossiê, Itens, lançamento existente) sempre reaproveitam o registro original — nunca é armazenada uma segunda cópia — e informam onde o documento já pontua.',
+      'Referências por link institucional com o mesmo conjunto de links passam a reaproveitar o documento de referência existente.',
+    ],
+    fixes: [
+      'Corrigida brecha em que o mesmo arquivo selecionado duas vezes no mesmo lote de upload era armazenado em duplicidade.',
+      'Documentos de instrução processual deixaram de criar cópia quando o mesmo arquivo já existia no sistema; se o arquivo já pontua como comprobatório, o sistema bloqueia a reclassificação e orienta o usuário.',
+    ],
+  },
+  {
     date: '10 de julho de 2026',
     title: 'Dossiê Inteligente de Documentos',
     description: 'Nova ferramenta que ajuda o servidor a descobrir onde cada documento se encaixa no rol de itens RSC, revisar as sugestões e fazer a auditoria IA — tudo em um fluxo só, usando uma IA externa no padrão copiar/colar já praticado pelo sistema.',

@@ -9,6 +9,7 @@ import { differenceInDays, parseISO, isValid } from 'date-fns';
 import { Lock, Unlock, UploadCloud, FileText, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { mapearUsoDocumentos, codigosItensDosUsos, type UsoDocumento } from '../lib/duplicateDetection';
 
 interface UploadCardProps {
   key?: React.Key;
@@ -18,7 +19,7 @@ interface UploadCardProps {
 }
 
 export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) {
-  const { addLancamento, addDocumentoFromFile, servidor } = useAppContext();
+  const { addLancamento, addDocumentoFromFile, servidor, lancamentos, itensRSC } = useAppContext();
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [quantidade, setQuantidade] = useState<number>(0);
@@ -29,6 +30,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
     doc: Documento;
     docId: string;
     comprovantesIds: string[];
+    usos: UsoDocumento[];
   } | null>(null);
 
   // Auto-calculate quantity based on dates (only for items with quantidade_automatica)
@@ -81,8 +83,14 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
         }
       }
       if (duplicateDocFound) {
-        setDuplicateWarning({ doc: duplicateDocFound, docId: firstDocId!, comprovantesIds: uploadedIds });
-        return;
+        // O registro existente é sempre reaproveitado (nunca é criada cópia).
+        // Só pede confirmação quando o documento já pontua em algum lançamento.
+        const usos = mapearUsoDocumentos(lancamentos, itensRSC).get(duplicateDocFound.id) ?? [];
+        if (usos.length > 0) {
+          setDuplicateWarning({ doc: duplicateDocFound, docId: firstDocId!, comprovantesIds: uploadedIds, usos });
+          return;
+        }
+        toast.info(`O arquivo "${duplicateDocFound.nome_arquivo}" já estava no sistema — o documento existente foi reaproveitado, sem criar cópia.`);
       }
     } catch (error) {
       toast.error('Erro ao processar arquivo. Verifique o formato PDF.');
@@ -284,15 +292,18 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                   <AlertCircle className="h-8 w-8" />
                 </div>
 
-                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Atenção: Arquivo Duplicado</h3>
-                
+                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Atenção: documento já pontua no processo</h3>
+
                 <div className="space-y-4">
                   <p className="text-sm leading-relaxed text-gray-600">
-                    O sistema identificou que o arquivo <strong className="text-gray-900">"{duplicateWarning.doc.nome_arquivo}"</strong> já foi carregado anteriormente.
+                    O arquivo <strong className="text-gray-900">"{duplicateWarning.doc.nome_arquivo}"</strong> já está no sistema
+                    e <strong className="text-gray-900">já pontua no(s) item(ns) {codigosItensDosUsos(duplicateWarning.usos).join(', ')}</strong>.
                   </p>
-                  
+
                   <p className="text-sm text-gray-500">
-                    Deseja prosseguir com o lançamento utilizando o documento já existente no sistema?
+                    O mesmo documento não deve ser contado em duplicidade. Se prosseguir, o registro existente
+                    será reaproveitado (não é criada cópia), mas o novo lançamento pode ser apontado como
+                    dupla contagem na auditoria.
                   </p>
                 </div>
 
@@ -301,7 +312,7 @@ export default function UploadCard({ item, isOpen, onToggle }: UploadCardProps) 
                     onClick={() => finishSave(duplicateWarning.docId, duplicateWarning.comprovantesIds)}
                     className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
                   >
-                    Reaproveitar e salvar
+                    Prosseguir mesmo assim
                   </Button>
                   <Button
                     variant="ghost"

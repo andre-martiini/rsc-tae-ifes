@@ -59,6 +59,52 @@ describe('parseResultadoTriagem — importação de resposta válida', () => {
   });
 });
 
+describe('parseResultadoTriagem — ja_contemplado', () => {
+  it('preserva ja_contemplado: true da resposta da IA', () => {
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      sugestoes: [
+        {
+          documentos_ids: ['doc-001'],
+          item_rsc_id: 'item-2',
+          confianca: 'alta',
+          periodos: [],
+          justificativa: 'Fato já coberto pelo lançamento do item I-2.',
+          ja_contemplado: true,
+        },
+      ],
+    });
+    const resultado = parseResultadoTriagem(resposta, makeCtx());
+    expect(resultado.sugestoes[0].ja_contemplado).toBe(true);
+  });
+
+  it('não define ja_contemplado quando ausente ou falso', () => {
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      sugestoes: [
+        { documentos_ids: ['doc-001'], item_rsc_id: 'item-2', confianca: 'alta', periodos: [], justificativa: 'x', ja_contemplado: false },
+        { documentos_ids: ['doc-002'], item_rsc_id: 'item-32', confianca: 'alta', periodos: [], justificativa: 'y' },
+      ],
+    });
+    const resultado = parseResultadoTriagem(resposta, makeCtx());
+    expect(resultado.sugestoes[0].ja_contemplado).toBeUndefined();
+    expect(resultado.sugestoes[1].ja_contemplado).toBeUndefined();
+  });
+
+  it('propaga ja_contemplado ao mesclar sugestões do mesmo item', () => {
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      sugestoes: [
+        { documentos_ids: ['doc-001'], item_rsc_id: 'item-2', confianca: 'alta', periodos: [], justificativa: 'a' },
+        { documentos_ids: ['doc-002'], item_rsc_id: 'item-2', confianca: 'alta', periodos: [], justificativa: 'b', ja_contemplado: true },
+      ],
+    });
+    const resultado = parseResultadoTriagem(resposta, makeCtx());
+    expect(resultado.sugestoes).toHaveLength(1);
+    expect(resultado.sugestoes[0].ja_contemplado).toBe(true);
+  });
+});
+
 describe('parseResultadoTriagem — JSON dentro de cerca Markdown', () => {
   it('extrai JSON de cerca ```json', () => {
     const resposta = '```json\n' + JSON.stringify({
