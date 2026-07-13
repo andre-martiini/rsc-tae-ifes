@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { gerarPromptTriagem, gerarLotesTriagem, type TriagemPromptParams } from './triagemPrompt';
-import type { Documento, ItemRSC } from '../data/mock';
+import type { Documento, ItemRSC, Lancamento } from '../data/mock';
 
 const itensMock: ItemRSC[] = [
   {
@@ -151,6 +151,60 @@ describe('gerarLotesTriagem', () => {
     // Todos os documentos devem estar em algum lote
     const todosIds = lotes.flatMap((l) => l.documento_ids);
     expect(todosIds).toHaveLength(docsGrandes.length);
+  });
+});
+
+describe('bloco de itens já lançados (não duplicidade)', () => {
+  const lancamentoExistente: Lancamento = {
+    id: 'lanc-1',
+    servidor_id: 'srv-1',
+    item_rsc_id: 'item-32',
+    comprovantes_ids: ['doc-antigo'],
+    data_inicio: '2019-01-01',
+    data_fim: '2020-12-31',
+    periodos: [{ inicio: '2019-01-01', fim: '2020-12-31' }],
+    quantidade_informada: 2,
+    pontos_calculados: 9,
+    status_auditoria: 'Pendente',
+  };
+  const docAntigo: Documento = {
+    id: 'doc-antigo',
+    servidor_id: 'srv-1',
+    nome_arquivo: 'portaria-antiga.pdf',
+    data_upload: '2023-01-01',
+  };
+
+  it('omite o bloco quando não há lançamentos existentes', () => {
+    const prompt = gerarPromptTriagem(makeParams());
+    expect(prompt).not.toContain('ITENS JÁ LANÇADOS');
+  });
+
+  it('inclui item, períodos e documentos dos lançamentos existentes', () => {
+    const prompt = gerarPromptTriagem(makeParams({
+      lancamentosExistentes: [lancamentoExistente],
+      documentosDaSessao: [docBase, docAntigo],
+    }));
+    expect(prompt).toContain('ITENS JÁ LANÇADOS NO PROCESSO');
+    expect(prompt).toContain('IV-8');
+    expect(prompt).toContain('2019-01-01 a 2020-12-31');
+    expect(prompt).toContain('portaria-antiga.pdf');
+  });
+
+  it('não inclui transcrições dos lançamentos existentes', () => {
+    const prompt = gerarPromptTriagem(makeParams({
+      lancamentosExistentes: [lancamentoExistente],
+      documentosDaSessao: [docBase, { ...docAntigo, transcricao: 'CONTEUDO-QUE-NAO-DEVE-VAZAR' }],
+    }));
+    expect(prompt).not.toContain('CONTEUDO-QUE-NAO-DEVE-VAZAR');
+  });
+
+  it('inclui a regra 8a e o campo ja_contemplado no schema', () => {
+    const prompt = gerarPromptTriagem(makeParams({
+      lancamentosExistentes: [lancamentoExistente],
+      documentosDaSessao: [docBase, docAntigo],
+    }));
+    expect(prompt).toContain('ja_contemplado');
+    expect(prompt).toContain('NÃO DUPLICIDADE COM LANÇAMENTOS EXISTENTES');
   });
 });
 
