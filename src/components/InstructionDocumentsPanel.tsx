@@ -40,18 +40,28 @@ export default function InstructionDocumentsPanel() {
     const current = getInstructionDocument(docsDoServidor, categoria);
     setBusyCategory(categoria);
     try {
-      const { doc } = await addDocumentoFromFile({
+      const { doc, exists, conflitoClassificacao } = await addDocumentoFromFile({
         servidorId: servidor.id,
         file,
         tipoDocumento: 'instrucao_processual',
         categoriaInstrucao: categoria,
-        allowDuplicate: true,
       });
+
+      if (conflitoClassificacao) {
+        toast.error(
+          `O arquivo "${doc.nome_arquivo}" já está no sistema como documento comprobatório vinculado a um lançamento — anexe aqui o extrato correto.`,
+        );
+        return;
+      }
 
       if (current && current.id !== doc.id) {
         await deleteDocumento(current.id);
       }
-      toast.success(current ? 'Documento substituído.' : 'Documento de instrução anexado.');
+      if (exists && current?.id !== doc.id) {
+        toast.info('Este arquivo já estava no sistema — o documento existente foi reaproveitado como documento de instrução.');
+      } else {
+        toast.success(current ? 'Documento substituído.' : 'Documento de instrução anexado.');
+      }
     } catch (error) {
       console.error('Erro ao anexar documento de instrução:', error);
       toast.error('Não foi possível salvar o PDF neste navegador.');
