@@ -21,9 +21,11 @@ import {
   X,
   Clock,
   CheckCircle2,
+  PlayCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
+import VideoModal from '../components/VideoModal';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -32,6 +34,7 @@ import { useAppContext } from '../context/AppContext';
 import type { SessionSummary } from '../context/AppContext';
 import { ESCOLARIDADES, type Servidor } from '../data/mock';
 import { SYSTEM_UPDATES } from '../data/updates';
+import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE } from '../data/tutorialVideo';
 import {
   clearDatabase,
   getServidoresCount,
@@ -50,6 +53,7 @@ export default function LandingScreen() {
   const [isImporting, setIsImporting] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showUpdatesModal, setShowUpdatesModal] = useState(false);
+  const [showVideoModal, setShowVideoModal] = useState(false);
   const importInputRef = React.useRef<HTMLInputElement>(null);
   const { sessions, createSession, loadSession, deleteSession, importSessionAsNew } = useAppContext();
 
@@ -355,14 +359,24 @@ export default function LandingScreen() {
                   {institutionConfig.appSubtitle}
                 </p>
 
-                <button
-                  type="button"
-                  onClick={() => setShowUpdatesModal(true)}
-                  className="px-4 py-2 md:px-5 md:py-2.5 rounded-full border-2 border-primary/20 text-primary hover:bg-primary/5 transition-colors flex items-center gap-2 text-xs font-semibold"
-                >
-                  <Clock className="h-4 w-4 shrink-0" />
-                  Ver Novidades do Sistema
-                </button>
+                <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowVideoModal(true)}
+                    className="px-4 py-2 md:px-5 md:py-2.5 rounded-full bg-primary text-white hover:bg-primary/90 transition-colors flex items-center gap-2 text-xs font-semibold shadow-sm"
+                  >
+                    <PlayCircle className="h-4 w-4 shrink-0" />
+                    Ver Vídeo Tutorial
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowUpdatesModal(true)}
+                    className="px-4 py-2 md:px-5 md:py-2.5 rounded-full border-2 border-primary/20 text-primary hover:bg-primary/5 transition-colors flex items-center gap-2 text-xs font-semibold"
+                  >
+                    <Clock className="h-4 w-4 shrink-0" />
+                    Ver Novidades do Sistema
+                  </button>
+                </div>
               </section>
 
               {showAbout && (
@@ -649,6 +663,14 @@ export default function LandingScreen() {
 
         </div>
       </main>
+
+      <VideoModal
+        open={showVideoModal}
+        onClose={() => setShowVideoModal(false)}
+        videoId={TUTORIAL_VIDEO_ID}
+        title={TUTORIAL_VIDEO_TITLE}
+        subtitle="Veja como usar o Assistente RSC-TAE do início ao fim"
+      />
 
       {/* Updates Modal */}
       {showUpdatesModal && (

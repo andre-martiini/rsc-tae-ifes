@@ -15,6 +15,16 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '16 de julho de 2026',
+    title: 'Vídeo tutorial integrado ao sistema',
+    description: 'O vídeo orientativo do Assistente RSC-TAE, antes disponível apenas no YouTube, agora pode ser assistido sem sair do sistema, em três pontos de acesso.',
+    features: [
+      'Botão "Ver Vídeo Tutorial" na tela inicial (login/seleção de sessão), ao lado de "Ver Novidades do Sistema".',
+      'Banner "Novo por aqui? Assista ao vídeo tutorial" no topo do Dashboard, logo abaixo dos dados do servidor.',
+      'Vídeo embutido diretamente na aba "Guia e Informações" de Ajuda & Novidades, com atalho para abrir no YouTube.',
+    ],
+  },
+  {
+    date: '16 de julho de 2026',
     title: 'Detecção de prompt colado por engano nas telas de IA',
     description: 'Um erro comum era colar de volta o próprio prompt de classificação/auditoria no campo de resposta da IA, em vez da resposta gerada por ela. O sistema agora identifica isso de forma determinística e evita o processamento incorreto.',
     fixes: [

@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, FileSearch, Info, LayoutGrid, List, Bot, ScrollText, UserCircle, ExternalLink } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, FileSearch, Info, LayoutGrid, List, Bot, ScrollText, UserCircle, ExternalLink, PlayCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -11,6 +11,8 @@ import { Card, CardContent } from '../components/ui/card';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import { getDistinctRscCriterionCount, getEligibleRscLevel, getServidorProbationaryStatus, validateLevelConstraints } from '../lib/rsc';
 import MainLayout from '../components/MainLayout';
+import VideoModal from '../components/VideoModal';
+import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE } from '../data/tutorialVideo';
 
 const levelAccentClasses = [
   {
@@ -94,6 +96,7 @@ export default function Dashboard() {
     : null;
 
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [showVideoModal, setShowVideoModal] = useState(false);
 
   const resumoItensLancados = useMemo(() => {
     const itemMap = new Map<
@@ -167,9 +170,27 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-        )}
-
-
+        )}        <button
+          type="button"
+          onClick={() => setShowVideoModal(true)}
+          className="flex w-full items-center gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10 sm:p-5"
+        >
+          <span className="relative flex h-16 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-950 sm:h-20 sm:w-32">
+            <img
+              src={`https://i.ytimg.com/vi/${TUTORIAL_VIDEO_ID}/mqdefault.jpg`}
+              alt=""
+              className="h-full w-full object-cover opacity-80"
+              loading="lazy"
+            />
+            <span className="absolute flex h-8 w-8 items-center justify-center rounded-full bg-white/90 shadow">
+              <PlayCircle className="h-5 w-5 fill-primary text-primary" />
+            </span>
+          </span>
+          <span>
+            <span className="block text-sm font-bold text-gray-900">Novo por aqui? Assista ao vídeo tutorial</span>
+            <span className="mt-0.5 block text-xs text-gray-600">Veja como usar o Dossiê Inteligente e montar seu pedido de RSC-TAE do início ao fim.</span>
+          </span>
+        </button>
 
 
 
@@ -593,6 +614,14 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
+
+      <VideoModal
+        open={showVideoModal}
+        onClose={() => setShowVideoModal(false)}
+        videoId={TUTORIAL_VIDEO_ID}
+        title={TUTORIAL_VIDEO_TITLE}
+        subtitle="Veja como usar o Assistente RSC-TAE do início ao fim"
+      />
     </MainLayout>
   );
 }
