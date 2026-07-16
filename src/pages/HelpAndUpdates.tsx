@@ -26,9 +26,12 @@ import {
   ExternalLink,
   FileText,
   AlertTriangle,
+  PlayCircle,
 } from 'lucide-react';
 import MainLayout from '../components/MainLayout';
+import YoutubeEmbed from '../components/YoutubeEmbed';
 import { SYSTEM_UPDATES, type UpdateEntry } from '../data/updates';
+import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE, TUTORIAL_VIDEO_URL } from '../data/tutorialVideo';
 
 // ── Dados de Legislação (migrados de Legislation.tsx) ───────────────────
 
@@ -249,7 +252,35 @@ export default function HelpAndUpdates() {
         <div>
           {activeTab === 'info' && (
             <div className="space-y-8">
-              
+
+              {/* Vídeo Tutorial */}
+              <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
+                <div className="mb-6 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <PlayCircle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900">Vídeo Tutorial</h3>
+                      <p className="text-xs text-gray-500">Veja como usar o sistema do início ao fim</p>
+                    </div>
+                  </div>
+                  <a
+                    href={TUTORIAL_VIDEO_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hidden shrink-0 items-center gap-1 rounded-full border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:text-primary sm:inline-flex"
+                  >
+                    Abrir no YouTube <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <YoutubeEmbed
+                  videoId={TUTORIAL_VIDEO_ID}
+                  title={TUTORIAL_VIDEO_TITLE}
+                  className="aspect-video w-full rounded-2xl"
+                />
+              </div>
+
               {/* About developers & IFES */}
               <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm sm:p-8">
                 <div className="flex flex-col gap-6 md:flex-row md:items-start md:gap-8">
