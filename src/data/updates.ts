@@ -14,6 +14,14 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '16 de julho de 2026',
+    title: 'Detecção de prompt colado por engano nas telas de IA',
+    description: 'Um erro comum era colar de volta o próprio prompt de classificação/auditoria no campo de resposta da IA, em vez da resposta gerada por ela. O sistema agora identifica isso de forma determinística e evita o processamento incorreto.',
+    fixes: [
+      'Nos campos "Cole aqui a resposta da IA" do Dossiê Inteligente (Análise externa e Auditoria IA) e da Auditoria semântica/Memorial da Consolidação, o sistema compara o início do texto colado com o início do prompt gerado; se coincidirem, exibe um aviso específico orientando a colar a resposta da IA, e desabilita o botão "Processar resposta" até a correção.',
+    ],
+  },
+  {
     date: '13 de julho de 2026',
     title: 'Blindagem contra documentos duplicados e Dossiê incremental',
     description: 'O sistema passou a garantir uma única cópia de cada documento, independentemente da origem do envio, e a prevenir dupla contagem de fatos já lançados. O Dossiê Inteligente agora também funciona para quem já tem documentos e lançamentos na sessão.',

@@ -44,7 +44,7 @@ import { abrangenciaPeriodos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes,
 import { mapearUsoDocumentos, codigosItensDosUsos, encontrarDuplicatasPorConteudo, chaveConteudo } from '../lib/duplicateDetection';
 import { gerarLotesTriagem } from '../lib/triagemPrompt';
 import { parseResultadoTriagem } from '../lib/triagemParser';
-import { pareceJson } from '../lib/jsonDetect';
+import { pareceJson, pareceSerPrompt } from '../lib/jsonDetect';
 import { gerarPromptAuditoriaEstruturada, excedeLimiteTokens } from '../lib/auditoriaPrompt';
 import { parseResultadoAuditoria } from '../lib/auditoriaParser';
 import { getEligibleRscLevel } from '../lib/rsc';
@@ -1275,7 +1275,14 @@ export default function Triagem() {
                       placeholder='Cole a resposta JSON da IA aqui. Pode incluir cercas ```json e texto em volta.'
                       className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    {respostaColada.trim() && !pareceJson(respostaColada) && (
+                    {respostaColada.trim() && pareceSerPrompt(respostaColada, lotes.map((l) => l.prompt)) ? (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        <p className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>Isso é o <strong>prompt</strong>, não a resposta da IA. Copie o prompt acima, cole-o no chat da IA, aguarde a resposta e cole <strong>a resposta</strong> (o JSON gerado por ela) aqui.</span>
+                        </p>
+                      </div>
+                    ) : respostaColada.trim() && !pareceJson(respostaColada) && (
                       <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                         <p className="flex items-start gap-2">
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1295,7 +1302,11 @@ export default function Triagem() {
                       <Button type="button" variant="outline" onClick={() => setEtapa('documentos')}>
                         Voltar
                       </Button>
-                      <Button type="button" onClick={handleProcessarResposta} disabled={!respostaColada.trim()}>
+                      <Button
+                        type="button"
+                        onClick={handleProcessarResposta}
+                        disabled={!respostaColada.trim() || pareceSerPrompt(respostaColada, lotes.map((l) => l.prompt))}
+                      >
                         <Sparkles className="mr-2 h-4 w-4" />
                         Processar resposta
                       </Button>
@@ -1926,7 +1937,14 @@ export default function Triagem() {
                       placeholder='Cole a resposta JSON da IA aqui. Pode incluir cercas ```json e texto em volta.'
                       className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    {respostaAuditoria.trim() && !pareceJson(respostaAuditoria) && (
+                    {respostaAuditoria.trim() && pareceSerPrompt(respostaAuditoria, promptAuditoria) ? (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                        <p className="flex items-start gap-2">
+                          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                          <span>Isso é o <strong>prompt</strong>, não a resposta da IA. Copie o prompt acima, cole-o no chat da IA, aguarde a resposta e cole <strong>a resposta</strong> (o JSON gerado por ela) aqui.</span>
+                        </p>
+                      </div>
+                    ) : respostaAuditoria.trim() && !pareceJson(respostaAuditoria) && (
                       <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                         <p className="flex items-start gap-2">
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1946,7 +1964,11 @@ export default function Triagem() {
                       <Button type="button" variant="outline" onClick={() => setEtapa('revisao')}>
                         Voltar
                       </Button>
-                      <Button type="button" onClick={handleProcessarRespostaAuditoria} disabled={!respostaAuditoria.trim()}>
+                      <Button
+                        type="button"
+                        onClick={handleProcessarRespostaAuditoria}
+                        disabled={!respostaAuditoria.trim() || pareceSerPrompt(respostaAuditoria, promptAuditoria)}
+                      >
                         <Sparkles className="mr-2 h-4 w-4" />
                         Processar resposta
                       </Button>
