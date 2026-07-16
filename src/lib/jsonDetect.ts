@@ -50,3 +50,28 @@ export function pareceJson(texto: string): boolean {
   // Deve conter pelo menos uma "chave": valor
   return /"[^"]+"\s*:/.test(candidato);
 }
+
+/** Normaliza espaços em branco para comparação tolerante a diferenças de quebra de linha. */
+function normalizarEspacos(texto: string): string {
+  return texto.trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Detecção determinística de "colou o prompt em vez da resposta".
+ *
+ * Compara o início do texto colado com o início de um ou mais prompts
+ * conhecidos (normalizando espaços). Se coincidirem por um trecho
+ * suficientemente longo, é quase certo que o usuário copiou o próprio
+ * prompt de volta para o campo de resposta.
+ */
+export function pareceSerPrompt(colado: string, prompts: string | string[], minChars = 60): boolean {
+  const listaPrompts = Array.isArray(prompts) ? prompts : [prompts];
+  const a = normalizarEspacos(colado);
+  if (a.length < minChars) return false;
+
+  return listaPrompts.some((prompt) => {
+    const b = normalizarEspacos(prompt);
+    if (b.length < minChars) return false;
+    return a.slice(0, minChars) === b.slice(0, minChars);
+  });
+}

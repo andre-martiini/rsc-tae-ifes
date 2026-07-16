@@ -6,6 +6,7 @@ import { estimatePromptTokens, gerarPromptAuditoriaConsolidada } from '../lib/au
 import { gerarPromptMemorial } from '../lib/memorialPrompt';
 import { gerarPromptAuditoriaEstruturada } from '../lib/auditoriaPrompt';
 import { parseResultadoAuditoria } from '../lib/auditoriaParser';
+import { pareceSerPrompt } from '../lib/jsonDetect';
 import type { OperacaoAuditoria, TipoOperacao } from '../data/auditoria';
 import { getLancamentoDocumentIds, itemDossierCode } from '../lib/documentOrdering';
 import { needsTranscription, transcribeDocument, type PrepStatus } from '../lib/transcricao';
@@ -439,6 +440,15 @@ export default function AuditPromptModal({
                 className="h-[42vh] min-h-[320px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800 shadow-inner focus:border-primary/50 focus:outline-none focus:ring-4 focus:ring-primary/10"
               />
 
+              {respostaIA.trim() && pareceSerPrompt(respostaIA, prompt) && (
+                <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                  <p className="flex items-start gap-2">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>Isso é o <strong>prompt</strong>, não a resposta da IA. Copie o prompt acima, cole-o no chat da IA, aguarde a resposta e cole <strong>a resposta</strong> (o JSON gerado por ela) aqui.</span>
+                  </p>
+                </div>
+              )}
+
               {errosResposta.length > 0 && (
                 <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                   <p className="font-bold">Avisos na validação:</p>
@@ -664,7 +674,7 @@ export default function AuditPromptModal({
               <Button
                 type="button"
                 onClick={handleProcessarResposta}
-                disabled={!respostaIA.trim()}
+                disabled={!respostaIA.trim() || pareceSerPrompt(respostaIA, prompt)}
                 className="h-10 rounded-xl px-6 text-xs font-black uppercase tracking-widest"
               >
                 <Wrench className="mr-2 h-4 w-4" />
