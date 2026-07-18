@@ -8,11 +8,10 @@ import {
   sortDocumentsByDossierOrder,
   sortLancamentosByDossierOrder,
 } from './documentOrdering';
-import { sumPointValues, splitPointsEvenly } from './points';
+import { sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { getInstructionDocument } from './instructionDocuments';
 import { sanitizeForTag } from './utils';
-import { CATALOG_VERSION } from '../data/normative/rsc-pcctae-2026';
 import {
   generateMemorialDescritivo,
   generateRequerimentoFormal,
@@ -74,125 +73,6 @@ function buildComprovacaoGroups(
     })
     .filter((group): group is ComprovacaoItemResumo => !!group)
     .sort((a, b) => compareItemsByDossierOrder(a.item, b.item));
-}
-
-interface ManifestLancamento {
-  /** Id do lançamento de origem (rsc.ts `Lancamento.id`). Vários documentos do
-   * mesmo lançamento compartilham o mesmo lancamento_id — usado pelo
-   * avaliador para não confundir "um lançamento com N comprovantes" com "N
-   * lançamentos distintos do mesmo item do rol". */
-  lancamento_id: string;
-  item_numero: number;
-  inciso: string;
-  pontos: number;
-  pagina_inicio: number;
-  pagina_fim: number;
-  doc_ref: string;
-  doc_hash?: string;
-  observacao?: string;
-}
-
-interface ManifestRSC {
-  versao: 1;
-  catalogo_versao: string;
-  gerado_em: string;
-  servidor: { siape: string; nome: string; cargo?: string };
-  nivel_pleiteado: string;
-  pontos_totais: number;
-  itens_distintos: number;
-  lancamentos: ManifestLancamento[];
-}
-
-/**
- * Serialização completa do processo (00_Manifest_RSC.json), para o sistema
- * avaliador reconstruir o processo sem depender da extração de tags visuais
- * dos PDFs (robusto a reimpressão/reescaneamento do dossiê). As tags nos
- * PDFs permanecem como fallback.
- */
-function buildManifest(params: {
-  servidor: Servidor;
-  nivelElegivel: NivelRsc | null;
-  processo: ProcessoRSC;
-  lancamentos: Lancamento[];
-  itensRSC: ItemRSC[];
-  documentos: Documento[];
-  documentPageRanges: Record<string, { startPage: number; endPage: number }>;
-  documentHashes: Record<string, string>;
-  totalPontos: number;
-  itensDistintos: number;
-}): ManifestRSC {
-  const {
-    servidor,
-    nivelElegivel,
-    processo,
-    lancamentos,
-    itensRSC,
-    documentos,
-    documentPageRanges,
-    documentHashes,
-    totalPontos,
-    itensDistintos,
-  } = params;
-
-  const sortedLancamentos = sortLancamentosByDossierOrder(lancamentos, itensRSC);
-  const manifestLancamentos: ManifestLancamento[] = [];
-
-  for (const l of sortedLancamentos) {
-    const item = itensRSC.find((i) => i.id === l.item_rsc_id);
-    if (!item) continue;
-
-    const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0
-      ? l.comprovantes_ids
-      : (l.documento_id ? [l.documento_id] : []);
-
-    if (docIds.length === 0) {
-      manifestLancamentos.push({
-        lancamento_id: l.id,
-        item_numero: item.numero,
-        inciso: item.inciso,
-        pontos: l.pontos_calculados,
-        pagina_inicio: 0,
-        pagina_fim: 0,
-        doc_ref: 'AUTODECLARACAO',
-        observacao: l.observacao || undefined,
-      });
-      continue;
-    }
-
-    // O avaliador soma o campo `pontos` de cada entrada do manifest
-    // diretamente (sem reagrupar por item), então quando um lançamento tem
-    // vários comprovantes cada entrada precisa carregar sua fração dos
-    // pontos — nunca o total do lançamento repetido — sob pena de
-    // multiplicar a pontuação apurada por `docIds.length`.
-    const parcelas = splitPointsEvenly(l.pontos_calculados, docIds.length);
-    docIds.forEach((docId, idx) => {
-      const docItem = documentos.find((d) => d.id === docId);
-      const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
-      const range = docRefKey ? documentPageRanges[docRefKey] : undefined;
-      manifestLancamentos.push({
-        lancamento_id: l.id,
-        item_numero: item.numero,
-        inciso: item.inciso,
-        pontos: parcelas[idx],
-        pagina_inicio: range?.startPage ?? 0,
-        pagina_fim: range?.endPage ?? 0,
-        doc_ref: docItem?.nome_arquivo ?? 'AUTODECLARACAO',
-        doc_hash: docRefKey ? documentHashes[docRefKey] : undefined,
-        observacao: l.observacao || undefined,
-      });
-    });
-  }
-
-  return {
-    versao: 1,
-    catalogo_versao: CATALOG_VERSION,
-    gerado_em: new Date().toISOString(),
-    servidor: { siape: servidor.siape, nome: servidor.nome_completo, cargo: servidor.cargo },
-    nivel_pleiteado: processo.nivel_pleiteado_id ?? '',
-    pontos_totais: totalPontos,
-    itens_distintos: itensDistintos,
-    lancamentos: manifestLancamentos,
-  };
 }
 
 function drawTagOnPage(
@@ -272,7 +152,6 @@ export async function exportPacoteRSC(params: {
   const courierFont = await unifiedPdf.embedFont(StandardFonts.Courier);
   let currentPageIndex = 0;
   const documentPageRanges: Record<string, { startPage: number; endPage: number }> = {};
-  const documentHashes: Record<string, string> = {};
 
   for (const group of groups) {
     const itemNumero = group.item.numero;
@@ -313,7 +192,6 @@ export async function exportPacoteRSC(params: {
         const endPage = currentPageIndex;
         const docRefKey = `${itemNumero}_${doc.id}`;
         documentPageRanges[docRefKey] = { startPage, endPage };
-        documentHashes[docRefKey] = docHash;
 
       } catch (err) {
         console.error(`Erro ao mesclar o documento ${doc.nome_arquivo}:`, err);
@@ -333,21 +211,6 @@ export async function exportPacoteRSC(params: {
 
   const unifiedPdfBytes = await unifiedPdf.save();
   zip.file('06_Documentos_Comprobatorios_Unificados.pdf', unifiedPdfBytes);
-
-  // 1.b Manifest estruturado (00_Manifest_RSC.json) — ver buildManifest().
-  const manifest = buildManifest({
-    servidor,
-    nivelElegivel,
-    processo,
-    lancamentos,
-    itensRSC,
-    documentos,
-    documentPageRanges,
-    documentHashes,
-    totalPontos,
-    itensDistintos,
-  });
-  zip.file('00_Manifest_RSC.json', JSON.stringify(manifest, null, 2));
 
   // 2. Gerar o Requerimento
   const requerimentoBytes = await generateRequerimentoFormal(
