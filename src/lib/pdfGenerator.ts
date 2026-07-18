@@ -7,6 +7,7 @@ import {
   rgb,
 } from 'pdf-lib';
 import { institutionConfig } from '../config/institution';
+import { CATALOG_VERSION } from '../data/normative/rsc-pcctae-2026';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
 import {
   buildDossierDocumentOrder,
@@ -931,6 +932,7 @@ export async function generateMemorialDescritivo(
   writer.text(`[RSC:SIAPE:${sanitizedSiape}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:CATALOGO:${CATALOG_VERSION}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
 
   // Mantem as tags na mesma ordem documental usada na aba Documentos e na Auditoria IA.
   const sortedLancamentosForTags = sortLancamentosByDossierOrder(lancamentos, itensRSC);
@@ -942,9 +944,11 @@ export async function generateMemorialDescritivo(
     const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0 ? l.comprovantes_ids : (l.documento_id ? [l.documento_id] : []);
     const incisoRomano = item.inciso;
     const pontosStr = formatPointValue(l.pontos_calculados);
+    const lancamentoIdTag = sanitizeForTag(l.id);
 
     if (docIds.length === 0) {
       writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PAGINA_INICIO:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
@@ -966,6 +970,7 @@ export async function generateMemorialDescritivo(
         const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
 
         writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
