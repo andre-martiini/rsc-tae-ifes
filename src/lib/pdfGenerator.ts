@@ -942,9 +942,11 @@ export async function generateMemorialDescritivo(
     const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0 ? l.comprovantes_ids : (l.documento_id ? [l.documento_id] : []);
     const incisoRomano = item.inciso;
     const pontosStr = formatPointValue(l.pontos_calculados);
+    const lancamentoIdTag = sanitizeForTag(l.id);
 
     if (docIds.length === 0) {
       writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PAGINA_INICIO:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
@@ -966,6 +968,7 @@ export async function generateMemorialDescritivo(
         const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
 
         writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
