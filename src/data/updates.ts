@@ -15,13 +15,13 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '20 de julho de 2026',
-    title: 'Validação de lançamentos com IA integrada à Auditoria',
-    description: 'O botão "Validar com IA" nos lançamentos individuais foi totalmente renovado e simplificado. Agora, em vez de apenas exibir um diagnóstico textual, ele gera um prompt estruturado para que a IA retorne uma resposta no formato JSON de auditoria. Ao colar essa resposta de volta, os ajustes sugeridos são integrados automaticamente ao módulo global de Auditoria.',
+    title: 'Módulo de Auditoria, Validação Individual com IA e PDF Rastreável',
+    description: 'Uma grande atualização focada em qualidade de auditoria e precisão na exportação do pacote RSC foi disponibilizada. Agora, o sistema conta com um módulo completo de auditoria para centralizar sugestões da IA e um fluxo aprimorado de divisão de pontos e marcação de documentos no PDF final.',
     features: [
-      'Validação guiada por lançamento: o botão "Validar com IA" agora abre um assistente de dois passos (copiar prompt e colar resposta JSON).',
-      'Integração direta com o módulo Auditoria: as inconsistências apontadas pela IA para o lançamento validado aparecem na página de Auditoria para revisão e aplicação retroativa pelo usuário.',
-      'Prompt de validação robusto: o prompt agora inclui a lista completa de itens do catálogo normativo, permitindo que a IA sugira reclassificações exatas.',
-      'Garantia de não-duplicidade individual: a validação de lançamentos avulsos substitui apenas as pendências anteriores do mesmo lançamento, mantendo as demais intactas.',
+      'Novo Módulo de Auditoria: Tela centralizada que reúne todas as operações propostas pela IA (remover, reclassificar, ajustar períodos/quantidades, sinalizar). Nela, você pode visualizar um painel comparativo da alteração, ver o impacto real na pontuação do dossiê e aplicar as correções em lote.',
+      'Validação Individual com IA: O botão "Validar com IA" nos lançamentos individuais agora abre um assistente de duas etapas (copiar prompt e colar resposta JSON), integrando os ajustes propostos diretamente ao módulo de Auditoria de forma retroativa.',
+      'Divisão de Pontos no Manifest: Ajuste na geração do arquivo "00_Manifest_RSC.json" para dividir proporcionalmente a pontuação calculada entre os documentos comprovantes anexados ao mesmo lançamento, evitando que o avaliador infle a nota do dossiê.',
+      'Rastreabilidade de Comprovantes: Adição da tag [RSC:LANCAMENTO_ID] nas tags do Memorial e no manifest para que o avaliador identifique múltiplos comprovantes de um único lançamento, garantindo a integridade dos dados.',
     ],
   },
   {
