@@ -15,12 +15,26 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '20 de julho de 2026',
-    title: 'Módulo de Auditoria e Validação Individual com IA',
-    description: 'Uma grande atualização focada em qualidade de auditoria e validação de documentos foi disponibilizada. Agora, o sistema conta com um módulo completo de auditoria para centralizar sugestões da IA e um fluxo aprimorado de análise individual.',
+    title: 'Módulo de Auditoria centralizado, revisão "mastigada" e IA mais confiável',
+    description: 'A maior atualização do sistema até agora: as propostas de ajuste da IA — vindas do Dossiê Inteligente, da Consolidação ou da validação de um lançamento individual — deixam de viver dentro de modais frágeis e passam a ter uma central própria, persistente e muito mais clara. Junto disso, vieram correções importantes de precisão da IA e suporte a formatação de texto no Memorial.',
     features: [
-      'Novo Módulo de Auditoria: Tela centralizada que reúne todas as operações propostas pela IA (remover, reclassificar, ajustar períodos/quantidades, sinalizar). Nela, você pode visualizar um painel comparativo da alteração, ver o impacto real na pontuação do dossiê e aplicar as correções em lote.',
-      'Validação Individual com IA: O botão "Validar com IA" nos lançamentos individuais agora abre um assistente de duas etapas (copiar prompt e colar resposta JSON), integrando os ajustes propostos diretamente ao módulo de Auditoria de forma retroativa.',
-      'Melhorias Gerais na Qualidade dos Prompts: Refinamentos na engenharia de prompt para garantir análises mais precisas e aderentes às normas oficiais do RSC-PCCTAE.',
+      'Novo Módulo de Auditoria (aba própria no menu): reúne todas as propostas de ajuste da IA em um só lugar, com filtros por status (pendente/aprovada/rejeitada/aplicada) e por origem (Consolidar, Dossiê Inteligente ou validação individual). As propostas ficam salvas mesmo se você fechar a tela — nada mais se perde ao sair de um modal.',
+      'Painel "Como está hoje → Como ficará": cada proposta mostra lado a lado o valor atual e o valor após a correção (quantidade, período, item e pontos), com o impacto exato na pontuação daquele lançamento antes de você decidir.',
+      'Projeção da pontuação do dossiê: a barra de aplicação mostra a simulação do total de pontos ("161 → 156,5 pts") somando o efeito de todas as propostas já aprovadas, antes de confirmar.',
+      'Indicação de documentos a remover: quando a IA identifica que um comprovante específico não sustenta o fato lançado (ex.: portaria que designa o servidor como membro comum, não como presidente), ela agora pode indicar exatamente qual documento desvincular do lançamento — evitando que um comprovante inválido fique perdido no dossiê e gere diligência da comissão.',
+      'Visualização de documentos direto na Auditoria: cada proposta lista os comprovantes envolvidos com um botão de pré-visualização (abre o PDF sem sair da tela) e um atalho "Abrir lançamento" para editar rapidamente.',
+      'Divisão automática em lotes: tanto o prompt de auditoria final (Consolidar) quanto o prompt de classificação inicial (Dossiê Inteligente) agora se dividem sozinhos em vários lotes quando o dossiê é grande, com uma trilha de progresso visual (lote 1, 2, 3...), avanço automático ao colar cada resposta e aviso claro de quando um lote foi concluído — evita que a IA perca qualidade ou falhe com prompts grandes demais.',
+      '"Validar com IA" agora analisa todos os documentos do lançamento: antes, quando um lançamento tinha vários comprovantes anexados, apenas o primeiro era enviado para a IA analisar. Agora todos são incluídos, e a resposta da IA se integra diretamente ao módulo de Auditoria.',
+      'Suporte a Markdown no Memorial: negrito (**texto**), itálico (*texto*), títulos (#) e listas (-) digitados no campo do Memorial agora aparecem formatados de verdade — tanto na pré-visualização em tela quanto no PDF final exportado.',
+    ],
+    improvements: [
+      'Botões explícitos de "Aprovar correção" / "Rejeitar" / "Desfazer decisão" no lugar de ícones, e um indicador "Você revisou X de Y propostas" com barra de progresso.',
+      'Guia "Como funciona esta tela" na primeira visita ao módulo de Auditoria, explicando o fluxo revisar → decidir → aplicar.',
+      'Propostas do tipo "Sinalizar" foram renomeadas para "Verificação manual" e ganharam um botão próprio ("Concluir verificação"), deixando claro que são apenas um alerta e não alteram nada sozinhas.',
+      'O prompt de auditoria foi reforçado para instruir a IA a analisar TODOS os documentos de um lançamento (não só o primeiro) e a nunca propor uma "correção" que resulte no mesmo valor já registrado.',
+    ],
+    fixes: [
+      'Corrigido: a IA podia propor "ajustar quantidade" ou "reclassificar" informando exatamente o mesmo valor/item já registrado — uma resposta contraditória que confundia a revisão. Essas propostas agora são descartadas automaticamente, com aviso explicativo.',
     ],
   },
   {
