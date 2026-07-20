@@ -15,13 +15,12 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '20 de julho de 2026',
-    title: 'Módulo de Auditoria, Validação Individual com IA e PDF Rastreável',
-    description: 'Uma grande atualização focada em qualidade de auditoria e precisão na exportação do pacote RSC foi disponibilizada. Agora, o sistema conta com um módulo completo de auditoria para centralizar sugestões da IA e um fluxo aprimorado de divisão de pontos e marcação de documentos no PDF final.',
+    title: 'Módulo de Auditoria e Validação Individual com IA',
+    description: 'Uma grande atualização focada em qualidade de auditoria e validação de documentos foi disponibilizada. Agora, o sistema conta com um módulo completo de auditoria para centralizar sugestões da IA e um fluxo aprimorado de análise individual.',
     features: [
       'Novo Módulo de Auditoria: Tela centralizada que reúne todas as operações propostas pela IA (remover, reclassificar, ajustar períodos/quantidades, sinalizar). Nela, você pode visualizar um painel comparativo da alteração, ver o impacto real na pontuação do dossiê e aplicar as correções em lote.',
       'Validação Individual com IA: O botão "Validar com IA" nos lançamentos individuais agora abre um assistente de duas etapas (copiar prompt e colar resposta JSON), integrando os ajustes propostos diretamente ao módulo de Auditoria de forma retroativa.',
-      'Divisão de Pontos no Manifest: Ajuste na geração do arquivo "00_Manifest_RSC.json" para dividir proporcionalmente a pontuação calculada entre os documentos comprovantes anexados ao mesmo lançamento, evitando que o avaliador infle a nota do dossiê.',
-      'Rastreabilidade de Comprovantes: Adição da tag [RSC:LANCAMENTO_ID] nas tags do Memorial e no manifest para que o avaliador identifique múltiplos comprovantes de um único lançamento, garantindo a integridade dos dados.',
+      'Melhorias Gerais na Qualidade dos Prompts: Refinamentos na engenharia de prompt para garantir análises mais precisas e aderentes às normas oficiais do RSC-PCCTAE.',
     ],
   },
   {
