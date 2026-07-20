@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard';
 import ItemCatalog from './pages/ItemCatalog';
 import Documents from './pages/Documents';
 import Consolidation from './pages/Consolidation';
+import Auditoria from './pages/Auditoria';
 import HelpAndUpdates from './pages/HelpAndUpdates';
 import Triagem from './pages/Triagem';
 import FeedbackWidget from './components/FeedbackWidget';
@@ -69,6 +70,14 @@ export default function App() {
             element={
               <RequireSession>
                 <Consolidation />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="/auditoria"
+            element={
+              <RequireSession>
+                <Auditoria />
               </RequireSession>
             }
           />

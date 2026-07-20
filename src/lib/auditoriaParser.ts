@@ -1,8 +1,8 @@
 import type { Lancamento, ItemRSC } from '../data/mock';
-import { itemDossierCode } from './documentOrdering';
+import { itemDossierCode, getLancamentoDocumentIds } from './documentOrdering';
 import { validarIntervaloDatas } from './dateUtils';
 import type {
-  OperacaoAuditoria,
+  OperacaoParseada,
   TipoOperacao,
   SeveridadeOperacao,
 } from '../data/auditoria';
@@ -11,7 +11,7 @@ import type {
 const SCHEMA_VERSION_ESPERADA = 1;
 
 export interface ResultadoParseAuditoria {
-  operacoes: OperacaoAuditoria[];
+  operacoes: OperacaoParseada[];
   erros: string[];
   ignoradas: number;
 }
@@ -89,7 +89,7 @@ export function parseResultadoAuditoria(
 ): ResultadoParseAuditoria {
   const erros: string[] = [];
   let ignoradas = 0;
-  const operacoes: OperacaoAuditoria[] = [];
+  const operacoes: OperacaoParseada[] = [];
 
   const lancIds = new Set(contexto.lancamentos.map((l) => l.id));
   const itemIds = new Set(contexto.itensRSC.map((i) => i.id));
@@ -175,10 +175,45 @@ export function parseResultadoAuditoria(
       let novos_periodos: Array<{ inicio: string; fim: string }> | undefined;
       let nova_quantidade: number | undefined;
       let descricao: string | undefined;
+      let documentos_remover: string[] | undefined;
+
+      // documentos_remover é opcional e acompanha ajustes (não sinalizar/remover).
+      // Cada id precisa pertencer ao próprio lançamento; ids inválidos são descartados.
+      if (op.documentos_remover !== undefined && tipoOperacao !== 'sinalizar' && tipoOperacao !== 'remover_lancamento') {
+        if (!Array.isArray(op.documentos_remover)) {
+          erros.push(`documentos_remover inválido (esperado lista) para lançamento ${lancamento_id} — campo ignorado.`);
+        } else {
+          const lancDaOp = contexto.lancamentos.find((l) => l.id === lancamento_id);
+          const docsDoLanc = new Set(lancDaOp ? getLancamentoDocumentIds(lancDaOp) : []);
+          const validos: string[] = [];
+          for (const docId of op.documentos_remover) {
+            if (typeof docId === 'string' && docsDoLanc.has(docId)) {
+              if (!validos.includes(docId)) validos.push(docId);
+            } else {
+              erros.push(`documento_id "${docId}" em documentos_remover não pertence ao lançamento ${lancamento_id} — ignorado.`);
+            }
+          }
+          // Guarda: se a IA tentar remover todos os comprovantes, ignora o campo
+          // (esvaziar o lançamento deveria ser remover_lancamento, não ajuste).
+          if (validos.length > 0 && validos.length >= docsDoLanc.size) {
+            erros.push(`documentos_remover do lançamento ${lancamento_id} removeria todos os comprovantes — use remover_lancamento; campo ignorado.`);
+          } else if (validos.length > 0) {
+            documentos_remover = validos;
+          }
+        }
+      }
 
       if (tipoOperacao === 'reclassificar') {
         if (typeof op.novo_item_rsc_id !== 'string' || !itemIds.has(op.novo_item_rsc_id)) {
           erros.push(`novo_item_rsc_id "${op.novo_item_rsc_id}" inválido para reclassificação do lançamento ${lancamento_id} — operação ignorada.`);
+          ignoradas++;
+          continue;
+        }
+        // A IA às vezes se autocontradiz: identifica um problema de enquadramento,
+        // mas propõe "reclassificar" para o item onde o lançamento já está.
+        const lancAtualReclass = contexto.lancamentos.find((l) => l.id === lancamento_id);
+        if (lancAtualReclass && lancAtualReclass.item_rsc_id === op.novo_item_rsc_id) {
+          erros.push(`reclassificar do lançamento ${lancamento_id} propõe o mesmo item já registrado (${op.novo_item_rsc_id}) — resposta inconsistente da IA, operação ignorada.`);
           ignoradas++;
           continue;
         }
@@ -257,6 +292,14 @@ export function parseResultadoAuditoria(
           ignoradas++;
           continue;
         }
+        // A IA às vezes se autocontradiz: aponta a quantidade atual como errada,
+        // mas sugere "corrigir" para o mesmo valor. Isso não é uma correção real.
+        const lancAtual = contexto.lancamentos.find((l) => l.id === lancamento_id);
+        if (lancAtual && lancAtual.quantidade_informada === op.nova_quantidade) {
+          erros.push(`ajustar_quantidade do lançamento ${lancamento_id} propõe o mesmo valor já registrado (${op.nova_quantidade}) — resposta inconsistente da IA, operação ignorada.`);
+          ignoradas++;
+          continue;
+        }
         nova_quantidade = op.nova_quantidade;
       }
 
@@ -281,7 +324,7 @@ export function parseResultadoAuditoria(
         continue;
       }
 
-      const operacao: OperacaoAuditoria = {
+      const operacao: OperacaoParseada = {
         id: gerarId(),
         tipo: tipoOperacao,
         lancamento_id,
@@ -294,6 +337,7 @@ export function parseResultadoAuditoria(
       if (novos_periodos) operacao.novos_periodos = novos_periodos;
       if (nova_quantidade !== undefined) operacao.nova_quantidade = nova_quantidade;
       if (descricao) operacao.descricao = descricao;
+      if (documentos_remover) operacao.documentos_remover = documentos_remover;
 
       dedup.set(dedupKey, operacoes.length);
       operacoes.push(operacao);

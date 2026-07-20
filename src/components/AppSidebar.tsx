@@ -5,6 +5,7 @@ import {
     ScrollText,
     Files,
     FileCheck,
+    ClipboardCheck,
     ChevronLeft,
     ChevronRight,
     LogOut,
@@ -18,7 +19,7 @@ import AppLogo from './AppLogo';
 import { useAppContext } from '../context/AppContext';
 
 interface SidebarProps {
-    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'help' | 'triagem';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'auditoria' | 'profile' | 'help' | 'triagem';
     onNavigate: (view: any) => void;
     onLogout: () => void;
     mobileOpen?: boolean;
@@ -42,6 +43,7 @@ export default function AppSidebar({
         { key: 'catalog', label: 'Itens', icon: ScrollText },
         { key: 'documents', label: 'Documentos', icon: Files },
         { key: 'consolidate', label: 'Consolidar', icon: FileCheck },
+        { key: 'auditoria', label: 'Auditoria', icon: ClipboardCheck },
         { key: 'help', label: 'Ajuda & Novidades', icon: HelpCircle },
     ] as const;
 

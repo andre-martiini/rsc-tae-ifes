@@ -134,6 +134,117 @@ describe('parseResultadoAuditoria — tipos de operação', () => {
     expect(resultado.operacoes[0].nova_quantidade).toBe(3);
   });
 
+  it('ignora ajustar_quantidade quando a IA propõe o mesmo valor já registrado', () => {
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      operacoes: [
+        {
+          lancamento_id: 'lanc-001', // quantidade_informada atual: 1
+          tipo: 'ajustar_quantidade',
+          severidade: 'alta',
+          justificativa: 'Quantidade incorreta, mas a IA sugere o mesmo valor.',
+          nova_quantidade: 1,
+        },
+      ],
+    });
+    const resultado = parseResultadoAuditoria(resposta, makeCtx());
+    expect(resultado.operacoes).toHaveLength(0);
+    expect(resultado.ignoradas).toBe(1);
+    expect(resultado.erros[0]).toMatch(/mesmo valor já registrado/);
+  });
+
+  it('aceita documentos_remover válidos e descarta ids que não pertencem ao lançamento', () => {
+    const ctxMultiDoc: ContextoParseAuditoria = {
+      itensRSC: itens,
+      lancamentos: [
+        {
+          id: 'lanc-multi',
+          servidor_id: 'srv-1',
+          item_rsc_id: 'item-2',
+          comprovantes_ids: ['doc-a', 'doc-b', 'doc-c'],
+          data_inicio: '2020-01-01',
+          data_fim: '2020-12-31',
+          quantidade_informada: 3,
+          pontos_calculados: 13.5,
+          status_auditoria: 'Pendente',
+        },
+      ],
+    };
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      operacoes: [
+        {
+          lancamento_id: 'lanc-multi',
+          tipo: 'ajustar_quantidade',
+          severidade: 'alta',
+          justificativa: 'Uma portaria não comprova o fato.',
+          nova_quantidade: 2,
+          documentos_remover: ['doc-b', 'doc-inexistente'],
+        },
+      ],
+    });
+    const resultado = parseResultadoAuditoria(resposta, ctxMultiDoc);
+    expect(resultado.operacoes).toHaveLength(1);
+    expect(resultado.operacoes[0].documentos_remover).toEqual(['doc-b']);
+    expect(resultado.erros.some((e) => e.includes('doc-inexistente'))).toBe(true);
+  });
+
+  it('ignora documentos_remover que esvaziaria todos os comprovantes', () => {
+    const ctxDoisDocs: ContextoParseAuditoria = {
+      itensRSC: itens,
+      lancamentos: [
+        {
+          id: 'lanc-dois',
+          servidor_id: 'srv-1',
+          item_rsc_id: 'item-2',
+          comprovantes_ids: ['doc-a', 'doc-b'],
+          data_inicio: '2020-01-01',
+          data_fim: '2020-12-31',
+          quantidade_informada: 2,
+          pontos_calculados: 9,
+          status_auditoria: 'Pendente',
+        },
+      ],
+    };
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      operacoes: [
+        {
+          lancamento_id: 'lanc-dois',
+          tipo: 'ajustar_quantidade',
+          severidade: 'alta',
+          justificativa: 'Ambos inválidos.',
+          nova_quantidade: 1,
+          documentos_remover: ['doc-a', 'doc-b'],
+        },
+      ],
+    });
+    const resultado = parseResultadoAuditoria(resposta, ctxDoisDocs);
+    // A operação de quantidade permanece, mas sem desvincular documentos.
+    expect(resultado.operacoes).toHaveLength(1);
+    expect(resultado.operacoes[0].documentos_remover).toBeUndefined();
+    expect(resultado.erros.some((e) => e.includes('remover_lancamento'))).toBe(true);
+  });
+
+  it('não aceita documentos_remover em sinalizar', () => {
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      operacoes: [
+        {
+          lancamento_id: 'lanc-001',
+          tipo: 'sinalizar',
+          severidade: 'baixa',
+          justificativa: 'Alerta.',
+          descricao: 'Verificar.',
+          documentos_remover: ['doc-001'],
+        },
+      ],
+    });
+    const resultado = parseResultadoAuditoria(resposta, makeCtx());
+    expect(resultado.operacoes).toHaveLength(1);
+    expect(resultado.operacoes[0].documentos_remover).toBeUndefined();
+  });
+
   it('processa ajustar_periodos', () => {
     const resposta = JSON.stringify({
       schema_version: 1,
@@ -171,6 +282,26 @@ describe('parseResultadoAuditoria — tipos de operação', () => {
     const resultado = parseResultadoAuditoria(resposta, makeCtx());
     expect(resultado.operacoes).toHaveLength(1);
     expect(resultado.operacoes[0].novo_item_rsc_id).toBe('item-32');
+  });
+
+  it('ignora reclassificar quando a IA propõe o mesmo item já registrado', () => {
+    const resposta = JSON.stringify({
+      schema_version: 1,
+      operacoes: [
+        {
+          lancamento_id: 'lanc-001', // item_rsc_id atual: item-2
+          tipo: 'reclassificar',
+          severidade: 'alta',
+          justificativa: 'Item errado, mas a IA sugere o mesmo item.',
+          novo_item_rsc_id: 'item-2',
+          nova_quantidade: 1,
+        },
+      ],
+    });
+    const resultado = parseResultadoAuditoria(resposta, makeCtx());
+    expect(resultado.operacoes).toHaveLength(0);
+    expect(resultado.ignoradas).toBe(1);
+    expect(resultado.erros[0]).toMatch(/mesmo item já registrado/);
   });
 
   it('processa remover_lancamento', () => {

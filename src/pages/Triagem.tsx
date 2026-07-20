@@ -20,8 +20,6 @@ import {
   PencilLine,
   Sparkles,
   ShieldCheck,
-  SearchCheck,
-  Wrench,
   PlayCircle,
   FolderOpen,
   GitMerge,
@@ -36,7 +34,6 @@ import { Button } from '../components/ui/button';
 import { useAppContext } from '../context/AppContext';
 import type { Documento } from '../data/mock';
 import type { EstadoTriagem, SugestaoTriagem } from '../data/triagem';
-import type { EstadoAuditoria, OperacaoAuditoria, TipoOperacao } from '../data/auditoria';
 import { needsTranscription, transcribeDocument, type PrepStatus } from '../lib/transcricao';
 import { estimatePromptTokens } from '../lib/auditPrompt';
 import { calculateLancamentoPoints, formatPointValue } from '../lib/points';
@@ -90,14 +87,10 @@ export default function Triagem() {
     addDocumentoFromFile,
     updateDocumento,
     addLancamento,
-    removeLancamento,
     updateLancamento,
     lancamentos,
     processo,
-    auditoria,
-    setAuditoria,
-    atualizarOperacaoAuditoria,
-    limparAuditoria,
+    importarOperacoesAuditoria,
   } = useAppContext();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -108,6 +101,10 @@ export default function Triagem() {
   const [etapa, setEtapa] = useState<Etapa>('documentos');
   const [respostaColada, setRespostaColada] = useState('');
   const [errosColagem, setErrosColagem] = useState<string[]>([]);
+  // Fluxo sequencial de lotes do prompt de classificação (mesmo padrão do Consolidar):
+  // um lote por vez, avanço automático ao colar a resposta, banner do lote concluído.
+  const [loteAtualTriagem, setLoteAtualTriagem] = useState(0);
+  const [ultimoLoteConcluidoTriagem, setUltimoLoteConcluidoTriagem] = useState<number | null>(null);
   const [editingSugestaoId, setEditingSugestaoId] = useState<string | null>(null);
   const [editItemRscId, setEditItemRscId] = useState<string>('');
   const [editPeriodos, setEditPeriodos] = useState<Array<{ inicio: string; fim: string }>>([{ inicio: '', fim: '' }]);
@@ -117,11 +114,8 @@ export default function Triagem() {
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
-  const [faseAuditoria, setFaseAuditoria] = useState<'prompt' | 'revisao'>('prompt');
   const [respostaAuditoria, setRespostaAuditoria] = useState('');
   const [errosAuditoria, setErrosAuditoria] = useState<string[]>([]);
-  const [filtroOpStatus, setFiltroOpStatus] = useState<'todos' | 'pendente' | 'aprovada' | 'rejeitada'>('todos');
-  const [aplicandoOps, setAplicandoOps] = useState(false);
   const [docsExpandidos, setDocsExpandidos] = useState<Set<string>>(new Set());
   const [tutorialOpen, setTutorialOpen] = useState(false);
 
@@ -410,7 +404,24 @@ export default function Triagem() {
     });
   }, [triagemDocs, itensRSC, documentosIlegiveis, lancamentosDoServidor, documentos]);
 
-  // ── Colagem da resposta ────────────────────────────────────────────────
+  const totalLotesTriagem = lotes.length;
+  const haMultiplosLotesTriagem = totalLotesTriagem > 1;
+
+  // Reinicia o progresso dos lotes sempre que o CONJUNTO de documentos muda
+  // (novo upload/remoção altera quantos lotes existem e invalida o progresso anterior).
+  // Usa uma chave estável (ids ordenados) em vez de `triagemDocs` diretamente,
+  // pois esse array ganha uma referência nova a cada sugestão processada
+  // (setTriagem recria o objeto), o que reiniciaria o progresso a cada lote.
+  const chaveDocsTriagem = useMemo(
+    () => triagemDocs.map((d) => d.id).sort().join(','),
+    [triagemDocs],
+  );
+  useEffect(() => {
+    setLoteAtualTriagem(0);
+    setUltimoLoteConcluidoTriagem(null);
+  }, [chaveDocsTriagem]);
+
+  // ── Colagem da resposta (um lote por vez) ───────────────────────────────
   const handleProcessarResposta = useCallback(() => {
     if (!respostaColada.trim()) {
       toast.error('Cole a resposta da IA primeiro.');
@@ -432,6 +443,22 @@ export default function Triagem() {
       erros_ultima_colagem: resultado.erros,
     }));
 
+    if (resultado.erros.length > 0) {
+      toast.warning(`${resultado.erros.length} aviso(s) na validação. Verifique abaixo.`);
+    }
+
+    const haProximoLoteTriagem = haMultiplosLotesTriagem && loteAtualTriagem < totalLotesTriagem - 1;
+    if (haProximoLoteTriagem) {
+      const proximo = loteAtualTriagem + 1;
+      setUltimoLoteConcluidoTriagem(loteAtualTriagem + 1);
+      setLoteAtualTriagem(proximo);
+      setRespostaColada('');
+      toast.success(
+        `Lote ${loteAtualTriagem + 1} de ${totalLotesTriagem} processado (${resultado.sugestoes.length} sugestão(ões)). Copie o prompt do lote ${proximo + 1} de ${totalLotesTriagem}.`,
+      );
+      return;
+    }
+
     if (resultado.sugestoes.length > 0) {
       toast.success(`${resultado.sugestoes.length} sugestão(ões) processada(s).`);
       setEtapa('revisao');
@@ -439,12 +466,8 @@ export default function Triagem() {
       toast.warning('Nenhuma sugestão válida encontrada na resposta colada.');
     }
 
-    if (resultado.erros.length > 0) {
-      toast.warning(`${resultado.erros.length} aviso(s) na validação. Verifique abaixo.`);
-    }
-
     setRespostaColada('');
-  }, [respostaColada, triagemDocs, itensRSC, setTriagem]);
+  }, [respostaColada, triagemDocs, itensRSC, setTriagem, haMultiplosLotesTriagem, loteAtualTriagem, totalLotesTriagem]);
 
   // ── Preview de pontos ──────────────────────────────────────────────────
   const previewPontos = useCallback((sugestao: SugestaoTriagem): number => {
@@ -726,136 +749,19 @@ export default function Triagem() {
       itensRSC,
     });
     setErrosAuditoria(resultado.erros);
-    setAuditoria({
-      schema_version: 1,
-      operacoes: resultado.operacoes,
-      ultima_colagem_em: new Date().toISOString(),
-      erros_ultima_colagem: resultado.erros,
-    });
-    if (resultado.operacoes.length > 0) {
-      toast.success(`${resultado.operacoes.length} operação(ões) processada(s).`);
-      setFaseAuditoria('revisao');
-    } else {
-      toast.info('Nenhuma operação encontrada — o processo parece estar em ordem.');
-      setFaseAuditoria('revisao');
-    }
+    importarOperacoesAuditoria('triagem', resultado.operacoes, resultado.erros);
     if (resultado.erros.length > 0) {
       toast.warning(`${resultado.erros.length} aviso(s) na validação.`);
     }
+    if (resultado.operacoes.length > 0) {
+      toast.success(`${resultado.operacoes.length} operação(ões) enviada(s) para o módulo Auditoria.`);
+    } else {
+      toast.info('Nenhuma correção proposta pela IA.');
+    }
     setRespostaAuditoria('');
-  }, [respostaAuditoria, lancamentosDoServidor, itensRSC, setAuditoria]);
+    navigate('/auditoria');
+  }, [respostaAuditoria, lancamentosDoServidor, itensRSC, importarOperacoesAuditoria, navigate]);
 
-  const opsAgrupadas = useMemo(() => {
-    const ops = auditoria?.operacoes ?? [];
-    const filtradas = filtroOpStatus === 'todos'
-      ? ops
-      : ops.filter((o) => o.status === filtroOpStatus);
-    const grupos = new Map<TipoOperacao, OperacaoAuditoria[]>();
-    const ordem: TipoOperacao[] = ['remover_lancamento', 'reclassificar', 'ajustar_periodos', 'ajustar_quantidade', 'sinalizar'];
-    for (const op of filtradas) {
-      const arr = grupos.get(op.tipo) ?? [];
-      arr.push(op);
-      grupos.set(op.tipo, arr);
-    }
-    return ordem
-      .filter((t) => grupos.has(t))
-      .map((t) => [t, grupos.get(t)!] as const);
-  }, [auditoria, filtroOpStatus]);
-
-  const opsPendentes = (auditoria?.operacoes ?? []).filter((o) => o.status === 'pendente').length;
-  const opsAprovadas = (auditoria?.operacoes ?? []).filter((o) => o.status === 'aprovada').length;
-  const opsRejeitadas = (auditoria?.operacoes ?? []).filter((o) => o.status === 'rejeitada').length;
-
-  const handleAplicarOperacoes = useCallback(() => {
-    const ops = auditoria?.operacoes ?? [];
-    const aprovadas = ops.filter((o) => o.status === 'aprovada');
-    if (aprovadas.length === 0) {
-      toast.info('Nenhuma operação aprovada para aplicar.');
-      return;
-    }
-    setAplicandoOps(true);
-    let aplicadas = 0;
-    let puladas = 0;
-    const ordem: TipoOperacao[] = ['remover_lancamento', 'reclassificar', 'ajustar_periodos', 'ajustar_quantidade'];
-
-    for (const tipo of ordem) {
-      const opsDoTipo = aprovadas.filter((o) => o.tipo === tipo);
-      for (const op of opsDoTipo) {
-        const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
-        if (!lanc) {
-          puladas++;
-          continue;
-        }
-        if (tipo === 'remover_lancamento') {
-          removeLancamento(op.lancamento_id);
-          aplicadas++;
-        } else if (tipo === 'reclassificar' && op.novo_item_rsc_id) {
-          const novoItem = itensRSC.find((i) => i.id === op.novo_item_rsc_id);
-          if (!novoItem) {
-            puladas++;
-            continue;
-          }
-          let periodos = op.novos_periodos ?? periodosDoLancamento(lanc);
-          let quantidade = op.nova_quantidade ?? lanc.quantidade_informada;
-          if (novoItem.modo_calculo !== 'manual') {
-            const dias = totalDiasPeriodos(periodos);
-            quantidade = novoItem.modo_calculo === 'auto_mes'
-              ? unidadesMes(dias)
-              : unidadesAnoFracao(dias);
-          }
-          const abr = abrangenciaPeriodos(periodos);
-          const pontos = calculateLancamentoPoints(quantidade, novoItem.pontos_por_unidade);
-          updateLancamento(op.lancamento_id, {
-            item_rsc_id: op.novo_item_rsc_id,
-            periodos,
-            quantidade_informada: quantidade,
-            pontos_calculados: pontos,
-            data_inicio: abr?.inicio ?? lanc.data_inicio,
-            data_fim: abr?.fim ?? lanc.data_fim,
-          });
-          aplicadas++;
-        } else if (tipo === 'ajustar_periodos' && op.novos_periodos) {
-          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
-          const periodos = op.novos_periodos;
-          const dias = totalDiasPeriodos(periodos);
-          let quantidade = lanc.quantidade_informada;
-          if (item && item.modo_calculo !== 'manual') {
-            quantidade = item.modo_calculo === 'auto_mes'
-              ? unidadesMes(dias)
-              : unidadesAnoFracao(dias);
-          }
-          const abr = abrangenciaPeriodos(periodos);
-          const pontos = item
-            ? calculateLancamentoPoints(quantidade, item.pontos_por_unidade)
-            : lanc.pontos_calculados;
-          updateLancamento(op.lancamento_id, {
-            periodos,
-            quantidade_informada: quantidade,
-            pontos_calculados: pontos,
-            data_inicio: abr?.inicio ?? lanc.data_inicio,
-            data_fim: abr?.fim ?? lanc.data_fim,
-          });
-          aplicadas++;
-        } else if (tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined) {
-          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
-          const pontos = item
-            ? calculateLancamentoPoints(op.nova_quantidade, item.pontos_por_unidade)
-            : lanc.pontos_calculados;
-          updateLancamento(op.lancamento_id, {
-            quantidade_informada: op.nova_quantidade,
-            pontos_calculados: pontos,
-          });
-          aplicadas++;
-        }
-      }
-    }
-    // Marcar sinalizar como rejeitada (no-op aplicado)
-    for (const op of aprovadas.filter((o) => o.tipo === 'sinalizar')) {
-      atualizarOperacaoAuditoria(op.id, { status: 'rejeitada' });
-    }
-    setAplicandoOps(false);
-    toast.success(`${aplicadas} operação(ões) aplicada(s), ${puladas} pulada(s).`);
-  }, [auditoria, lancamentos, itensRSC, removeLancamento, updateLancamento, atualizarOperacaoAuditoria]);
 
   // ── Stepper visual ─────────────────────────────────────────────────────
   const stepLabels = [
@@ -1188,15 +1094,57 @@ export default function Triagem() {
               </Card>
             ) : (
               <>
-                {/* Prompt por lote */}
-                {lotes.map((lote, idx) => {
+                {/* Indicador de progresso dos lotes */}
+                {haMultiplosLotesTriagem && (
+                  <div className="flex items-center gap-2 rounded-full bg-violet-50 py-1 pl-1 pr-3 w-fit">
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalLotesTriagem }, (_, i) => i + 1).map((n) => {
+                        const concluido = n <= (ultimoLoteConcluidoTriagem ?? 0);
+                        const atual = n === loteAtualTriagem + 1;
+                        return (
+                          <span
+                            key={n}
+                            className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black transition-colors ${
+                              concluido
+                                ? 'bg-emerald-500 text-white'
+                                : atual
+                                  ? 'bg-violet-600 text-white ring-4 ring-violet-100'
+                                  : 'bg-white text-violet-300 border border-violet-100'
+                            }`}
+                            title={concluido ? `Lote ${n} concluído` : atual ? `Lote ${n} — atual` : `Lote ${n}`}
+                          >
+                            {concluido ? '✓' : n}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-violet-700">
+                      Lote {loteAtualTriagem + 1} de {totalLotesTriagem}
+                    </span>
+                  </div>
+                )}
+
+                {/* Banner persistente de lote concluído */}
+                {ultimoLoteConcluidoTriagem !== null && (
+                  <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                    <p>
+                      <strong>Lote {ultimoLoteConcluidoTriagem} de {totalLotesTriagem} concluído</strong> — {(triagem?.sugestoes.length ?? 0)} sugestão(ões) capturada(s) até agora. Copie abaixo o prompt do <strong>lote {loteAtualTriagem + 1} de {totalLotesTriagem}</strong> e repita o processo.
+                    </p>
+                  </div>
+                )}
+
+                {/* Prompt do lote atual */}
+                {lotes[loteAtualTriagem] && (() => {
+                  const lote = lotes[loteAtualTriagem];
+                  const idx = loteAtualTriagem;
                   const tokens = estimatePromptTokens(lote.prompt);
                   return (
-                    <Card key={idx} className="border-gray-200 bg-white shadow-sm">
+                    <Card className="border-gray-200 bg-white shadow-sm">
                       <CardContent className="p-5">
                         <div className="mb-3 flex items-center justify-between">
                           <h3 className="text-sm font-bold text-gray-900">
-                            {lotes.length > 1 ? `Prompt — Lote ${lote.indice + 1} de ${lote.total}` : 'Prompt de classificação'}
+                            {haMultiplosLotesTriagem ? `Prompt — Lote ${lote.indice + 1} de ${lote.total}` : 'Prompt de classificação'}
                           </h3>
                           <div className="flex items-center gap-3 text-xs text-gray-500">
                             <span>~{tokens.toLocaleString('pt-BR')} tokens</span>
@@ -1233,7 +1181,7 @@ export default function Triagem() {
                       </CardContent>
                     </Card>
                   );
-                })}
+                })()}
 
                 {/* Links IA externa */}
                 <div className="flex flex-wrap gap-2 text-xs">
@@ -1268,14 +1216,18 @@ export default function Triagem() {
                 {/* Área de colagem */}
                 <Card className="border-gray-200 bg-white shadow-sm">
                   <CardContent className="p-5">
-                    <h3 className="mb-3 text-sm font-bold text-gray-900">Cole aqui a resposta da IA</h3>
+                    <h3 className="mb-3 text-sm font-bold text-gray-900">
+                      {haMultiplosLotesTriagem
+                        ? `Cole aqui a resposta da IA para o lote ${loteAtualTriagem + 1} de ${totalLotesTriagem}`
+                        : 'Cole aqui a resposta da IA'}
+                    </h3>
                     <textarea
                       value={respostaColada}
                       onChange={(e) => setRespostaColada(e.target.value)}
                       placeholder='Cole a resposta JSON da IA aqui. Pode incluir cercas ```json e texto em volta.'
                       className="h-[30vh] min-h-[200px] w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-xs leading-relaxed text-gray-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
-                    {respostaColada.trim() && pareceSerPrompt(respostaColada, lotes.map((l) => l.prompt)) ? (
+                    {respostaColada.trim() && pareceSerPrompt(respostaColada, [lotes[loteAtualTriagem]?.prompt ?? '']) ? (
                       <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
                         <p className="flex items-start gap-2">
                           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1305,10 +1257,12 @@ export default function Triagem() {
                       <Button
                         type="button"
                         onClick={handleProcessarResposta}
-                        disabled={!respostaColada.trim() || pareceSerPrompt(respostaColada, lotes.map((l) => l.prompt))}
+                        disabled={!respostaColada.trim() || pareceSerPrompt(respostaColada, [lotes[loteAtualTriagem]?.prompt ?? ''])}
                       >
                         <Sparkles className="mr-2 h-4 w-4" />
-                        Processar resposta
+                        {haMultiplosLotesTriagem && loteAtualTriagem < totalLotesTriagem - 1
+                          ? `Processar e ir para o lote ${loteAtualTriagem + 2}`
+                          : 'Processar resposta'}
                       </Button>
                     </div>
                   </CardContent>
@@ -1801,7 +1755,7 @@ export default function Triagem() {
                       <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
                     {lancamentosDoServidor.length > 0 && (
-                      <Button variant="outline" onClick={() => { setFaseAuditoria('prompt'); setEtapa('auditoria'); }}>
+                      <Button variant="outline" onClick={() => setEtapa('auditoria')}>
                         <ShieldCheck className="mr-1 h-4 w-4" />
                         Auditoria IA
                       </Button>
@@ -1843,7 +1797,7 @@ export default function Triagem() {
                   </div>
                 </CardContent>
               </Card>
-            ) : faseAuditoria === 'prompt' ? (
+            ) : (
               <>
                 {/* Prompt de auditoria */}
                 <Card className="border-gray-200 bg-white shadow-sm">
@@ -1970,319 +1924,11 @@ export default function Triagem() {
                         disabled={!respostaAuditoria.trim() || pareceSerPrompt(respostaAuditoria, promptAuditoria)}
                       >
                         <Sparkles className="mr-2 h-4 w-4" />
-                        Processar resposta
+                        Processar e enviar à Auditoria
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
-              </>
-            ) : (
-              <>
-                {/* Revisão de operações */}
-                <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-                  <p className="flex items-start gap-2">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>
-                      As operações abaixo foram propostas pela IA externa. Aprove ou rejeite cada uma antes de aplicar.
-                      A responsabilidade pelas alterações é do servidor.
-                    </span>
-                  </p>
-                </div>
-
-                {/* Filtros + Aplicar */}
-                <div className="flex flex-wrap items-center gap-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFiltroOpStatus('todos')}
-                      className={cn(
-                        'rounded-full px-3 py-1 font-bold transition-colors',
-                        filtroOpStatus === 'todos' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                      )}
-                    >
-                      Todas ({(auditoria?.operacoes ?? []).length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiltroOpStatus('pendente')}
-                      className={cn(
-                        'rounded-full px-3 py-1 font-bold transition-colors',
-                        filtroOpStatus === 'pendente' ? 'bg-gray-700 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                      )}
-                    >
-                      Pendentes ({opsPendentes})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiltroOpStatus('aprovada')}
-                      className={cn(
-                        'rounded-full px-3 py-1 font-bold transition-colors',
-                        filtroOpStatus === 'aprovada' ? 'bg-emerald-600 text-white' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
-                      )}
-                    >
-                      Aprovadas ({opsAprovadas})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiltroOpStatus('rejeitada')}
-                      className={cn(
-                        'rounded-full px-3 py-1 font-bold transition-colors',
-                        filtroOpStatus === 'rejeitada' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100',
-                      )}
-                    >
-                      Rejeitadas ({opsRejeitadas})
-                    </button>
-                  </div>
-                  {opsAprovadas > 0 && (
-                    <Button type="button" size="sm" onClick={handleAplicarOperacoes} disabled={aplicandoOps}>
-                      {aplicandoOps ? (
-                        <>
-                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                          Aplicando...
-                        </>
-                      ) : (
-                        <>
-                          <Wrench className="mr-1 h-3.5 w-3.5" />
-                          Aplicar aprovadas ({opsAprovadas})
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </div>
-
-                {/* Lista de operações */}
-                {opsAgrupadas.length === 0 && (auditoria?.operacoes ?? []).length === 0 && (
-                  <Card className="border-gray-200 bg-white shadow-sm">
-                    <CardContent className="p-6 text-center text-sm text-gray-500">
-                      Nenhuma operação disponível. Processe a resposta da IA na etapa anterior.
-                      <div className="mt-4 flex justify-center gap-2">
-                        <Button type="button" variant="outline" onClick={() => setFaseAuditoria('prompt')}>
-                          Voltar para o prompt
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {opsAgrupadas.length === 0 && (auditoria?.operacoes ?? []).length > 0 && (
-                  <Card className="border-gray-200 bg-white shadow-sm">
-                    <CardContent className="p-6 text-center text-sm text-gray-500">
-                      Nenhuma operação neste filtro.
-                    </CardContent>
-                  </Card>
-                )}
-
-                {opsAgrupadas.map(([tipo, ops]) => {
-                  const tipoLabel: Record<TipoOperacao, string> = {
-                    remover_lancamento: 'Remover lançamento',
-                    reclassificar: 'Reclassificar',
-                    ajustar_periodos: 'Ajustar períodos',
-                    ajustar_quantidade: 'Ajustar quantidade',
-                    sinalizar: 'Sinalizar',
-                  };
-                  const tipoIcon: Record<TipoOperacao, string> = {
-                    remover_lancamento: 'text-red-600 bg-red-50',
-                    reclassificar: 'text-blue-600 bg-blue-50',
-                    ajustar_periodos: 'text-amber-600 bg-amber-50',
-                    ajustar_quantidade: 'text-amber-600 bg-amber-50',
-                    sinalizar: 'text-gray-600 bg-gray-100',
-                  };
-
-                  return (
-                    <div key={tipo} className="space-y-2">
-                      <h3 className="px-1 text-xs font-black uppercase tracking-wider text-gray-400">
-                        {tipoLabel[tipo]} ({ops.length})
-                      </h3>
-                      {ops.map((op) => {
-                        const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
-                        const item = lanc ? itensRSC.find((i) => i.id === lanc.item_rsc_id) : null;
-                        const novoItem = op.novo_item_rsc_id ? itensRSC.find((i) => i.id === op.novo_item_rsc_id) : null;
-                        const isRejeitada = op.status === 'rejeitada';
-
-                        return (
-                          <Card key={op.id} className={cn(
-                            'border shadow-sm transition-all',
-                            isRejeitada ? 'border-gray-100 bg-gray-50/50 opacity-60' : 'border-gray-200 bg-white',
-                          )}>
-                            <CardContent className="p-4">
-                              <div className="flex items-start gap-3">
-                                <div className={cn('mt-0.5 rounded-lg p-1.5', tipoIcon[op.tipo])}>
-                                  {op.tipo === 'remover_lancamento' ? <Trash2 className="h-4 w-4" /> :
-                                   op.tipo === 'reclassificar' ? <SearchCheck className="h-4 w-4" /> :
-                                   op.tipo === 'sinalizar' ? <AlertCircle className="h-4 w-4" /> :
-                                   <Wrench className="h-4 w-4" />}
-                                </div>
-                                <div className="min-w-0 flex-1 space-y-2">
-                                  {/* Linha 1: tipo + severidade + status */}
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className={cn(
-                                      'rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider',
-                                      op.severidade === 'alta' && 'bg-red-50 text-red-700',
-                                      op.severidade === 'media' && 'bg-amber-50 text-amber-700',
-                                      op.severidade === 'baixa' && 'bg-gray-100 text-gray-600',
-                                    )}>
-                                      {op.severidade}
-                                    </span>
-                                    {op.status === 'aprovada' && (
-                                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                                        <CheckCircle className="mr-1 inline h-3 w-3" />Aprovada
-                                      </span>
-                                    )}
-                                    {isRejeitada && (
-                                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-500">
-                                        Rejeitada
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Lançamento alvo */}
-                                  {lanc && item && (
-                                    <p className="text-sm font-bold text-gray-800">
-                                      {itemDossierCode(item)} — {item.descricao}
-                                    </p>
-                                  )}
-
-                                  {/* Detalhes da operação */}
-                                  {op.tipo === 'reclassificar' && novoItem && (
-                                    <p className="text-xs text-gray-600">
-                                      <span className="font-semibold">Reclassificar para:</span>{' '}
-                                      {itemDossierCode(novoItem)} — {novoItem.descricao}
-                                    </p>
-                                  )}
-                                  {op.tipo === 'ajustar_periodos' && op.novos_periodos && (
-                                    <p className="text-xs text-gray-600">
-                                      <span className="font-semibold">Novos períodos:</span>{' '}
-                                      {op.novos_periodos.map((p) => `${p.inicio} a ${p.fim}`).join('; ')}
-                                    </p>
-                                  )}
-                                  {op.tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined && (
-                                    <p className="text-xs text-gray-600">
-                                      <span className="font-semibold">Nova quantidade:</span> {op.nova_quantidade}
-                                    </p>
-                                  )}
-                                  {op.tipo === 'sinalizar' && op.descricao && (
-                                    <p className="text-xs text-gray-600">
-                                      <span className="font-semibold">Problema:</span> {op.descricao}
-                                    </p>
-                                  )}
-
-                                  {/* Justificativa */}
-                                  <p className="text-xs text-gray-500">
-                                    <span className="font-semibold">Justificativa:</span> {op.justificativa}
-                                  </p>
-
-                                  {/* Ações */}
-                                  <div className="flex flex-wrap gap-2 pt-1">
-                                    {op.status === 'pendente' && (
-                                      <>
-                                        <Button
-                                          size="sm"
-                                          onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'aprovada' })}
-                                        >
-                                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" />
-                                          Aprovar
-                                        </Button>
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'rejeitada' })}
-                                        >
-                                          <X className="mr-1 h-3.5 w-3.5" />
-                                          Rejeitar
-                                        </Button>
-                                      </>
-                                    )}
-                                    {op.status === 'aprovada' && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'pendente' })}
-                                      >
-                                        Desfazer aprovação
-                                      </Button>
-                                    )}
-                                    {isRejeitada && (
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'pendente' })}
-                                      >
-                                        Restaurar
-                                      </Button>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-
-                {/* Pós-auditoria */}
-                {opsPendentes === 0 && (auditoria?.operacoes ?? []).length > 0 && (
-                  <Card className="border-emerald-200 bg-emerald-50/30 shadow-sm">
-                    <CardContent className="p-6 text-center">
-                      <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
-                      <h3 className="mt-3 text-lg font-bold text-gray-900">Auditoria concluída!</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        {opsAprovadas} operação(ões) aprovada(s), {opsRejeitadas} rejeitada(s).
-                      </p>
-                      <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        <Button onClick={() => navigate('/dashboard')}>
-                          Ir para o Dashboard
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" onClick={() => navigate('/consolidar')}>
-                          Ir para Consolidar
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" onClick={() => { limparAuditoria(); setFaseAuditoria('prompt'); }}>
-                          Nova auditoria
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {(!auditoria || (auditoria.operacoes.length === 0)) && (
-                  <Card className="border-emerald-200 bg-emerald-50/30 shadow-sm">
-                    <CardContent className="p-6 text-center">
-                      <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-500" />
-                      <h3 className="mt-3 text-lg font-bold text-gray-900">Nenhum problema encontrado!</h3>
-                      <p className="mt-1 text-sm text-gray-500">
-                        A IA não identificou operações de correção para os lançamentos atuais.
-                      </p>
-                      <div className="mt-4 flex flex-wrap justify-center gap-2">
-                        <Button onClick={() => navigate('/dashboard')}>
-                          Ir para o Dashboard
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" onClick={() => navigate('/consolidar')}>
-                          Ir para Consolidar
-                          <ChevronRight className="ml-1 h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" onClick={() => { limparAuditoria(); setFaseAuditoria('prompt'); }}>
-                          Nova auditoria
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Navegação */}
-                {auditoria && auditoria.operacoes.length > 0 && opsPendentes > 0 && (
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setFaseAuditoria('prompt')}>
-                      Voltar para o prompt
-                    </Button>
-                    <Button variant="outline" onClick={() => { limparAuditoria(); setFaseAuditoria('prompt'); }}>
-                      Limpar auditoria
-                    </Button>
-                  </div>
-                )}
               </>
             )}
           </div>

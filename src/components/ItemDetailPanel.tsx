@@ -39,6 +39,7 @@ import { Label } from './ui/label';
 import { generateLLMPrompt } from '../lib/llmPrompt';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
 import { mapearUsoDocumentos, codigosItensDosUsos, type UsoDocumento } from '../lib/duplicateDetection';
+import SingleAuditPromptModal from './SingleAuditPromptModal';
 
 type UploadMeta = {
   converted: boolean;
@@ -94,6 +95,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const [blobUrls, setBlobUrls] = useState<Record<string, string>>({});
   const [openDocs, setOpenDocs] = useState<Set<string>>(new Set());
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
+  const [activeAuditLancamento, setActiveAuditLancamento] = useState<Lancamento | null>(null);
   const [uploadHelpOpen, setUploadHelpOpen] = useState(false);
   const [linksHelpOpen, setLinksHelpOpen] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{
@@ -543,21 +545,28 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   };
 
   const finishSave = (lancamentoParaPrompt: any, newDoc?: Documento) => {
-    addLancamento(lancamentoParaPrompt);
+    const savedLanc = addLancamento(lancamentoParaPrompt);
 
     toast.success(`Lançamento salvo! +${formatPointValue(lancamentoParaPrompt.pontos_calculados)} pts.`, {
       description: 'Deseja validar esta comprovação com uma IA agora?',
       action: {
         label: 'Gerar Prompt IA',
         onClick: async () => {
-          const preparedDoc = await prepareDocumentForPrompt(newDoc);
+          // Inclui todos os comprovantes do lançamento recém-salvo, não só o primeiro.
+          const idsComprovantes: string[] = savedLanc.comprovantes_ids ?? (newDoc ? [newDoc.id] : []);
+          const docsResolvidos = idsComprovantes
+            .map((id) => docsById.get(id) ?? (newDoc?.id === id ? newDoc : undefined))
+            .filter((d): d is Documento => !!d);
+          const baseDocs = docsResolvidos.length > 0 ? docsResolvidos : (newDoc ? [newDoc] : []);
+          const preparedDocs = await Promise.all(baseDocs.map((doc) => prepareDocumentForPrompt(doc)));
           const prompt = generateLLMPrompt({
             item,
-            lancamento: { ...lancamentoParaPrompt, id: '', status_auditoria: 'Pendente' },
-            documento: preparedDoc,
+            lancamento: savedLanc,
+            documentos: preparedDocs.filter((d): d is Documento => !!d),
             servidor,
           });
           setPromptModalText(prompt);
+          setActiveAuditLancamento(savedLanc);
         },
       },
     });
@@ -1016,7 +1025,6 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
               const comprovantesIds = lancamento.comprovantes_ids ?? (lancamento.documento_id ? [lancamento.documento_id] : []);
               const comprovantes = comprovantesIds.map((id) => docsById.get(id)).filter(Boolean) as Documento[];
               const isEditing = editingLancamentoId === lancamento.id;
-              const primaryDoc = comprovantes[0];
               return (
                 <div key={lancamento.id} className="rounded-xl border border-gray-100 bg-gray-50/70 p-4">
                   {/* Cabeçalho: dados principais + botão excluir */}
@@ -1227,11 +1235,22 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                       <button
                         type="button"
                         onClick={async () => {
-                          const finalDoc = await prepareDocumentForPrompt(primaryDoc);
-                          setPromptModalText(generateLLMPrompt({ item, lancamento, documento: finalDoc, servidor }));
+                          // Transcreve e inclui TODOS os comprovantes do lançamento,
+                          // não apenas o primeiro (o botão antes só usava comprovantes[0]).
+                          const finalDocs = comprovantes.length > 0
+                            ? await Promise.all(comprovantes.map((doc) => prepareDocumentForPrompt(doc)))
+                            : [];
+                          const prompt = generateLLMPrompt({
+                            item,
+                            lancamento,
+                            documentos: finalDocs.filter((d): d is Documento => !!d),
+                            servidor,
+                          });
+                          setPromptModalText(prompt);
+                          setActiveAuditLancamento(lancamento);
                         }}
                         className="flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700 hover:bg-violet-100"
-                        title="Copiar prompt para testar este lançamento em uma IA"
+                        title="Copiar prompt para testar este lançamento em uma IA (inclui todos os documentos anexados)"
                       >
                         <Sparkles className="h-3.5 w-3.5" />
                         Validar com IA
@@ -1434,68 +1453,19 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         </div>
       )}
 
-      {/* Prompt Modal */}
-      {promptModalText && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setPromptModalText(null)}>
-          <div className="relative flex w-full max-w-3xl flex-col rounded-2xl border border-violet-100 bg-white shadow-2xl" style={{ maxHeight: '85vh' }} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-violet-50 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-600">
-                  <Sparkles className="h-5 w-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-gray-900">Prompt para Validação com IA</h3>
-                  <p className="text-[11px] text-gray-500">{Math.round(promptModalText.length / 1024)}KB — Selecione tudo (Ctrl+A) e copie (Ctrl+C)</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const copied = await copyTextToClipboard(promptModalText);
-                    if (!copied) {
-                      toast.error('Não foi possível copiar o prompt completo.');
-                      return;
-                    }
-                    toast.success(`Prompt copiado por completo (${promptModalText.length.toLocaleString('pt-BR')} caracteres).`);
-                  }}
-                  className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 transition-colors"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Copiar tudo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPromptModalText(null)}
-                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-hidden p-4">
-              <textarea
-                id="prompt-textarea"
-                readOnly
-                value={promptModalText}
-                className="h-full w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 font-mono text-[11px] leading-relaxed text-gray-700 focus:border-violet-300 focus:ring-2 focus:ring-violet-100 focus:outline-none"
-                style={{ minHeight: '50vh' }}
-                onFocus={(e) => {
-                  e.target.select();
-                  e.target.setSelectionRange(0, e.target.value.length);
-                }}
-              />
-            </div>
-
-            {/* Footer */}
-            <div className="border-t border-gray-100 px-6 py-3 text-center text-[10px] text-gray-400">
-              Clique no campo acima → Ctrl+A (selecionar tudo) → Ctrl+C (copiar) → Cole na sua IA favorita
-            </div>
-          </div>
-        </div>
+      {/* Single Audit Prompt Modal */}
+      {promptModalText && activeAuditLancamento && (
+        <SingleAuditPromptModal
+          open={!!promptModalText}
+          onClose={() => {
+            setPromptModalText(null);
+            setActiveAuditLancamento(null);
+          }}
+          servidor={servidor}
+          item={item}
+          lancamento={activeAuditLancamento}
+          prompt={promptModalText}
+        />
       )}
 
       {/* Duplicate Warning Modal */}
