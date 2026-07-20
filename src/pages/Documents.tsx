@@ -31,9 +31,11 @@ import {
   sortLancamentosByDossierOrder,
 } from '../lib/documentOrdering';
 import { getDocumentBlob } from '../lib/documentStorage';
+import { prepareViewerBlob, shouldRenderAsPdf } from '../lib/documentViewer';
 import { generateLLMPrompt } from '../lib/llmPrompt';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
 import { cn } from '../lib/utils';
+import SingleAuditPromptModal from '../components/SingleAuditPromptModal';
 
 type DocumentUsage = {
   lancamento: Lancamento;
@@ -118,18 +120,6 @@ function formatUserFileKind(doc: Documento) {
   if (mime.includes('spreadsheet') || fileName.endsWith('.xls') || fileName.endsWith('.xlsx')) return 'Planilha';
   if (mime.startsWith('text/') || fileName.endsWith('.txt') || fileName.endsWith('.md')) return 'Texto';
   return 'Arquivo';
-}
-
-function shouldRenderAsPdf(doc: Documento, blob: Blob) {
-  return blob.type.toLowerCase().includes('pdf') || doc.nome_arquivo.toLowerCase().endsWith('.pdf');
-}
-
-function prepareViewerBlob(doc: Documento, blob: Blob) {
-  if (shouldRenderAsPdf(doc, blob) && blob.type !== 'application/pdf') {
-    return new Blob([blob], { type: 'application/pdf' });
-  }
-
-  return blob;
 }
 
 function formatDate(value: string) {
@@ -297,6 +287,8 @@ export default function Documents() {
   const [viewerErrors, setViewerErrors] = useState<Record<string, string>>({});
   const [viewerLoadingDocId, setViewerLoadingDocId] = useState<string | null>(null);
   const [promptModalText, setPromptModalText] = useState<string | null>(null);
+  const [activeAuditLancamento, setActiveAuditLancamento] = useState<Lancamento | null>(null);
+  const [activeAuditItem, setActiveAuditItem] = useState<ItemRSC | null>(null);
   const [promptLoadingDocId, setPromptLoadingDocId] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
   const [pendingDeleteRow, setPendingDeleteRow] = useState<InventoryRow | null>(null);
@@ -467,12 +459,15 @@ export default function Documents() {
     setPromptLoadingDocId(row.doc.id);
     try {
       const preparedDoc = await prepareDocumentForPrompt(row.doc);
-      setPromptModalText(generateLLMPrompt({
+      const prompt = generateLLMPrompt({
         item: usage.item,
         lancamento: usage.lancamento,
         documento: preparedDoc,
         servidor,
-      }));
+      });
+      setPromptModalText(prompt);
+      setActiveAuditLancamento(usage.lancamento);
+      setActiveAuditItem(usage.item);
     } finally {
       setPromptLoadingDocId(null);
     }
@@ -821,8 +816,19 @@ export default function Documents() {
           </aside>
         </div>
       </main>
-      {promptModalText && (
-        <PromptModal text={promptModalText} onClose={() => setPromptModalText(null)} />
+      {promptModalText && activeAuditLancamento && activeAuditItem && (
+        <SingleAuditPromptModal
+          open={!!promptModalText}
+          onClose={() => {
+            setPromptModalText(null);
+            setActiveAuditLancamento(null);
+            setActiveAuditItem(null);
+          }}
+          servidor={servidor}
+          item={activeAuditItem}
+          lancamento={activeAuditLancamento}
+          prompt={promptModalText}
+        />
       )}
       {pendingDeleteRow && (
         <DeleteDocumentModal

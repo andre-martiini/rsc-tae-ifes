@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { AlertTriangle, Clipboard, Download, ExternalLink, FileText, Loader2, X, CheckCircle2, CircleDot, ChevronLeft, Wrench } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { AlertTriangle, CheckCircle2, Clipboard, Download, ExternalLink, FileText, X, ChevronLeft, Wrench } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
-import { estimatePromptTokens, gerarPromptAuditoriaConsolidada } from '../lib/auditPrompt';
+import { estimatePromptTokens } from '../lib/auditPrompt';
 import { gerarPromptMemorial } from '../lib/memorialPrompt';
-import { gerarPromptAuditoriaEstruturada } from '../lib/auditoriaPrompt';
+import { gerarLotesAuditoria, type LoteAuditoria } from '../lib/auditoriaPrompt';
 import { parseResultadoAuditoria } from '../lib/auditoriaParser';
 import { pareceSerPrompt } from '../lib/jsonDetect';
-import type { OperacaoAuditoria, TipoOperacao } from '../data/auditoria';
-import { getLancamentoDocumentIds, itemDossierCode } from '../lib/documentOrdering';
+import type { OperacaoParseada } from '../data/auditoria';
+import { getLancamentoDocumentIds } from '../lib/documentOrdering';
 import { needsTranscription, transcribeDocument, type PrepStatus } from '../lib/transcricao';
-import { calculateLancamentoPoints } from '../lib/points';
-import { periodosDoLancamento, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, abrangenciaPeriodos } from '../lib/periodos';
+import { useAppContext } from '../context/AppContext';
 import { Button } from './ui/button';
 
 type NivelResumo = {
@@ -32,44 +32,22 @@ type Props = {
   itensRSC: ItemRSC[];
   documentos: Documento[];
   updateDocumento: (docId: string, updates: Partial<Documento>) => void;
-  removeLancamento?: (id: string) => boolean;
-  updateLancamento?: (id: string, updates: Partial<Omit<Lancamento, 'id'>>) => boolean;
   mode?: 'audit' | 'memorial';
 };
 
-function downloadTextFile(prompt: string, servidor: Servidor, mode: 'audit' | 'memorial') {
+function downloadTextFile(prompt: string, servidor: Servidor, mode: 'audit' | 'memorial', loteSuffix?: string) {
   const siape = servidor.siape.replace(/\D/g, '') || 'servidor';
   const date = new Date().toISOString().slice(0, 10);
   const blob = new Blob([prompt], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `prompt-${mode === 'memorial' ? 'memorial' : 'auditoria'}-rsc-${siape}-${date}.txt`;
+  anchor.download = `prompt-${mode === 'memorial' ? 'memorial' : 'auditoria'}-rsc-${siape}-${date}${loteSuffix ? `-${loteSuffix}` : ''}.txt`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
   URL.revokeObjectURL(url);
 }
-
-const SEVERIDADE_LABEL: Record<string, string> = {
-  alta: 'Alta',
-  media: 'Média',
-  baixa: 'Baixa',
-};
-
-const SEVERIDADE_CLASS: Record<string, string> = {
-  alta: 'bg-red-50 text-red-700 border-red-200',
-  media: 'bg-amber-50 text-amber-700 border-amber-200',
-  baixa: 'bg-blue-50 text-blue-700 border-blue-200',
-};
-
-const TIPO_LABEL: Record<string, string> = {
-  remover_lancamento: 'Remover lançamento',
-  reclassificar: 'Reclassificar',
-  ajustar_periodos: 'Ajustar períodos',
-  ajustar_quantidade: 'Ajustar quantidade',
-  sinalizar: 'Sinalizar',
-};
 
 export default function AuditPromptModal({
   open,
@@ -81,12 +59,12 @@ export default function AuditPromptModal({
   itensRSC,
   documentos,
   updateDocumento,
-  removeLancamento,
-  updateLancamento,
   mode = 'audit',
 }: Props) {
   const isAudit = mode === 'audit';
-  const [fase, setFase] = useState<'prompt' | 'resposta' | 'operacoes'>('prompt');
+  const navigate = useNavigate();
+  const { importarOperacoesAuditoria } = useAppContext();
+  const [fase, setFase] = useState<'prompt' | 'resposta'>('prompt');
   const [preparedDocs, setPreparedDocs] = useState<Documento[]>(documentos);
   const [prompt, setPrompt] = useState('');
   const [isPreparing, setIsPreparing] = useState(false);
@@ -95,9 +73,17 @@ export default function AuditPromptModal({
 
   // Audit response phase state
   const [respostaIA, setRespostaIA] = useState('');
-  const [operacoes, setOperacoes] = useState<OperacaoAuditoria[]>([]);
   const [errosResposta, setErrosResposta] = useState<string[]>([]);
-  const [aplicandoOps, setAplicandoOps] = useState(false);
+
+  // Divisão em lotes (dossiês grandes viram vários prompts menores e independentes)
+  const [lotes, setLotes] = useState<LoteAuditoria[]>([]);
+  const [loteAtual, setLoteAtual] = useState(0);
+  // Operações e erros acumulados ao longo dos lotes, importados de uma vez no fim.
+  const [opsAcumuladas, setOpsAcumuladas] = useState<OperacaoParseada[]>([]);
+  const [errosAcumulados, setErrosAcumulados] = useState<string[]>([]);
+  // Nº (1-based) do último lote processado com sucesso — usado para mostrar um
+  // aviso persistente na tela ao avançar de lote (um toast sozinho passa despercebido).
+  const [ultimoLoteConcluido, setUltimoLoteConcluido] = useState<number | null>(null);
 
   const usedDocumentIds = useMemo(
     () => new Set(lancamentos.flatMap(getLancamentoDocumentIds)),
@@ -112,8 +98,11 @@ export default function AuditPromptModal({
     if (open) {
       setFase('prompt');
       setRespostaIA('');
-      setOperacoes([]);
       setErrosResposta([]);
+      setOpsAcumuladas([]);
+      setErrosAcumulados([]);
+      setLoteAtual(0);
+      setUltimoLoteConcluido(null);
     }
   }, [open]);
 
@@ -158,14 +147,18 @@ export default function AuditPromptModal({
         itensRSC,
         documentos: nextDocs,
       };
-      const nextPrompt = mode === 'memorial'
-        ? gerarPromptMemorial(promptParams)
-        : isAudit
-          ? gerarPromptAuditoriaEstruturada({ ...promptParams, nivelPleiteado: nivelPleiteado as any })
-          : gerarPromptAuditoriaConsolidada(promptParams);
+
+      if (mode === 'memorial') {
+        setLotes([]);
+        setPrompt(gerarPromptMemorial(promptParams));
+      } else {
+        const lotesGerados = gerarLotesAuditoria({ ...promptParams, nivelPleiteado: nivelPleiteado as any });
+        setLotes(lotesGerados);
+        setLoteAtual(0);
+        setPrompt(lotesGerados[0]?.prompt ?? '');
+      }
 
       setPreparedDocs(nextDocs);
-      setPrompt(nextPrompt);
       setStatus({ total: docsToPrepare.length, current: docsToPrepare.length, failures });
       setIsPreparing(false);
     }
@@ -194,114 +187,53 @@ export default function AuditPromptModal({
     toast.info('Prompt selecionado. Use Ctrl+C ou clique com o botão direito e copie.');
   };
 
+  const totalLotes = lotes.length;
+  const haMultiplosLotes = totalLotes > 1;
+
   const handleProcessarResposta = useCallback(() => {
     if (!respostaIA.trim()) {
       toast.error('Cole a resposta da IA primeiro.');
       return;
     }
-    const resultado = parseResultadoAuditoria(respostaIA, {
-      lancamentos,
-      itensRSC,
-    });
-    setErrosResposta(resultado.erros);
-    setOperacoes(resultado.operacoes);
-    if (resultado.operacoes.length > 0) {
-      toast.success(`${resultado.operacoes.length} operação(ões) processada(s).`);
-      setFase('operacoes');
-    } else {
-      toast.info('Nenhuma operação encontrada — o processo parece estar em ordem.');
-      setFase('operacoes');
-    }
+    const resultado = parseResultadoAuditoria(respostaIA, { lancamentos, itensRSC });
+
+    const prefixo = haMultiplosLotes ? `Lote ${loteAtual + 1}/${totalLotes}: ` : '';
+    const errosDesteLote = resultado.erros.map((erro) => `${prefixo}${erro}`);
     if (resultado.erros.length > 0) {
       toast.warning(`${resultado.erros.length} aviso(s) na validação.`);
     }
-  }, [respostaIA, lancamentos, itensRSC]);
 
-  const toggleOperacaoStatus = useCallback((id: string, status: 'aprovada' | 'rejeitada') => {
-    setOperacoes((prev) => prev.map((op) => (op.id === id ? { ...op, status } : op)));
-  }, []);
+    const opsFinais = [...opsAcumuladas, ...resultado.operacoes];
+    const errosFinais = [...errosAcumulados, ...errosDesteLote];
+    setOpsAcumuladas(opsFinais);
+    setErrosAcumulados(errosFinais);
+    setErrosResposta(resultado.erros);
 
-  const opsPendentes = operacoes.filter((o) => o.status === 'pendente').length;
-  const opsAprovadas = operacoes.filter((o) => o.status === 'aprovada').length;
-  const opsRejeitadas = operacoes.filter((o) => o.status === 'rejeitada').length;
-
-  const handleAplicarOperacoes = useCallback(() => {
-    if (!removeLancamento || !updateLancamento) {
-      toast.error('Funções de edição não disponíveis.');
+    const haProximoLote = haMultiplosLotes && loteAtual < totalLotes - 1;
+    if (haProximoLote) {
+      const proximo = loteAtual + 1;
+      setLoteAtual(proximo);
+      setPrompt(lotes[proximo].prompt);
+      setRespostaIA('');
+      setErrosResposta([]);
+      setUltimoLoteConcluido(loteAtual + 1);
+      setFase('prompt');
+      toast.success(
+        `Lote ${loteAtual + 1} de ${totalLotes} processado (${resultado.operacoes.length} operação(ões)). Copie o prompt do lote ${proximo + 1} de ${totalLotes}.`,
+      );
       return;
     }
-    const aprovadas = operacoes.filter((o) => o.status === 'aprovada');
-    if (aprovadas.length === 0) {
-      toast.info('Nenhuma operação aprovada para aplicar.');
-      return;
-    }
-    setAplicandoOps(true);
-    let aplicadas = 0;
-    let puladas = 0;
-    const ordem: TipoOperacao[] = ['remover_lancamento', 'reclassificar', 'ajustar_periodos', 'ajustar_quantidade'];
 
-    for (const tipo of ordem) {
-      const opsDoTipo = aprovadas.filter((o) => o.tipo === tipo);
-      for (const op of opsDoTipo) {
-        const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
-        if (!lanc) { puladas++; continue; }
-        if (tipo === 'remover_lancamento') {
-          removeLancamento(op.lancamento_id);
-          aplicadas++;
-        } else if (tipo === 'reclassificar' && op.novo_item_rsc_id) {
-          const novoItem = itensRSC.find((i) => i.id === op.novo_item_rsc_id);
-          if (!novoItem) { puladas++; continue; }
-          let periodos = op.novos_periodos ?? periodosDoLancamento(lanc);
-          let quantidade = op.nova_quantidade ?? lanc.quantidade_informada;
-          if (novoItem.modo_calculo !== 'manual') {
-            const dias = totalDiasPeriodos(periodos);
-            quantidade = novoItem.modo_calculo === 'auto_mes' ? unidadesMes(dias) : unidadesAnoFracao(dias);
-          }
-          const abr = abrangenciaPeriodos(periodos);
-          const pontos = calculateLancamentoPoints(quantidade, novoItem.pontos_por_unidade);
-          updateLancamento(op.lancamento_id, {
-            item_rsc_id: op.novo_item_rsc_id,
-            periodos,
-            quantidade_informada: quantidade,
-            pontos_calculados: pontos,
-            data_inicio: abr?.inicio ?? lanc.data_inicio,
-            data_fim: abr?.fim ?? lanc.data_fim,
-          });
-          aplicadas++;
-        } else if (tipo === 'ajustar_periodos' && op.novos_periodos) {
-          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
-          const periodos = op.novos_periodos;
-          const dias = totalDiasPeriodos(periodos);
-          let quantidade = lanc.quantidade_informada;
-          if (item && item.modo_calculo !== 'manual') {
-            quantidade = item.modo_calculo === 'auto_mes' ? unidadesMes(dias) : unidadesAnoFracao(dias);
-          }
-          const abr = abrangenciaPeriodos(periodos);
-          const pontos = item ? calculateLancamentoPoints(quantidade, item.pontos_por_unidade) : lanc.pontos_calculados;
-          updateLancamento(op.lancamento_id, {
-            periodos,
-            quantidade_informada: quantidade,
-            pontos_calculados: pontos,
-            data_inicio: abr?.inicio ?? lanc.data_inicio,
-            data_fim: abr?.fim ?? lanc.data_fim,
-          });
-          aplicadas++;
-        } else if (tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined) {
-          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
-          const pontos = item ? calculateLancamentoPoints(op.nova_quantidade, item.pontos_por_unidade) : lanc.pontos_calculados;
-          updateLancamento(op.lancamento_id, {
-            quantidade_informada: op.nova_quantidade,
-            pontos_calculados: pontos,
-          });
-          aplicadas++;
-        }
-      }
+    // Último (ou único) lote: importa tudo para o módulo Auditoria e redireciona.
+    importarOperacoesAuditoria('consolidar', opsFinais, errosFinais);
+    if (opsFinais.length > 0) {
+      toast.success(`${opsFinais.length} operação(ões) enviada(s) para o módulo Auditoria.`);
+    } else {
+      toast.info('Nenhuma correção proposta. Nada a revisar no módulo Auditoria.');
     }
-    // Marcar sinalizar como rejeitada
-    setOperacoes((prev) => prev.map((op) => op.tipo === 'sinalizar' && op.status === 'aprovada' ? { ...op, status: 'rejeitada' as const } : op));
-    setAplicandoOps(false);
-    toast.success(`${aplicadas} operação(ões) aplicada(s), ${puladas} pulada(s).`);
-  }, [operacoes, lancamentos, itensRSC, removeLancamento, updateLancamento]);
+    onClose();
+    navigate('/auditoria');
+  }, [respostaIA, lancamentos, itensRSC, lotes, loteAtual, totalLotes, haMultiplosLotes, opsAcumuladas, errosAcumulados, importarOperacoesAuditoria, onClose, navigate]);
 
   if (!open) return null;
 
@@ -329,7 +261,7 @@ export default function AuditPromptModal({
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-600">
               {mode === 'memorial'
                 ? 'O sistema prepara as transcrições disponíveis e gera um comando para a IA redigir uma base narrativa. Depois, revise o resultado e cole a versão final no campo de Memorial do sistema.'
-                : 'O sistema prepara as transcrições e gera um prompt estruturado para a IA auditar os lançamentos. Copie o prompt, envie para uma IA externa, cole a resposta em JSON e aplique as correções.'}
+                : 'O sistema prepara as transcrições e gera um prompt estruturado para a IA auditar os lançamentos. Copie o prompt, envie para uma IA externa e cole a resposta em JSON — as correções propostas vão para o módulo Auditoria, onde você revisa e aplica.'}
             </p>
           </div>
           <button
@@ -344,20 +276,49 @@ export default function AuditPromptModal({
 
         {/* Fase indicator (audit mode only) */}
         {isAudit && (
-          <div className="flex items-center gap-2 border-b border-gray-100 px-5 py-2.5 sm:px-6">
-            {[
-              { key: 'prompt', label: '1. Copiar prompt', num: 1 },
-              { key: 'resposta', label: '2. Colar resposta', num: 2 },
-              { key: 'operacoes', label: '3. Revisar operações', num: 3 },
-            ].map((s, idx) => (
-              <div key={s.key} className="flex items-center gap-2">
-                <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${fase === s.key ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
-                  {s.num}
+          <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 px-5 py-2.5 sm:px-6">
+            <div className="flex items-center gap-2">
+              {[
+                { key: 'prompt', label: '1. Copiar prompt', num: 1 },
+                { key: 'resposta', label: '2. Colar resposta', num: 2 },
+              ].map((s, idx) => (
+                <div key={s.key} className="flex items-center gap-2">
+                  <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-black ${fase === s.key ? 'bg-primary text-white' : 'bg-gray-100 text-gray-400'}`}>
+                    {s.num}
+                  </span>
+                  <span className={`text-xs font-bold ${fase === s.key ? 'text-gray-900' : 'text-gray-400'}`}>{s.label}</span>
+                  {idx < 1 && <span className="text-gray-200">→</span>}
+                </div>
+              ))}
+            </div>
+            {haMultiplosLotes && (
+              <div className="flex items-center gap-2 rounded-full bg-violet-50 py-1 pl-1 pr-3">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalLotes }, (_, i) => i + 1).map((n) => {
+                    const concluido = n <= (ultimoLoteConcluido ?? 0);
+                    const atual = n === loteAtual + 1;
+                    return (
+                      <span
+                        key={n}
+                        className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-black transition-colors ${
+                          concluido
+                            ? 'bg-emerald-500 text-white'
+                            : atual
+                              ? 'bg-violet-600 text-white ring-4 ring-violet-100'
+                              : 'bg-white text-violet-300 border border-violet-100'
+                        }`}
+                        title={concluido ? `Lote ${n} concluído` : atual ? `Lote ${n} — atual` : `Lote ${n}`}
+                      >
+                        {concluido ? '✓' : n}
+                      </span>
+                    );
+                  })}
+                </div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-violet-700">
+                  Lote {loteAtual + 1} de {totalLotes}
                 </span>
-                <span className={`text-xs font-bold ${fase === s.key ? 'text-gray-900' : 'text-gray-400'}`}>{s.label}</span>
-                {idx < 2 && <span className="text-gray-200">→</span>}
               </div>
-            ))}
+            )}
           </div>
         )}
 
@@ -365,6 +326,15 @@ export default function AuditPromptModal({
           {/* ── Fase: PROMPT ─────────────────────────────────────── */}
           {fase === 'prompt' && (
             <>
+              {ultimoLoteConcluido !== null && (
+                <div className="mb-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    <strong>Lote {ultimoLoteConcluido} de {totalLotes} concluído</strong> — {opsAcumuladas.length} operação(ões) capturada(s) até agora. Copie abaixo o prompt do <strong>lote {loteAtual + 1} de {totalLotes}</strong> e repita o processo.
+                  </p>
+                </div>
+              )}
+
               <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 <div className="flex gap-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -394,7 +364,13 @@ export default function AuditPromptModal({
                 </div>
               </div>
 
-              {promptTokens > 30000 && (
+              {haMultiplosLotes && (
+                <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
+                  {`Este dossiê foi dividido automaticamente em ${totalLotes} lotes para evitar que a IA perca qualidade ou falhe com um prompt grande demais. Copie o prompt do lote ${loteAtual + 1}, cole a resposta e o sistema avança para o próximo lote sozinho — as operações de todos os lotes são reunidas no módulo Auditoria.`}
+                </div>
+              )}
+
+              {!haMultiplosLotes && promptTokens > 15000 && (
                 <div className="mb-4 rounded-xl border border-violet-100 bg-violet-50 px-4 py-3 text-sm text-violet-900">
                   {'Prompt extenso. Para melhor resultado, prefira modelos com contexto longo. Use "Selecionar tudo" e copie com Ctrl+C ou pelo botão direito do mouse. Se preferir, baixe o TXT.'}
                 </div>
@@ -428,7 +404,9 @@ export default function AuditPromptModal({
                 <div className="flex gap-2">
                   <Clipboard className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>
-                    Cole aqui a resposta JSON da IA. O sistema vai validar e extrair as operações de correção.
+                    {haMultiplosLotes
+                      ? `Cole aqui a resposta JSON da IA para o lote ${loteAtual + 1} de ${totalLotes}. O sistema valida e reúne as operações no módulo Auditoria.`
+                      : 'Cole aqui a resposta JSON da IA. O sistema valida e envia as operações de correção para o módulo Auditoria.'}
                   </p>
                 </div>
               </div>
@@ -473,137 +451,6 @@ export default function AuditPromptModal({
               </div>
             </>
           )}
-
-          {/* ── Fase: OPERAÇÕES ──────────────────────────────────── */}
-          {fase === 'operacoes' && (
-            <>
-              {/* Resumo */}
-              <div className="mb-4 flex items-center gap-4 rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs font-bold">
-                <span className="text-gray-600">Total: <span className="text-gray-900">{operacoes.length}</span></span>
-                <span className="text-gray-300">|</span>
-                <span className="text-emerald-600">Aprovadas: {opsAprovadas}</span>
-                <span className="text-gray-300">|</span>
-                <span className="text-gray-500">Rejeitadas: {opsRejeitadas}</span>
-                <span className="text-gray-300">|</span>
-                <span className="text-amber-600">Pendentes: {opsPendentes}</span>
-              </div>
-
-              {errosResposta.length > 0 && (
-                <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  <p className="font-bold">Avisos na validação:</p>
-                  <ul className="mt-2 list-disc space-y-0.5 pl-5">
-                    {errosResposta.map((erro, i) => (
-                      <li key={i}>{erro}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {operacoes.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-                  <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-                  <p className="text-sm font-bold text-gray-700">Nenhuma operação detectada.</p>
-                  <p className="text-xs text-gray-400">A IA não identificou correções necessárias, ou a resposta não continha operações válidas.</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {operacoes.map((op) => {
-                    const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
-                    const item = lanc ? itensRSC.find((i) => i.id === lanc.item_rsc_id) : null;
-                    return (
-                      <div
-                        key={op.id}
-                        className={`rounded-xl border p-4 transition-all ${
-                          op.status === 'aprovada' ? 'border-emerald-200 bg-emerald-50/30'
-                          : op.status === 'rejeitada' ? 'border-gray-100 bg-gray-50/30 opacity-60'
-                          : 'border-gray-200 bg-white'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase ${SEVERIDADE_CLASS[op.severidade] ?? SEVERIDADE_CLASS.baixa}`}>
-                                {SEVERIDADE_LABEL[op.severidade] ?? op.severidade}
-                              </span>
-                              <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
-                                {TIPO_LABEL[op.tipo] ?? op.tipo}
-                              </span>
-                              {item && (
-                                <span className="truncate text-xs font-bold text-gray-700">
-                                  {itemDossierCode(item)} — {item.descricao.slice(0, 60)}
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-xs leading-relaxed text-gray-600">{op.justificativa}</p>
-
-                            {/* Detalhes da operação */}
-                            <div className="mt-2 rounded-lg bg-gray-50 p-2 text-[11px] text-gray-500">
-                              {op.tipo === 'remover_lancamento' && <p>Este lançamento será removido.</p>}
-                              {op.tipo === 'reclassificar' && op.novo_item_rsc_id && (
-                                <p>Reclassificar para: <strong>{op.novo_item_rsc_id}</strong>
-                                  {op.novos_periodos && ` · ${op.novos_periodos.length} período(s)`}
-                                  {op.nova_quantidade !== undefined && ` · qtd: ${op.nova_quantidade}`}
-                                </p>
-                              )}
-                              {op.tipo === 'ajustar_periodos' && op.novos_periodos && (
-                                <p>Novos períodos: {op.novos_periodos.map(p => `${p.inicio} a ${p.fim}`).join('; ')}</p>
-                              )}
-                              {op.tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined && (
-                                <p>Nova quantidade: <strong>{op.nova_quantidade}</strong></p>
-                              )}
-                              {op.tipo === 'sinalizar' && op.descricao && (
-                                <p>{op.descricao}</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Aprovar / Rejeitar */}
-                          <div className="flex shrink-0 gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => toggleOperacaoStatus(op.id, 'aprovada')}
-                              className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all ${
-                                op.status === 'aprovada'
-                                  ? 'border-emerald-300 bg-emerald-100 text-emerald-700'
-                                  : 'border-gray-200 bg-white text-gray-400 hover:border-emerald-200 hover:text-emerald-600'
-                              }`}
-                              title="Aprovar"
-                            >
-                              <CheckCircle2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleOperacaoStatus(op.id, 'rejeitada')}
-                              className={`flex h-7 w-7 items-center justify-center rounded-lg border transition-all ${
-                                op.status === 'rejeitada'
-                                  ? 'border-red-300 bg-red-100 text-red-700'
-                                  : 'border-gray-200 bg-white text-gray-400 hover:border-red-200 hover:text-red-600'
-                              }`}
-                              title="Rejeitar"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => { setFase('resposta'); setOperacoes([]); setErrosResposta([]); }}
-                >
-                  <ChevronLeft className="mr-1 h-4 w-4" />
-                  Colar nova resposta
-                </Button>
-              </div>
-            </>
-          )}
         </div>
 
         {/* ── Footer ─────────────────────────────────────────────── */}
@@ -637,7 +484,7 @@ export default function AuditPromptModal({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => downloadTextFile(prompt, servidor, mode)}
+                  onClick={() => downloadTextFile(prompt, servidor, mode, haMultiplosLotes ? `lote-${loteAtual + 1}-de-${totalLotes}` : undefined)}
                   disabled={isPreparing || !prompt}
                   className="h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest"
                 >
@@ -661,7 +508,7 @@ export default function AuditPromptModal({
                     disabled={isPreparing || !prompt}
                     className="h-10 rounded-xl px-4 text-xs font-black uppercase tracking-widest"
                   >
-                    Já copiei — colar resposta
+                    {haMultiplosLotes ? `Já copiei — colar resposta do lote ${loteAtual + 1}` : 'Já copiei — colar resposta'}
                   </Button>
                 )}
               </div>
@@ -678,28 +525,12 @@ export default function AuditPromptModal({
                 className="h-10 rounded-xl px-6 text-xs font-black uppercase tracking-widest"
               >
                 <Wrench className="mr-2 h-4 w-4" />
-                Processar resposta
+                {haMultiplosLotes && loteAtual < totalLotes - 1
+                  ? `Processar e ir para o lote ${loteAtual + 2}`
+                  : 'Processar e enviar à Auditoria'}
               </Button>
             </div>
           )}
-
-          {/* Fase: operações */}
-          {fase === 'operacoes' && (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                onClick={handleAplicarOperacoes}
-                disabled={aplicandoOps || opsAprovadas === 0 || !removeLancamento || !updateLancamento}
-                className="h-10 rounded-xl px-6 text-xs font-black uppercase tracking-widest"
-              >
-                {aplicandoOps ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
-                Aplicar {opsAprovadas > 0 ? `(${opsAprovadas})` : ''}
-              </Button>
-            </div>
-          )}
-
-          {/* Memorial mode (no phases) */}
-          {!isAudit && fase === 'prompt' && null}
         </div>
       </div>
     </div>

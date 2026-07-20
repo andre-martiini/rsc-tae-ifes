@@ -7,6 +7,7 @@ import AppLogo from '../components/AppLogo';
 import AuditPromptModal from '../components/AuditPromptModal';
 import InstructionDocumentsPanel from '../components/InstructionDocumentsPanel';
 import MainLayout from '../components/MainLayout';
+import MarkdownLiteText from '../components/MarkdownLiteText';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -42,7 +43,7 @@ const CRITERIO_LABELS: Record<string, string> = {
 };
 
 export default function Consolidation() {
-  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso, updateDocumento, removeLancamento, updateLancamento } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, processo, updateProcesso, updateDocumento } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -385,8 +386,6 @@ export default function Consolidation() {
         itensRSC={itensRSC}
         documentos={documentos}
         updateDocumento={updateDocumento}
-        removeLancamento={removeLancamento}
-        updateLancamento={updateLancamento}
       />
       <AuditPromptModal
         mode="memorial"
@@ -1049,7 +1048,7 @@ export default function Consolidation() {
                       </p>
                     </div>
                     {memorialOk ? (
-                      <div className="whitespace-pre-wrap text-justify text-[14px] leading-7 text-gray-800">{memorialTexto.trim()}</div>
+                      <MarkdownLiteText text={memorialTexto.trim()} className="text-justify text-[14px] leading-7 text-gray-800" />
                     ) : (
                       <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50 p-6 text-center text-sm font-semibold text-amber-800">
                         Redija o memorial textual no campo acima para visualizar a versão final.

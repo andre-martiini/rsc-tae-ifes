@@ -9,7 +9,8 @@ import {
   mockItensRSC,
 } from '../data/mock';
 import type { EstadoTriagem, SugestaoTriagem } from '../data/triagem';
-import type { EstadoAuditoria, OperacaoAuditoria } from '../data/auditoria';
+import type { EstadoAuditoria, OperacaoAuditoria, OperacaoParseada, OrigemAuditoria, TipoOperacao } from '../data/auditoria';
+import { mergeOperacoesPorOrigem } from '../lib/auditoriaMerge';
 import {
   buildInstitutionReferenceFileName,
   normalizeInstitutionDocumentLink,
@@ -21,8 +22,15 @@ import {
   computeDocumentHash,
 } from '../lib/documentStorage';
 import type { RestoredSession } from '../lib/sessionImport';
-import { normalizePointValue } from '../lib/points';
+import { normalizePointValue, calculateLancamentoPoints } from '../lib/points';
 import { getLancamentoDocumentIds } from '../lib/documentOrdering';
+import {
+  periodosDoLancamento,
+  totalDiasPeriodos,
+  unidadesAnoFracao,
+  unidadesMes,
+  abrangenciaPeriodos,
+} from '../lib/periodos';
 
 
 // ── Session types ─────────────────────────────────────────────────────────────
@@ -72,6 +80,30 @@ function loadJson<T>(key: string, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Migra estados de auditoria persistidos antes do módulo unificado: operações
+ * sem `origem`/`criada_em` recebem defaults (só a Triagem persistia antes).
+ */
+function normalizeAuditoria(estado: EstadoAuditoria | null): EstadoAuditoria | null {
+  if (!estado || !Array.isArray(estado.operacoes)) return estado;
+  let mudou = false;
+  const agora = new Date().toISOString();
+  const operacoes = estado.operacoes.map((op) => {
+    if (op.origem && op.criada_em) return op;
+    mudou = true;
+    return {
+      ...op,
+      origem: op.origem ?? ('triagem' as OrigemAuditoria),
+      criada_em: op.criada_em ?? agora,
+    };
+  });
+  return mudou ? { ...estado, operacoes } : estado;
+}
+
+function loadAuditoria(key: string): EstadoAuditoria | null {
+  return normalizeAuditoria(loadJson<EstadoAuditoria | null>(key, null));
 }
 
 function normalizeFileName(value: string): string {
@@ -245,6 +277,9 @@ interface AppContextType {
   setAuditoria: React.Dispatch<React.SetStateAction<EstadoAuditoria | null>>;
   atualizarOperacaoAuditoria: (id: string, updates: Partial<OperacaoAuditoria>) => void;
   limparAuditoria: () => void;
+  importarOperacoesAuditoria: (origem: OrigemAuditoria, novasOps: OperacaoParseada[], erros: string[]) => void;
+  importarOperacoesAvulsas: (novasOps: OperacaoParseada[], erros: string[]) => void;
+  aplicarOperacoesAuditoria: () => { aplicadas: number; puladas: number };
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -323,7 +358,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [auditoria, setAuditoria] = useState<EstadoAuditoria | null>(() => {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
-    return id ? loadJson<EstadoAuditoria | null>(`rsc-tae-${id}-auditoria`, null) : null;
+    return id ? loadAuditoria(`rsc-tae-${id}-auditoria`) : null;
   });
 
   // ── Persistence effects ─────────────────────────────────────────────────────
@@ -448,7 +483,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLancamentos(migratedLancamentos);
     setProcesso(loadJson<ProcessoRSC>(keys.processo, INITIAL_PROCESSO));
     setTriagem(loadJson<EstadoTriagem | null>(keys.triagem, null));
-    setAuditoria(loadJson<EstadoAuditoria | null>(keys.auditoria, null));
+    setAuditoria(loadAuditoria(keys.auditoria));
   };
 
   const deleteSession = async (id: string) => {
@@ -496,7 +531,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLancamentos(migratedLancamentos);
     setProcesso(session.processo ?? INITIAL_PROCESSO);
     setTriagem(session.triagem ?? null);
-    setAuditoria(session.auditoria ?? null);
+    setAuditoria(normalizeAuditoria(session.auditoria ?? null));
   };
 
   const importSessionAsNew = (restored: RestoredSession) => {
@@ -539,7 +574,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLancamentos(migratedLancamentos);
     setProcesso(restored.processo ?? INITIAL_PROCESSO);
     setTriagem(restored.triagem ?? null);
-    setAuditoria(restored.auditoria ?? null);
+    setAuditoria(normalizeAuditoria(restored.auditoria ?? null));
   };
 
   // ── Document & lançamento actions ────────────────────────────────────────────
@@ -802,6 +837,158 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setAuditoria(null);
   };
 
+  // Importa as operações recém-extraídas de uma auditoria para o módulo,
+  // substituindo apenas as da mesma origem (mantém histórico aplicado e a
+  // outra origem). Ver mergeOperacoesPorOrigem.
+  const importarOperacoesAuditoria = (
+    origem: OrigemAuditoria,
+    novasOps: OperacaoParseada[],
+    erros: string[],
+  ) => {
+    setAuditoria((current) => mergeOperacoesPorOrigem(current, origem, novasOps, erros));
+  };
+
+  // Importa operações avulsas de validação de um lançamento específico,
+  // substituindo apenas as pendentes daquele lançamento para não interferir em outros.
+  const importarOperacoesAvulsas = (
+    novasOps: OperacaoParseada[],
+    erros: string[],
+  ) => {
+    setAuditoria((current) => {
+      const anteriores = current?.operacoes ?? [];
+      const lancIdsAtualizados = new Set(novasOps.map((op) => op.lancamento_id));
+      
+      const mantidas = anteriores.filter(
+        (op) => !lancIdsAtualizados.has(op.lancamento_id) || op.status === 'aplicada'
+      );
+      
+      const agora = new Date().toISOString();
+      const novas: OperacaoAuditoria[] = novasOps.map((op) => ({
+        ...op,
+        status: 'pendente',
+        origem: 'consolidar',
+        criada_em: agora,
+      }));
+      
+      return {
+        schema_version: 1,
+        operacoes: [...mantidas, ...novas],
+        ultima_colagem_por_origem: {
+          ...(current?.ultima_colagem_por_origem ?? {}),
+          consolidar: {
+            em: agora,
+            erros: [...(current?.ultima_colagem_por_origem?.consolidar?.erros ?? []), ...erros],
+          },
+        },
+      };
+    });
+  };
+
+  // Aplica ao dossiê todas as operações aprovadas, na ordem segura, e as marca
+  // como 'aplicada' (histórico). 'sinalizar' aprovado é apenas registrado e
+  // vira 'rejeitada' (não há auto-fix). Lógica antes duplicada no modal/Triagem.
+  const aplicarOperacoesAuditoria = (): { aplicadas: number; puladas: number } => {
+    const aprovadas = (auditoria?.operacoes ?? []).filter((o) => o.status === 'aprovada');
+    if (aprovadas.length === 0) return { aplicadas: 0, puladas: 0 };
+
+    const agora = new Date().toISOString();
+    const aplicadasIds = new Set<string>();
+    let aplicadas = 0;
+    let puladas = 0;
+    const ordem: TipoOperacao[] = ['remover_lancamento', 'reclassificar', 'ajustar_periodos', 'ajustar_quantidade'];
+
+    for (const tipo of ordem) {
+      for (const op of aprovadas.filter((o) => o.tipo === tipo)) {
+        const lanc = lancamentos.find((l) => l.id === op.lancamento_id);
+        if (!lanc) { puladas++; continue; }
+
+        // Desvincula do lançamento os comprovantes que a IA marcou como
+        // irrelevantes (documentos_remover). Retorna undefined quando não há
+        // nada a remover, para não alterar comprovantes_ids sem necessidade.
+        const comprovantesAjustados = (() => {
+          if (!op.documentos_remover?.length) return undefined;
+          const remover = new Set(op.documentos_remover);
+          const atuais = getLancamentoDocumentIds(lanc);
+          const restantes = atuais.filter((id) => !remover.has(id));
+          return restantes.length !== atuais.length ? restantes : undefined;
+        })();
+
+        if (tipo === 'remover_lancamento') {
+          removeLancamento(op.lancamento_id);
+          aplicadasIds.add(op.id);
+          aplicadas++;
+        } else if (tipo === 'reclassificar' && op.novo_item_rsc_id) {
+          const novoItem = itensRSC.find((i) => i.id === op.novo_item_rsc_id);
+          if (!novoItem) { puladas++; continue; }
+          const periodos = op.novos_periodos ?? periodosDoLancamento(lanc);
+          let quantidade = op.nova_quantidade ?? lanc.quantidade_informada;
+          if (novoItem.modo_calculo !== 'manual') {
+            const dias = totalDiasPeriodos(periodos);
+            quantidade = novoItem.modo_calculo === 'auto_mes' ? unidadesMes(dias) : unidadesAnoFracao(dias);
+          }
+          const abr = abrangenciaPeriodos(periodos);
+          const pontos = calculateLancamentoPoints(quantidade, novoItem.pontos_por_unidade);
+          updateLancamento(op.lancamento_id, {
+            item_rsc_id: op.novo_item_rsc_id,
+            periodos,
+            quantidade_informada: quantidade,
+            pontos_calculados: pontos,
+            data_inicio: abr?.inicio ?? lanc.data_inicio,
+            data_fim: abr?.fim ?? lanc.data_fim,
+            ...(comprovantesAjustados ? { comprovantes_ids: comprovantesAjustados } : {}),
+          });
+          aplicadasIds.add(op.id);
+          aplicadas++;
+        } else if (tipo === 'ajustar_periodos' && op.novos_periodos) {
+          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
+          const periodos = op.novos_periodos;
+          const dias = totalDiasPeriodos(periodos);
+          let quantidade = lanc.quantidade_informada;
+          if (item && item.modo_calculo !== 'manual') {
+            quantidade = item.modo_calculo === 'auto_mes' ? unidadesMes(dias) : unidadesAnoFracao(dias);
+          }
+          const abr = abrangenciaPeriodos(periodos);
+          const pontos = item ? calculateLancamentoPoints(quantidade, item.pontos_por_unidade) : lanc.pontos_calculados;
+          updateLancamento(op.lancamento_id, {
+            periodos,
+            quantidade_informada: quantidade,
+            pontos_calculados: pontos,
+            data_inicio: abr?.inicio ?? lanc.data_inicio,
+            data_fim: abr?.fim ?? lanc.data_fim,
+            ...(comprovantesAjustados ? { comprovantes_ids: comprovantesAjustados } : {}),
+          });
+          aplicadasIds.add(op.id);
+          aplicadas++;
+        } else if (tipo === 'ajustar_quantidade' && op.nova_quantidade !== undefined) {
+          const item = itensRSC.find((i) => i.id === lanc.item_rsc_id);
+          const pontos = item ? calculateLancamentoPoints(op.nova_quantidade, item.pontos_por_unidade) : lanc.pontos_calculados;
+          updateLancamento(op.lancamento_id, {
+            quantidade_informada: op.nova_quantidade,
+            pontos_calculados: pontos,
+            ...(comprovantesAjustados ? { comprovantes_ids: comprovantesAjustados } : {}),
+          });
+          aplicadasIds.add(op.id);
+          aplicadas++;
+        }
+      }
+    }
+
+    // Marca aplicadas (histórico) e resolve 'sinalizar' aprovado como rejeitado.
+    setAuditoria((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        operacoes: current.operacoes.map((op) => {
+          if (aplicadasIds.has(op.id)) return { ...op, status: 'aplicada' as const, aplicada_em: agora };
+          if (op.tipo === 'sinalizar' && op.status === 'aprovada') return { ...op, status: 'rejeitada' as const };
+          return op;
+        }),
+      };
+    });
+
+    return { aplicadas, puladas };
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -837,6 +1024,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setAuditoria,
         atualizarOperacaoAuditoria,
         limparAuditoria,
+        importarOperacoesAuditoria,
+        importarOperacoesAvulsas,
+        aplicarOperacoesAuditoria,
       }}
     >
       {children}

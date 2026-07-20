@@ -8,7 +8,7 @@ import { useAppContext } from '../context/AppContext';
 
 interface MainLayoutProps {
     children: React.ReactNode;
-    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'profile' | 'help' | 'triagem';
+    activeView: 'dashboard' | 'catalog' | 'documents' | 'consolidate' | 'auditoria' | 'profile' | 'help' | 'triagem';
 }
 
 export default function MainLayout({ children, activeView }: MainLayoutProps) {
@@ -23,6 +23,7 @@ export default function MainLayout({ children, activeView }: MainLayoutProps) {
             case 'catalog': navigate('/itens'); break;
             case 'documents': navigate('/documentos'); break;
             case 'consolidate': navigate('/consolidar'); break;
+            case 'auditoria': navigate('/auditoria'); break;
             case 'help': navigate('/ajuda'); break;
             case 'triagem': navigate('/triagem'); break;
             default: navigate('/dashboard');

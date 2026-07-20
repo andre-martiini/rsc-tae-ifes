@@ -8,6 +8,7 @@ import {
 } from 'pdf-lib';
 import { institutionConfig } from '../config/institution';
 import type { Documento, ItemRSC, Lancamento, ProcessoRSC, Servidor } from '../data/mock';
+import { CATALOG_VERSION } from '../data/normative/rsc-pcctae-2026';
 import {
   buildDossierDocumentOrder,
   formatDossierDocumentLabel,
@@ -18,6 +19,9 @@ import { addPointValues, formatPointValue, sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { formatarDataSegura, sanitizeForTag } from './utils';
 import { periodosDoLancamento } from './periodos';
+import { parseInlineMarkdown, dividirEmBlocosMarkdown } from './markdownLite';
+
+export { parseInlineMarkdown } from './markdownLite';
 
 export type NivelRsc = {
   label: string;
@@ -125,6 +129,7 @@ class Writer {
   private footerRight: string;
   private regular!: PDFFont;
   private bold!: PDFFont;
+  private italic!: PDFFont;
   public courier!: PDFFont;
   private logo?: PDFImage;
   private page!: PDFPage;
@@ -147,6 +152,7 @@ class Writer {
   async init() {
     this.regular = await this.doc.embedFont(StandardFonts.Helvetica);
     this.bold = await this.doc.embedFont(StandardFonts.HelveticaBold);
+    this.italic = await this.doc.embedFont(StandardFonts.HelveticaOblique);
     this.courier = await this.doc.embedFont(StandardFonts.Courier);
     const logoBytes = await getLogoBytes();
     if (logoBytes) {
@@ -460,6 +466,82 @@ class Writer {
       }
       this.y -= lineHeight;
     }
+  }
+
+  /**
+   * Como text(), mas interpreta um subconjunto simples de Markdown inline
+   * (negrito com asteriscos duplos, itálico com asterisco ou underline
+   * simples), quebrando linha por palavra com a fonte correta em cada trecho.
+   * Usado para textos livres redigidos/colados pelo usuário (ex.: Memorial)
+   * onde formatação básica deve ser preservada no PDF exportado em vez de
+   * aparecer como asteriscos literais.
+   */
+  richText(
+    text: string,
+    options: {
+      size?: number;
+      lineHeight?: number;
+      indent?: number;
+      maxWidth?: number;
+      bulleted?: boolean;
+      forceBold?: boolean;
+      color?: ReturnType<typeof rgb>;
+    } = {},
+  ) {
+    const size = options.size ?? 9.5;
+    const indent = options.indent ?? 0;
+    const bulletWidth = options.bulleted ? 10 : 0;
+    const x0 = MARGIN_X + indent + bulletWidth;
+    const maxWidth = options.maxWidth ?? CONTENT_W - indent - bulletWidth;
+    const lineHeight = options.lineHeight ?? size * 1.45;
+    const color = options.color ?? COLORS.text;
+
+    const fontFor = (run: { bold: boolean; italic: boolean }): PDFFont =>
+      options.forceBold || run.bold ? this.bold : run.italic ? this.italic : this.regular;
+
+    type Tok = { text: string; bold: boolean; italic: boolean };
+    const tokens: Tok[] = [];
+    for (const run of parseInlineMarkdown(sanitize(text))) {
+      for (const word of run.text.split(/(\s+)/).filter((w) => w !== '')) {
+        tokens.push({ text: word, bold: run.bold, italic: run.italic });
+      }
+    }
+
+    const isSpace = (tok: Tok) => /^\s+$/.test(tok.text);
+    const lines: Tok[][] = [];
+    let current: Tok[] = [];
+    let currentWidth = 0;
+
+    for (const tok of tokens) {
+      if (isSpace(tok) && current.length === 0) continue; // nunca inicia linha com espaço
+      const w = fontFor(tok).widthOfTextAtSize(tok.text, size);
+      if (!isSpace(tok) && currentWidth + w > maxWidth && current.length > 0) {
+        while (current.length && isSpace(current[current.length - 1])) current.pop();
+        lines.push(current);
+        current = [];
+        currentWidth = 0;
+      }
+      current.push(tok);
+      currentWidth += w;
+    }
+    while (current.length && isSpace(current[current.length - 1])) current.pop();
+    lines.push(current);
+
+    lines.forEach((lineTokens, idx) => {
+      this.ensure(lineHeight);
+      if (options.bulleted && idx === 0) {
+        this.page.drawText('-', { x: MARGIN_X + indent, y: this.y, size, font: this.regular, color });
+      }
+      let drawX = x0;
+      for (const tok of lineTokens) {
+        const font = fontFor(tok);
+        if (!isSpace(tok)) {
+          this.page.drawText(tok.text, { x: drawX, y: this.y, size, font, color });
+        }
+        drawX += font.widthOfTextAtSize(tok.text, size);
+      }
+      this.y -= lineHeight;
+    });
   }
 
   keyValue(label: string, value: string, valueWidth = CONTENT_W - 132) {
@@ -902,9 +984,29 @@ export async function generateMemorialDescritivo(
   if (!memorialText) {
     writer.text('Memorial textual não informado.', { size: 10, color: COLORS.muted });
   } else {
-    const paragraphs = memorialText.split(/\n\s*\n/).map((paragraph) => paragraph.trim()).filter(Boolean);
-    for (const paragraph of paragraphs) {
-      writer.text(paragraph, { size: 10, lineHeight: 15 });
+    // Suporte a Markdown simples colado/redigido pelo usuário: cabeçalhos (#, ##...),
+    // listas (-, *) e ênfase inline (**negrito**, *itálico*) via Writer.richText.
+    // A mesma divisão em blocos (markdownLite.ts) alimenta a pré-visualização em
+    // tela do Requerimento, garantindo que as duas superfícies leiam o texto igual.
+    for (const bloco of dividirEmBlocosMarkdown(memorialText)) {
+      if (bloco.tipo === 'heading') {
+        const tamanho = bloco.nivel === 1 ? 12.5 : bloco.nivel === 2 ? 11 : 10;
+        writer.gap(2);
+        writer.richText(bloco.texto, { size: tamanho, lineHeight: tamanho * 1.35, forceBold: true });
+        writer.gap(6);
+        continue;
+      }
+
+      if (bloco.tipo === 'lista') {
+        for (const item of bloco.itens) {
+          writer.richText(item, { size: 10, lineHeight: 15, indent: 4, bulleted: true });
+          writer.gap(3);
+        }
+        writer.gap(5);
+        continue;
+      }
+
+      writer.richText(bloco.texto, { size: 10, lineHeight: 15 });
       writer.gap(8);
     }
   }
@@ -931,6 +1033,7 @@ export async function generateMemorialDescritivo(
   writer.text(`[RSC:SIAPE:${sanitizedSiape}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:CATALOGO:${CATALOG_VERSION}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
 
   // Mantem as tags na mesma ordem documental usada na aba Documentos e na Auditoria IA.
   const sortedLancamentosForTags = sortLancamentosByDossierOrder(lancamentos, itensRSC);

@@ -14,6 +14,17 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '20 de julho de 2026',
+    title: 'Validação de lançamentos com IA integrada à Auditoria',
+    description: 'O botão "Validar com IA" nos lançamentos individuais foi totalmente renovado e simplificado. Agora, em vez de apenas exibir um diagnóstico textual, ele gera um prompt estruturado para que a IA retorne uma resposta no formato JSON de auditoria. Ao colar essa resposta de volta, os ajustes sugeridos são integrados automaticamente ao módulo global de Auditoria.',
+    features: [
+      'Validação guiada por lançamento: o botão "Validar com IA" agora abre um assistente de dois passos (copiar prompt e colar resposta JSON).',
+      'Integração direta com o módulo Auditoria: as inconsistências apontadas pela IA para o lançamento validado aparecem na página de Auditoria para revisão e aplicação retroativa pelo usuário.',
+      'Prompt de validação robusto: o prompt agora inclui a lista completa de itens do catálogo normativo, permitindo que a IA sugira reclassificações exatas.',
+      'Garantia de não-duplicidade individual: a validação de lançamentos avulsos substitui apenas as pendências anteriores do mesmo lançamento, mantendo as demais intactas.',
+    ],
+  },
+  {
     date: '16 de julho de 2026',
     title: 'Vídeo tutorial integrado ao sistema',
     description: 'O vídeo orientativo do Assistente RSC-TAE, antes disponível apenas no YouTube, agora pode ser assistido sem sair do sistema, em três pontos de acesso.',
