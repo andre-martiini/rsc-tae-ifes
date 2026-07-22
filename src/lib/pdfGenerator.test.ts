@@ -172,6 +172,55 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
     expect(combinedText).toContain('Item');
     expect(combinedText).toContain('lista');
   });
+
+  it('renders complex AI output with Unicode symbols and line breaks without generating spurious question marks (?)', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'José da Silva',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      email_institucional: 'jose@example.com',
+      telefone: '12345',
+      cargo: 'Assistente em Administração',
+      lotacao: 'Campus Vitória',
+      escolaridade: 'Mestrado',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const memorialTextWithComplexMarkdown = [
+      '# Memorial Descritivo - Trajetória',
+      'Desempenhei atividades com foco em eficiência… e inovação.',
+      'Esta linha é a continuação do mesmo parágrafo,\ncom quebra de linha simples e traço – e aspas “especiais”.\u200B',
+      '',
+      '• Primeira atividade relevante',
+      '◦ Segunda atividade com reticências…',
+      '▪ Terceira atividade',
+      '',
+      '1. Item numerado um',
+      '2. Item numerado dois',
+    ].join('\n');
+
+    const pdfBytes = await generateMemorialDescritivo(
+      servidor,
+      null,
+      [],
+      [],
+      [],
+      { status: 'Rascunho', memorial_texto: memorialTextWithComplexMarkdown },
+      undefined,
+    );
+
+    expect(pdfBytes).toBeInstanceOf(Uint8Array);
+    const streams = decompressPdfStreams(pdfBytes);
+    const combinedText = streams.join('\n');
+
+    // NENHUM ponto de interrogação deve ter sido gerado na conversão de texto
+    // (com exceção de pontuação legítima se existisse no texto, o que não há neste caso)
+    expect(combinedText).not.toContain('?');
+    expect(combinedText).toContain('Desempenhei');
+    expect(combinedText).toContain('especiais');
+  });
 });
 
 describe('parseInlineMarkdown', () => {

@@ -9,7 +9,8 @@
 export type InlineRun = { text: string; bold: boolean; italic: boolean };
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
-const BULLET_RE = /^[-*]\s+/;
+const BULLET_RE = /^([-*+•◦▪▫‣⁃]|\d+[\.\)])\s+/;
+const ORDERED_RE = /^\d+[\.\)]\s+/;
 
 /**
  * Extrai negrito/itálico inline. Marcadores sem par de fechamento ficam como
@@ -39,7 +40,7 @@ export function parseInlineMarkdown(text: string): InlineRun[] {
 
 export type BlocoMarkdown =
   | { tipo: 'heading'; nivel: number; texto: string }
-  | { tipo: 'lista'; itens: string[] }
+  | { tipo: 'lista'; ordenada?: boolean; itens: string[] }
   | { tipo: 'paragrafo'; texto: string };
 
 /**
@@ -61,11 +62,16 @@ export function dividirEmBlocosMarkdown(texto: string): BlocoMarkdown[] {
 
     const isLista = linhas.length > 0 && linhas.every((linha) => BULLET_RE.test(linha));
     if (isLista) {
-      resultado.push({ tipo: 'lista', itens: linhas.map((l) => l.replace(BULLET_RE, '')) });
+      const ordenada = linhas.every((linha) => ORDERED_RE.test(linha));
+      resultado.push({
+        tipo: 'lista',
+        ordenada,
+        itens: linhas.map((l) => l.replace(BULLET_RE, '')),
+      });
       continue;
     }
 
-    resultado.push({ tipo: 'paragrafo', texto: bloco });
+    resultado.push({ tipo: 'paragrafo', texto: linhas.join(' ') });
   }
 
   return resultado;

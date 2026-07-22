@@ -16,14 +16,28 @@ describe('dividirEmBlocosMarkdown', () => {
     expect(blocos).toEqual([
       { tipo: 'heading', nivel: 2, texto: 'Formação Acadêmica' },
       { tipo: 'paragrafo', texto: 'Concluiu **Mestrado** em 2020.' },
-      { tipo: 'lista', itens: ['Item um', 'Item dois'] },
+      { tipo: 'lista', ordenada: false, itens: ['Item um', 'Item dois'] },
     ]);
   });
 
-  it('trata um bloco de várias linhas sem marcador de lista como parágrafo', () => {
+  it('reconhece listas ordenadas (1., 2.) e listas com marcadores gráficos (•, ◦, ▪)', () => {
+    const textoBullet = '• Marcador um\n◦ Marcador dois\n▪ Marcador três';
+    const blocosBullet = dividirEmBlocosMarkdown(textoBullet);
+    expect(blocosBullet).toEqual([
+      { tipo: 'lista', ordenada: false, itens: ['Marcador um', 'Marcador dois', 'Marcador três'] },
+    ]);
+
+    const textoOrdenado = '1. Primeiro item\n2. Segundo item';
+    const blocosOrdenado = dividirEmBlocosMarkdown(textoOrdenado);
+    expect(blocosOrdenado).toEqual([
+      { tipo: 'lista', ordenada: true, itens: ['Primeiro item', 'Segundo item'] },
+    ]);
+  });
+
+  it('trata um bloco de várias linhas sem marcador de lista como parágrafo único contínuo', () => {
     const texto = 'Linha um\nLinha dois continua o mesmo parágrafo.';
     const blocos = dividirEmBlocosMarkdown(texto);
-    expect(blocos).toEqual([{ tipo: 'paragrafo', texto }]);
+    expect(blocos).toEqual([{ tipo: 'paragrafo', texto: 'Linha um Linha dois continua o mesmo parágrafo.' }]);
   });
 
   it('ignora blocos vazios entre múltiplas quebras de linha', () => {

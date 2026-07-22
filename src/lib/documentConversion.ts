@@ -59,11 +59,17 @@ function splitTextInLines(text: string): string[] {
 function sanitizePdfText(value: string): string {
   return value
     .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
-    .replace(/[–—−]/g, '-')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[^\u0020-\u007E\u00A0-\u00FF\u2022]/g, '?');
+    .replace(/…/g, '...')
+    .replace(/[–—−‑‒―]/g, '-')
+    .replace(/[“”‟«»]/g, '"')
+    .replace(/[‘’‛′`]/g, "'")
+    .replace(/[•◦▪▫‣⁃●⏺]/g, '-')
+    .replace(/[✓✔]/g, '[x]')
+    .replace(/[\u00A0\u202F\u2000-\u200A]/g, ' ')
+    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, '');
 }
 
 function splitToken(token: string, font: PDFFont, fontSize: number, maxWidth: number): string[] {

@@ -82,6 +82,12 @@ export function gerarPromptMemorial(params: MemorialPromptParams) {
     '3. Para cada conjunto relevante, explique os saberes e competências demonstrados e a contribuição para a atuação do servidor ou para os resultados institucionais.',
     '4. Conclusão que demonstre, sem afirmar deferimento automático, por que a trajetória apresentada se alinha ao nível de RSC-PCCTAE pleiteado.',
     '',
+    'FORMATAÇÃO E MARKDOWN',
+    '- Use Markdown simples e limpo.',
+    '- Títulos de seção devem usar "#" ou "##".',
+    '- Para listas, use marcadores simples com hífen ("- ") ou numerados ("1. ").',
+    '- Não utilize reticências Unicode ("…"), símbolos de lista especiais ("•", "▪"), emojis ou aspas curvas; prefira reticências normais ("..."), hífens ("-") e aspas normais ("").',
+    '',
     'Entregue somente o texto do memorial, sem notas introdutórias, tabela, contagem de pontos ou lista de documentos ao final.',
   ].join('\n');
 
