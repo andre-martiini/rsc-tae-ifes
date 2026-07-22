@@ -115,6 +115,9 @@ export function gerarPromptAuditoriaConsolidada(params: AuditPromptParams) {
     '',
     '5. RISCO DE ENQUADRAMENTO OU ATRIBUICAO ORDINARIA:',
     '   Aponte itens em que o documento parece comprovar fato diferente da regra, atividade ordinaria do cargo ou informacao insuficiente.',
+    '',
+    '6. PRESIDENCIA DE COMISSAO/NUCLEO NAO NOMEADA EXPRESSAMENTE:',
+    '   Muitas portarias de designacao nao escrevem "Presidente: [Nome]" ao lado do servidor — o texto introdutorio costuma atribuir a presidencia ao primeiro nomeado da relacao (ex.: "sob a presidencia do primeiro", "cabendo a presidencia ao primeiro relacionado"). Antes de sinalizar um item de coordenacao/presidencia como indevido, verifique se o servidor e o primeiro nomeado da lista, na ordem do documento (nao alfabetica); se for, a presidencia esta corretamente comprovada mesmo sem citacao expressa ao lado do nome.',
   ].join('\n');
 
   const serverBlock = [

@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '22 de julho de 2026',
+    title: 'IA reconhece presidência de comissão mesmo quando a portaria não a nomeia expressamente',
+    description: 'Muitas portarias de designação de comissão não escrevem "Presidente: [Nome]" ao lado de cada membro — o texto introdutório (Art. 1º) costuma atribuir a presidência ao primeiro nomeado da relação (ex.: "sob a presidência do primeiro"). A IA passou a reconhecer esse padrão em todas as etapas que avaliam presidência/coordenação de comissão (item 2) versus participação como membro comum (item 3).',
+    improvements: [
+      'Dossiê Inteligente (triagem inicial), Auditoria estruturada, "Validar com IA" de um lançamento e Auditoria consolidada narrativa agora identificam a cláusula de presidência automática e conferem a posição do servidor na lista nomeada, na ordem do documento (não alfabética), antes de classificar ou corrigir o item.',
+      'O catálogo normativo (item-2 e item-3) foi atualizado com essa orientação, reduzindo o risco de a IA rebaixar indevidamente uma designação de presidência para "membro comum" só porque a palavra "presidente" não aparece ao lado do nome do servidor.',
+    ],
+  },
+  {
     date: '20 de julho de 2026',
     title: 'Módulo de Auditoria centralizado, revisão "mastigada" e IA mais confiável',
     description: 'A maior atualização do sistema até agora: as propostas de ajuste da IA — vindas do Dossiê Inteligente, da Consolidação ou da validação de um lançamento individual — deixam de viver dentro de modais frágeis e passam a ter uma central própria, persistente e muito mais clara. Junto disso, vieram correções importantes de precisão da IA e suporte a formatação de texto no Memorial.',
