@@ -121,11 +121,11 @@ export const rolItensRSC: ItemRSC[] = [
     pontos_por_unidade: 4.5,
     quantidade_automatica: false,
     modo_calculo: 'manual',
-    criterios_enquadramento: 'Coordenador ou presidente de núcleo, comissão ou grupo de trabalho formalmente instituído por ato normativo.',
-    fatos_minimos: 'Ato de instituição do núcleo/comissão, ato de designação como coordenador/presidente.',
+    criterios_enquadramento: 'Coordenador ou presidente de núcleo, comissão ou grupo de trabalho formalmente instituído por ato normativo. ATENÇÃO: muitas portarias não escrevem "presidente" ao lado do nome do servidor — o Art. 1º costuma atribuir a presidência ao primeiro nomeado da relação (ex.: "sob a presidência do primeiro", "cabendo a presidência ao primeiro relacionado", "sendo presidida pelo primeiro dos servidores abaixo"). Nesses casos, considere presidente quem ocupa a PRIMEIRA posição da lista nomeada (geralmente a alínea "a)" ou o 1º nome citado), na ordem em que aparece no documento — não em ordem alfabética.',
+    fatos_minimos: 'Ato de instituição do núcleo/comissão, ato de designação como coordenador/presidente (expresso ou por ser o primeiro nomeado sob cláusula de presidência automática).',
     documentos_tipicos: 'Portaria de designação, resolução de instituição do grupo, ata de instalação.',
     documentos_insuficientes: 'Email de nomeação sem portaria, lista de presença em reuniões.',
-    hipoteses_exclusao: 'Participação como membro (não coordenador/presidente) — usar item-3. Grupo informal sem ato de instituição.',
+    hipoteses_exclusao: 'Participação como membro comum — servidor não é citado expressamente como presidente/coordenador e também não é o primeiro nomeado da relação nas portarias com cláusula de presidência automática; nesse caso usar item-3. Grupo informal sem ato de instituição.',
   },
   {
     id: 'item-3',
@@ -136,6 +136,8 @@ export const rolItensRSC: ItemRSC[] = [
     pontos_por_unidade: 3,
     quantidade_automatica: false,
     modo_calculo: 'manual',
+    criterios_enquadramento: 'Membro comum de núcleo, comissão ou grupo de trabalho, sem exercer a coordenação/presidência.',
+    hipoteses_exclusao: 'Servidor é o primeiro nomeado da relação em portaria que atribui a presidência ao primeiro (ex.: "sob a presidência do primeiro") — nesse caso a designação é de presidência e deve usar item-2, não item-3.',
   },
   {
     id: 'item-4',

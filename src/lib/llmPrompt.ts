@@ -77,6 +77,7 @@ A) Documentos Válidos: A comprovação deve ocorrer por meios oficiais (portari
 B) Não duplicidade: a mesma documentação ou o mesmo fato comprovado não deve ser utilizado em duplicidade entre requisitos específicos.
 C) Atribuição Ordinária: não podem ser pontuados fatos que representem exclusivamente atribuições legais do cargo, sem demonstração de saberes, competências, inovação, responsabilidade ampliada ou resultados institucionais relevantes.
 D) Conformidade da Unidade: a comprovação deve preencher estritamente a unidade de medida (ex.: "Por designação" exige ato formal; "Por ano ou fração" exige comprovação temporal suficiente).
+E) Presidência de Comissão/Núcleo Não Nomeada Expressamente: muitas portarias de designação não escrevem "Presidente: [Nome]" ao lado do servidor — o texto introdutório costuma atribuir a presidência ao primeiro nomeado da relação (ex.: "sob a presidência do primeiro", "cabendo a presidência ao primeiro relacionado"). Nesse caso, considere presidente quem ocupa a PRIMEIRA posição da lista nomeada, na ordem do documento (não alfabética). Só enquadre o lançamento como coordenação/presidência se o servidor for citado expressamente como tal OU for o primeiro nomeado sob essa cláusula; caso contrário, trata-se de participação como membro comum.
 
 === ITENS DISPONÍVEIS NO CATÁLOGO (PARA RECLASSIFICAÇÃO) ===
 ${escopoItens}
