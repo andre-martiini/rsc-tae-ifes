@@ -25,8 +25,10 @@ export default function MarkdownLiteText({ text, className }: { text: string; cl
         }
 
         if (bloco.tipo === 'lista') {
+          const ListTag = bloco.ordenada ? 'ol' : 'ul';
+          const listClass = bloco.ordenada ? 'mb-4 list-decimal space-y-1 pl-5' : 'mb-4 list-disc space-y-1 pl-5';
           return (
-            <ul key={i} className="mb-4 list-disc space-y-1 pl-5">
+            <ListTag key={i} className={listClass}>
               {bloco.itens.map((item, j) => (
                 <li key={j}>
                   {parseInlineMarkdown(item).map((run, k) => (
@@ -36,7 +38,7 @@ export default function MarkdownLiteText({ text, className }: { text: string; cl
                   ))}
                 </li>
               ))}
-            </ul>
+            </ListTag>
           );
         }
 

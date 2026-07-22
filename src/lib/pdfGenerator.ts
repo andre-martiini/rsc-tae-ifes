@@ -70,16 +70,39 @@ const CRITERIO_LABELS: Record<string, string> = {
 
 let logoBytesPromise: Promise<Uint8Array | null> | null = null;
 
-function sanitize(value: unknown): string {
-  return String(value ?? '')
-    .normalize('NFKC')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '')
-    .replace(/[–—−]/g, '-')
-    .replace(/[“”]/g, '"')
-    .replace(/[‘’]/g, "'")
-    .replace(/[^\u0020-\u007E\u00A0-\u00FF\u2022]/g, '?')
-    .replace(/\s+/g, ' ')
-    .trim();
+function sanitize(value: unknown, options: { preserveNewlines?: boolean } = {}): string {
+  let str = String(value ?? '').normalize('NFKC');
+
+  // Remover caracteres invisíveis / largura zero e BOM
+  str = str.replace(/[\u200B-\u200D\uFEFF\u00AD]/g, '');
+
+  // Remover caracteres de controle exceto quebra de linha (\n = 10) e tabulação (\t = 9)
+  str = str.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+
+  // Converter pontuações e símbolos tipográficos comuns para equivalentes padrão WinAnsi
+  str = str
+    .replace(/…/g, '...')
+    .replace(/[–—−‑‒―]/g, '-')
+    .replace(/[“”‟«»]/g, '"')
+    .replace(/[‘’‛′`]/g, "'")
+    .replace(/[•◦▪▫‣⁃●⏺]/g, '-')
+    .replace(/[✓✔]/g, '[x]')
+    .replace(/[\u00A0\u202F\u2000-\u200A]/g, ' ');
+
+  // Remover emojis ou símbolos Unicode de alta faixa que não mapeiam para fontes padrão PDF
+  str = str.replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
+
+  if (options.preserveNewlines) {
+    // Manter \n e caracteres Latin/WinAnsi imprimíveis
+    str = str.replace(/[^\u000A\u0020-\u007E\u00A0-\u00FF]/g, '');
+    str = str.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+    return str.trim();
+  }
+
+  // Texto em linha única: converter \r, \n, \t em espaço simples
+  str = str.replace(/[\r\n\t]+/g, ' ');
+  str = str.replace(/[^\u0020-\u007E\u00A0-\u00FF]/g, '');
+  return str.replace(/\s+/g, ' ').trim();
 }
 
 function formatDate(value?: string): string {
@@ -484,13 +507,15 @@ class Writer {
       indent?: number;
       maxWidth?: number;
       bulleted?: boolean;
+      bulletPrefix?: string;
       forceBold?: boolean;
       color?: ReturnType<typeof rgb>;
     } = {},
   ) {
     const size = options.size ?? 9.5;
     const indent = options.indent ?? 0;
-    const bulletWidth = options.bulleted ? 10 : 0;
+    const bulletPrefix = options.bulletPrefix ?? (options.bulleted ? '-' : undefined);
+    const bulletWidth = bulletPrefix ? Math.max(12, bulletPrefix.length * 7) : 0;
     const x0 = MARGIN_X + indent + bulletWidth;
     const maxWidth = options.maxWidth ?? CONTENT_W - indent - bulletWidth;
     const lineHeight = options.lineHeight ?? size * 1.45;
@@ -501,7 +526,7 @@ class Writer {
 
     type Tok = { text: string; bold: boolean; italic: boolean };
     const tokens: Tok[] = [];
-    for (const run of parseInlineMarkdown(sanitize(text))) {
+    for (const run of parseInlineMarkdown(sanitize(text, { preserveNewlines: true }))) {
       for (const word of run.text.split(/(\s+)/).filter((w) => w !== '')) {
         tokens.push({ text: word, bold: run.bold, italic: run.italic });
       }
@@ -525,12 +550,14 @@ class Writer {
       currentWidth += w;
     }
     while (current.length && isSpace(current[current.length - 1])) current.pop();
-    lines.push(current);
+    if (current.length > 0) {
+      lines.push(current);
+    }
 
     lines.forEach((lineTokens, idx) => {
       this.ensure(lineHeight);
-      if (options.bulleted && idx === 0) {
-        this.page.drawText('-', { x: MARGIN_X + indent, y: this.y, size, font: this.regular, color });
+      if (bulletPrefix && idx === 0) {
+        this.page.drawText(bulletPrefix, { x: MARGIN_X + indent, y: this.y, size, font: this.bold, color });
       }
       let drawX = x0;
       for (const tok of lineTokens) {
@@ -998,8 +1025,10 @@ export async function generateMemorialDescritivo(
       }
 
       if (bloco.tipo === 'lista') {
+        let num = 1;
         for (const item of bloco.itens) {
-          writer.richText(item, { size: 10, lineHeight: 15, indent: 4, bulleted: true });
+          const prefix = bloco.ordenada ? `${num++}.` : '-';
+          writer.richText(item, { size: 10, lineHeight: 15, indent: 4, bulletPrefix: prefix });
           writer.gap(3);
         }
         writer.gap(5);

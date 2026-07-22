@@ -15,6 +15,18 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '22 de julho de 2026',
+    title: 'Correção de pontos de interrogação e suporte expandido a Markdown no Memorial Descritivo',
+    description: 'Corrigida a geração do Memorial Descritivo no PDF exportado e na visualização em tela, eliminando a aparição de pontos de interrogação em quebras de linha e caracteres especiais. O leitor de Markdown também ganhou suporte completo a listas numeradas e marcadores gráficos.',
+    improvements: [
+      'Suporte estendido a Markdown no Memorial: listas ordenadas numeradas (1., 2.) e listas com marcadores gráficos (•, ◦, ▪, *, -) agora são identificadas e formatadas de forma limpa e estruturada no PDF exportado e na pré-visualização.',
+      'Instruções de formatação otimizadas no prompt da IA para redigir minutas de Memorial em Markdown limpo, compatível com a exportação final.',
+    ],
+    fixes: [
+      'Corrigido: quebras de linha simples dentro de parágrafos do Memorial e caracteres Unicode especiais (reticências, travessões, aspas curvas, marcadores gráficos e caracteres invisíveis de largura zero) podiam ser convertidos em pontos de interrogação (?) no PDF. A higienização foi aprimorada para preservar a quebra de linha e normalizar a pontuação sem gerar caracteres espúrios.',
+    ],
+  },
+  {
+    date: '22 de julho de 2026',
     title: 'IA reconhece presidência de comissão mesmo quando a portaria não a nomeia expressamente',
     description: 'Muitas portarias de designação de comissão não escrevem "Presidente: [Nome]" ao lado de cada membro — o texto introdutório (Art. 1º) costuma atribuir a presidência ao primeiro nomeado da relação (ex.: "sob a presidência do primeiro"). A IA passou a reconhecer esse padrão em todas as etapas que avaliam presidência/coordenação de comissão (item 2) versus participação como membro comum (item 3).',
     improvements: [
