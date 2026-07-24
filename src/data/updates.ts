@@ -14,6 +14,16 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '24 de julho de 2026',
+    title: 'Aviso de margem de pontuação para organizar comprovantes',
+    description: 'O painel agora orienta, de forma não bloqueante, quando a pontuação registrada alcança uma margem estimada de 25% acima do mínimo do nível pleiteado.',
+    improvements: [
+      'O aviso só é apresentado após o preenchimento dos documentos processuais obrigatórios e deixa claro que a pontuação é uma estimativa sujeita à análise da comissão.',
+      'Marcadores discretos ao lado da pontuação, no cabeçalho e no cartão do Dashboard, mantêm a orientação disponível mesmo depois de fechar o banner; basta passar o mouse para ler a nota.',
+      'Fechar o banner oculta apenas a mensagem expandida para aquele processo e nível, sem impedir novos anexos nem remover os indicadores contextuais.',
+    ],
+  },
+  {
     date: '22 de julho de 2026',
     title: 'Correção de pontos de interrogação e suporte expandido a Markdown no Memorial Descritivo',
     description: 'Corrigida a geração do Memorial Descritivo no PDF exportado e na visualização em tela, eliminando a aparição de pontos de interrogação em quebras de linha e caracteres especiais. O leitor de Markdown também ganhou suporte completo a listas numeradas e marcadores gráficos.',

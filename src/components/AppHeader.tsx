@@ -1,8 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Menu, CheckCircle2, Download, Upload, Loader2 } from 'lucide-react';
+import { Menu, CheckCircle2, CircleAlert, Download, Upload, Loader2 } from 'lucide-react';
 import { formatPointValue, sumPointValues } from '../lib/points';
 import { useAppContext } from '../context/AppContext';
 import { getDistinctRscCriterionCount, getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
+import { RSC_LEVELS } from '../data/mock';
+import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
+import { shouldShowScoreMarginAlert } from '../lib/scoreMarginAlert';
 
 import { useBackup } from '../hooks/useBackup';
 
@@ -13,7 +16,7 @@ interface AppHeaderProps {
 export default function AppHeader({
   onOpenMenu,
 }: AppHeaderProps) {
-  const { processo, lancamentos, servidor, itensRSC } = useAppContext();
+  const { processo, lancamentos, servidor, itensRSC, documentos } = useAppContext();
   const { isExporting, isImporting, importInputRef, handleExportSession, handleImportSession } = useBackup();
 
   const lancamentosDoServidor = useMemo(
@@ -35,6 +38,19 @@ export default function AppHeader({
     () => (servidor ? getEligibleRscLevel(servidor.escolaridade_atual) : null),
     [servidor]
   );
+
+  const nivelDoAviso = useMemo(
+    () => RSC_LEVELS.find((nivel) => nivel.id === processo.nivel_pleiteado_id) ?? nivelElegivel,
+    [processo.nivel_pleiteado_id, nivelElegivel],
+  );
+  const scoreMarginIndicatorVisible = !!nivelDoAviso && shouldShowScoreMarginAlert({
+    totalPoints: totalPontos,
+    minimumPoints: nivelDoAviso.pontosMinimos,
+    requiredDocumentsComplete: REQUIRED_INSTRUCTION_CATEGORIES.every(
+      (categoria) => documentos.some((documento) => documento.categoria_instrucao === categoria),
+    ),
+    dismissed: false,
+  });
 
   const violations = useMemo(
     () =>
@@ -128,6 +144,12 @@ export default function AppHeader({
             <div className="flex items-center gap-1.5 text-[10px] font-bold">
               <span className="text-emerald-600 uppercase tracking-widest opacity-80">Total:</span>
               <span className="text-gray-900 tabular-nums">{formatPointValue(totalPontos)} pts</span>
+              {scoreMarginIndicatorVisible && (
+                <CircleAlert
+                  className="h-3.5 w-3.5 shrink-0 text-sky-600"
+                  aria-label="Margem de pontuação atingida; confira a orientação no painel"
+                />
+              )}
             </div>
             <div className="w-px h-3 bg-gray-200" />
             <div className="flex items-center gap-1.5 text-[10px] font-bold">
@@ -153,6 +175,17 @@ export default function AppHeader({
               <span className="text-gray-900 tabular-nums">
                 {formatPointValue(totalPontos)}{nivelElegivel ? ` de ${nivelElegivel.pontosMinimos}` : ''} pts
               </span>
+              {scoreMarginIndicatorVisible && (
+                <span
+                  className="group relative flex cursor-help text-sky-600"
+                  aria-label="Margem de pontuação atingida; confira a orientação no painel"
+                >
+                  <CircleAlert className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="pointer-events-none absolute left-1/2 top-full z-[60] mt-2 w-56 -translate-x-1/2 rounded-lg border border-sky-100 bg-white px-3 py-2 text-[10px] font-medium normal-case leading-relaxed text-gray-600 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+                    Margem de pontuação atingida. Revise os anexos para manter apenas os comprovantes relevantes.
+                  </span>
+                </span>
+              )}
             </div>
             <div className="w-px h-2.5 bg-gray-200" />
             <div className="flex items-center gap-1.5 text-[10px] font-bold">

@@ -59,6 +59,7 @@ export function sessionKeys(id: string) {
     triagem: `rsc-tae-${id}-triagem`,
     auditoria: `rsc-tae-${id}-auditoria`,
     onboarding: `rsc-tae-${id}-onboarding-seen`,
+    scoreMarginDismissedLevels: `rsc-tae-${id}-score-margin-dismissed-levels`,
   };
 }
 
