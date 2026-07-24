@@ -1,10 +1,10 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, FileSearch, Info, LayoutGrid, List, Bot, ScrollText, UserCircle, ExternalLink, PlayCircle } from 'lucide-react';
+import { AlertCircle, BookOpenText, CheckCircle2, ChevronRight, FileSearch, Info, LayoutGrid, List, Bot, ScrollText, UserCircle, ExternalLink, PlayCircle, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
-import { useAppContext } from '../context/AppContext';
+import { sessionKeys, useAppContext } from '../context/AppContext';
 import { RSC_LEVELS } from '../data/mock';
 import { Navigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
@@ -13,6 +13,11 @@ import { getDistinctRscCriterionCount, getEligibleRscLevel, getServidorProbation
 import MainLayout from '../components/MainLayout';
 import VideoModal from '../components/VideoModal';
 import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE } from '../data/tutorialVideo';
+import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
+import {
+  readDismissedScoreMarginLevels,
+  shouldShowScoreMarginAlert,
+} from '../lib/scoreMarginAlert';
 
 const levelAccentClasses = [
   {
@@ -42,7 +47,7 @@ const levelAccentClasses = [
 ];
 
 export default function Dashboard() {
-  const { servidor, itensRSC, lancamentos, processo, triagem } = useAppContext();
+  const { servidor, activeSessionId, itensRSC, documentos, lancamentos, processo, triagem } = useAppContext();
   const navigate = useNavigate();
 
   if (!servidor) {
@@ -53,6 +58,9 @@ export default function Dashboard() {
   const totalPontos = sumPointValues(lancamentosDoServidor.map((lancamento) => lancamento.pontos_calculados));
   const itensDistintos = getDistinctRscCriterionCount(lancamentosDoServidor, itensRSC);
   const nivelElegivel = getEligibleRscLevel(servidor.escolaridade_atual);
+  const nivelDoAviso =
+    RSC_LEVELS.find((nivel) => nivel.id === processo.nivel_pleiteado_id) ??
+    nivelElegivel;
   const probationaryStatus = getServidorProbationaryStatus(servidor);
   const probationEndDate = probationaryStatus.probationEndDate?.toLocaleDateString('pt-BR');
 
@@ -97,6 +105,55 @@ export default function Dashboard() {
 
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const [dismissedScoreMarginLevels, setDismissedScoreMarginLevels] = useState<string[]>(() => (
+    activeSessionId
+      ? readDismissedScoreMarginLevels(
+        window.localStorage.getItem(sessionKeys(activeSessionId).scoreMarginDismissedLevels),
+      )
+      : []
+  ));
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setDismissedScoreMarginLevels([]);
+      return;
+    }
+
+    setDismissedScoreMarginLevels(
+      readDismissedScoreMarginLevels(
+        window.localStorage.getItem(sessionKeys(activeSessionId).scoreMarginDismissedLevels),
+      ),
+    );
+  }, [activeSessionId]);
+
+  const requiredInstructionDocumentsComplete = REQUIRED_INSTRUCTION_CATEGORIES.every(
+    (categoria) => documentos.some((documento) => documento.categoria_instrucao === categoria),
+  );
+  const scoreMarginAlertVisible = !!nivelDoAviso && shouldShowScoreMarginAlert({
+    totalPoints: totalPontos,
+    minimumPoints: nivelDoAviso.pontosMinimos,
+    requiredDocumentsComplete: requiredInstructionDocumentsComplete,
+    dismissed: dismissedScoreMarginLevels.includes(nivelDoAviso.id),
+  });
+  const scoreMarginIndicatorVisible = !!nivelDoAviso && shouldShowScoreMarginAlert({
+    totalPoints: totalPontos,
+    minimumPoints: nivelDoAviso.pontosMinimos,
+    requiredDocumentsComplete: requiredInstructionDocumentsComplete,
+    dismissed: false,
+  });
+
+  const dismissScoreMarginAlert = () => {
+    if (!activeSessionId || !nivelDoAviso) return;
+
+    const nextDismissedLevels = Array.from(
+      new Set([...dismissedScoreMarginLevels, nivelDoAviso.id]),
+    );
+    setDismissedScoreMarginLevels(nextDismissedLevels);
+    window.localStorage.setItem(
+      sessionKeys(activeSessionId).scoreMarginDismissedLevels,
+      JSON.stringify(nextDismissedLevels),
+    );
+  };
 
   const resumoItensLancados = useMemo(() => {
     const itemMap = new Map<
@@ -170,7 +227,38 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
-        )}        <button
+        )}
+
+        {scoreMarginAlertVisible && nivelDoAviso && (
+          <section
+            aria-labelledby="score-margin-alert-title"
+            className="flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-950 shadow-sm sm:p-5"
+          >
+            <Info className="mt-0.5 h-5 w-5 shrink-0 text-sky-600" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <h2 id="score-margin-alert-title" className="text-sm font-bold">
+                Aviso de margem de pontuação atingida
+              </h2>
+              <p className="mt-1 text-sm leading-relaxed">
+                Você atingiu uma margem estimada de 25% acima da pontuação mínima para o{' '}
+                {nivelDoAviso.label}. O envio de documentos além do necessário pode aumentar o
+                tempo de análise. Revise os anexos e mantenha apenas os comprovantes relevantes.
+                Você ainda pode continuar adicionando documentos normalmente.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissScoreMarginAlert}
+              aria-label="Fechar permanentemente este aviso para o nível atual"
+              title="Não mostrar novamente neste processo e nível"
+              className="-mr-1 -mt-1 rounded-lg p-2 text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-600"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </section>
+        )}
+
+        <button
           type="button"
           onClick={() => setShowVideoModal(true)}
           className="flex w-full items-center gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 text-left transition-colors hover:bg-primary/10 sm:p-5"
@@ -201,12 +289,25 @@ export default function Dashboard() {
               <CardContent className="flex flex-1 flex-col items-center p-6 text-center">
                 <div className="mb-4 flex w-full items-center justify-between">
                   <h3 className="text-sm font-bold text-gray-900">Pontuação</h3>
-                  <div className="group relative flex items-center">
+                  <div className="flex items-center gap-2">
+                    {scoreMarginIndicatorVisible && (
+                      <span
+                        className="group relative flex cursor-help text-sky-600"
+                        aria-label="Margem de pontuação atingida; confira a orientação acima"
+                      >
+                        <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                        <span className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-60 rounded-xl border border-sky-100 bg-white px-3.5 py-3 text-[11px] font-medium normal-case leading-relaxed text-gray-600 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
+                          Margem de pontuação atingida. Revise os anexos e mantenha apenas os comprovantes relevantes.
+                        </span>
+                      </span>
+                    )}
+                    <div className="group relative flex items-center">
                     <Info className="h-4 w-4 cursor-help text-gray-300 hover:text-gray-500" />
                     <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 rounded-xl bg-gray-900 px-3.5 py-3 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
                       <p className="mb-1 text-[11px] font-bold text-white">Sobre a Pontuação</p>
                       <p className="text-[11px] leading-relaxed text-gray-300">Total somado de todos os seus lançamentos válidos. Para o {nivelPleiteavel.label}, o mínimo é {nivelPleiteavel.pontosMinimos} pts.</p>
                       <div className="absolute bottom-full right-1 border-4 border-transparent border-b-gray-900"></div>
+                    </div>
                     </div>
                   </div>
                 </div>
