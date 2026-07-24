@@ -482,7 +482,7 @@ export default function Dashboard() {
               );
             })()}
 
-            {/* Card: NotebookLM */}
+            {/* Card: Gemini Notebook */}
             <Card className="overflow-hidden border-none bg-white shadow-sm transition-all hover:shadow-md">
               <CardContent className="p-6">
                 <div className="flex items-start gap-4">
@@ -490,7 +490,7 @@ export default function Dashboard() {
                     <Bot className="h-6 w-6" />
                   </div>
                   <div className="flex-1 space-y-1">
-                    <h3 className="font-bold text-gray-900">NotebookLM de Apoio</h3>
+                    <h3 className="font-bold text-gray-900">Gemini Notebook de Apoio</h3>
                     <p className="text-[13px] leading-relaxed text-gray-500">
                       Utilize nossa IA para validar se seus documentos coincidem com a legislação e instruções vigentes, ou para sanar dúvidas gerais sobre o processo RSC-TAE.
                     </p>
@@ -501,7 +501,7 @@ export default function Dashboard() {
                         rel="noreferrer"
                         className="inline-flex items-center gap-2 rounded-xl bg-gray-900 px-5 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200"
                       >
-                        Abrir NotebookLM
+                        Abrir Gemini Notebook
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
