@@ -14,6 +14,19 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '27 de julho de 2026',
+    title: 'Editor visual (WYSIWYG) no Memorial Descritivo',
+    description: 'O campo do Memorial deixou de ser um texto simples: agora é um editor visual, com barra de formatação, que mostra negrito, títulos e listas prontos na tela — sem exibir os símbolos de Markdown (#, **, -) usados por trás.',
+    features: [
+      'Barra de ferramentas no campo do Memorial com Negrito, Itálico, Título, Subtítulo, Texto normal, Lista com marcadores e Lista numerada.',
+      'Texto colado da IA (ou de qualquer fonte) com formatação Markdown é interpretado automaticamente e exibido já formatado, sem precisar editar os símbolos manualmente.',
+    ],
+    fixes: [
+      'Corrigido: subtítulos de nível 3 ou mais profundo (ex.: "### Requisito I") apareciam do mesmo tamanho do título principal do Memorial, tanto no editor quanto na pré-visualização — agora seguem uma hierarquia visual clara e proporcional ao PDF exportado.',
+      'Corrigido: quando a IA separava cada item de uma lista com marcadores por linha em branco, cada item virava uma lista independente de um único elemento; agora são reconhecidos e agrupados como uma lista única, tanto na tela quanto no PDF.',
+    ],
+  },
+  {
     date: '24 de julho de 2026',
     title: 'Aviso de margem de pontuação para organizar comprovantes',
     description: 'O painel agora orienta, de forma não bloqueante, quando a pontuação registrada alcança uma margem estimada de 25% acima do mínimo do nível pleiteado.',

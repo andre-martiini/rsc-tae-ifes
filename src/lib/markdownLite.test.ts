@@ -82,6 +82,29 @@ describe('dividirEmBlocosMarkdown', () => {
     expect(blocos).toEqual([{ tipo: 'paragrafo', texto: 'Linha um Linha dois continua o mesmo parágrafo.' }]);
   });
 
+  it('funde itens de lista com marcador separados por linha em branco em uma só lista', () => {
+    const texto = [
+      '* **Governança:** primeiro item.',
+      '',
+      '* **Domínio Normativo:** segundo item.',
+      '',
+      '* **Inovação:** terceiro item.',
+    ].join('\n');
+
+    const blocos = dividirEmBlocosMarkdown(texto);
+    expect(blocos).toEqual([
+      {
+        tipo: 'lista',
+        ordenada: false,
+        itens: [
+          { marcador: '*', texto: '**Governança:** primeiro item.' },
+          { marcador: '*', texto: '**Domínio Normativo:** segundo item.' },
+          { marcador: '*', texto: '**Inovação:** terceiro item.' },
+        ],
+      },
+    ]);
+  });
+
   it('ignora blocos vazios entre múltiplas quebras de linha', () => {
     const blocos = dividirEmBlocosMarkdown('Um\n\n\n\nDois');
     expect(blocos).toEqual([

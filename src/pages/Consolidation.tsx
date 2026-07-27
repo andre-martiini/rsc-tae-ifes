@@ -8,6 +8,7 @@ import AuditPromptModal from '../components/AuditPromptModal';
 import InstructionDocumentsPanel from '../components/InstructionDocumentsPanel';
 import MainLayout from '../components/MainLayout';
 import MarkdownLiteText from '../components/MarkdownLiteText';
+import MemorialEditor from '../components/MemorialEditor';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -649,15 +650,14 @@ export default function Consolidation() {
               você conhece e remova dados pessoais desnecessários, pois o memorial poderá ser publicado antes da decisão.
             </div>
 
-            <label htmlFor="memorial-texto" className="mt-5 block text-xs font-black uppercase tracking-widest text-gray-400">
+            <label className="mt-5 block text-xs font-black uppercase tracking-widest text-gray-400">
               Texto final revisado pelo servidor
             </label>
-            <textarea
-              id="memorial-texto"
+            <MemorialEditor
               value={memorialTexto}
-              onChange={(event) => updateProcesso({ memorial_texto: event.target.value })}
+              onChange={(markdown) => updateProcesso({ memorial_texto: markdown })}
               placeholder="Ex.: Iniciei minha trajetória profissional... Ao longo da carreira, desenvolvi... Essas experiências contribuíram... Por esse conjunto, considero que minha trajetória se alinha ao nível..."
-              className="mt-2 min-h-[320px] w-full resize-y rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm leading-7 text-gray-800 outline-none transition-all focus:border-violet-300 focus:bg-white focus:ring-4 focus:ring-violet-100"
+              className="mt-2"
             />
             <div className="mt-2 flex flex-col gap-1 text-[11px] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
               <span>O texto é salvo automaticamente nesta sessão.</span>
