@@ -9,8 +9,8 @@
 export type InlineRun = { text: string; bold: boolean; italic: boolean };
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
-const BULLET_RE = /^([-*+•◦▪▫‣⁃]|\d+[\.\)])\s+/;
-const ORDERED_RE = /^\d+[\.\)]\s+/;
+const BULLET_RE = /^([-*+•◦▪▫‣⁃]|\d+(?:\.\d+)*[\.\)])\s+/;
+const ORDERED_RE = /^\d+(?:\.\d+)*[\.\)]\s+/;
 
 /**
  * Extrai negrito/itálico inline. Marcadores sem par de fechamento ficam como
@@ -38,9 +38,17 @@ export function parseInlineMarkdown(text: string): InlineRun[] {
   return runs;
 }
 
+/**
+ * Item de lista com o marcador original preservado ("1.", "2.1.", "3)", "-", "•"...).
+ * Em listas ordenadas o marcador escrito pelo autor é reaproveitado na renderização,
+ * em vez de renumerar do 1 — texto gerado por IA costuma numerar seções ("1.", "2.",
+ * "2.1.") em blocos separados por linha em branco, e renumerar quebrava a sequência.
+ */
+export type ItemLista = { texto: string; marcador: string };
+
 export type BlocoMarkdown =
   | { tipo: 'heading'; nivel: number; texto: string }
-  | { tipo: 'lista'; ordenada?: boolean; itens: string[] }
+  | { tipo: 'lista'; ordenada?: boolean; itens: ItemLista[] }
   | { tipo: 'paragrafo'; texto: string };
 
 /**
@@ -66,7 +74,10 @@ export function dividirEmBlocosMarkdown(texto: string): BlocoMarkdown[] {
       resultado.push({
         tipo: 'lista',
         ordenada,
-        itens: linhas.map((l) => l.replace(BULLET_RE, '')),
+        itens: linhas.map((l) => {
+          const m = l.match(BULLET_RE)!;
+          return { marcador: m[1], texto: l.slice(m[0].length) };
+        }),
       });
       continue;
     }

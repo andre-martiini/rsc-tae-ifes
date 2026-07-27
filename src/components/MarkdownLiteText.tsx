@@ -25,13 +25,16 @@ export default function MarkdownLiteText({ text, className }: { text: string; cl
         }
 
         if (bloco.tipo === 'lista') {
+          // Listas ordenadas exibem o marcador original ("1.", "2.", "2.1.") em vez de
+          // deixar o navegador renumerar (list-decimal reiniciaria do 1 a cada bloco).
           const ListTag = bloco.ordenada ? 'ol' : 'ul';
-          const listClass = bloco.ordenada ? 'mb-4 list-decimal space-y-1 pl-5' : 'mb-4 list-disc space-y-1 pl-5';
+          const listClass = bloco.ordenada ? 'mb-4 list-none space-y-1 pl-5' : 'mb-4 list-disc space-y-1 pl-5';
           return (
             <ListTag key={i} className={listClass}>
               {bloco.itens.map((item, j) => (
-                <li key={j}>
-                  {parseInlineMarkdown(item).map((run, k) => (
+                <li key={j} className={bloco.ordenada ? '-indent-5' : undefined}>
+                  {bloco.ordenada ? `${item.marcador} ` : null}
+                  {parseInlineMarkdown(item.texto).map((run, k) => (
                     <Fragment key={k}>
                       {run.bold ? <strong>{run.text}</strong> : run.italic ? <em>{run.text}</em> : run.text}
                     </Fragment>
