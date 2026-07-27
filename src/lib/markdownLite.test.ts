@@ -16,7 +16,14 @@ describe('dividirEmBlocosMarkdown', () => {
     expect(blocos).toEqual([
       { tipo: 'heading', nivel: 2, texto: 'Formação Acadêmica' },
       { tipo: 'paragrafo', texto: 'Concluiu **Mestrado** em 2020.' },
-      { tipo: 'lista', ordenada: false, itens: ['Item um', 'Item dois'] },
+      {
+        tipo: 'lista',
+        ordenada: false,
+        itens: [
+          { marcador: '-', texto: 'Item um' },
+          { marcador: '-', texto: 'Item dois' },
+        ],
+      },
     ]);
   });
 
@@ -24,13 +31,48 @@ describe('dividirEmBlocosMarkdown', () => {
     const textoBullet = '• Marcador um\n◦ Marcador dois\n▪ Marcador três';
     const blocosBullet = dividirEmBlocosMarkdown(textoBullet);
     expect(blocosBullet).toEqual([
-      { tipo: 'lista', ordenada: false, itens: ['Marcador um', 'Marcador dois', 'Marcador três'] },
+      {
+        tipo: 'lista',
+        ordenada: false,
+        itens: [
+          { marcador: '•', texto: 'Marcador um' },
+          { marcador: '◦', texto: 'Marcador dois' },
+          { marcador: '▪', texto: 'Marcador três' },
+        ],
+      },
     ]);
 
     const textoOrdenado = '1. Primeiro item\n2. Segundo item';
     const blocosOrdenado = dividirEmBlocosMarkdown(textoOrdenado);
     expect(blocosOrdenado).toEqual([
-      { tipo: 'lista', ordenada: true, itens: ['Primeiro item', 'Segundo item'] },
+      {
+        tipo: 'lista',
+        ordenada: true,
+        itens: [
+          { marcador: '1.', texto: 'Primeiro item' },
+          { marcador: '2.', texto: 'Segundo item' },
+        ],
+      },
+    ]);
+  });
+
+  it('preserva a numeração original quando itens numerados aparecem em blocos separados (títulos de seção da IA)', () => {
+    const texto = [
+      '1. APRESENTAÇÃO E SÍNTESE DA TRAJETÓRIA PROFISSIONAL',
+      '',
+      'Ingressei no Ifes em 2010.',
+      '',
+      '2. DESENVOLVIMENTO DA TRAJETÓRIA',
+      '',
+      '2.1. Liderança e Gestão de Processos (Requisito I)',
+    ].join('\n');
+
+    const blocos = dividirEmBlocosMarkdown(texto);
+    expect(blocos).toEqual([
+      { tipo: 'lista', ordenada: true, itens: [{ marcador: '1.', texto: 'APRESENTAÇÃO E SÍNTESE DA TRAJETÓRIA PROFISSIONAL' }] },
+      { tipo: 'paragrafo', texto: 'Ingressei no Ifes em 2010.' },
+      { tipo: 'lista', ordenada: true, itens: [{ marcador: '2.', texto: 'DESENVOLVIMENTO DA TRAJETÓRIA' }] },
+      { tipo: 'lista', ordenada: true, itens: [{ marcador: '2.1.', texto: 'Liderança e Gestão de Processos (Requisito I)' }] },
     ]);
   });
 

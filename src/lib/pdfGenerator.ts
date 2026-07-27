@@ -1025,10 +1025,11 @@ export async function generateMemorialDescritivo(
       }
 
       if (bloco.tipo === 'lista') {
-        let num = 1;
         for (const item of bloco.itens) {
-          const prefix = bloco.ordenada ? `${num++}.` : '-';
-          writer.richText(item, { size: 10, lineHeight: 15, indent: 4, bulletPrefix: prefix });
+          // Listas ordenadas reutilizam o marcador original ("1.", "2.", "2.1.") para
+          // não quebrar a sequência quando itens numerados ficam em blocos separados.
+          const prefix = bloco.ordenada ? item.marcador : '-';
+          writer.richText(item.texto, { size: 10, lineHeight: 15, indent: 4, bulletPrefix: prefix });
           writer.gap(3);
         }
         writer.gap(5);
