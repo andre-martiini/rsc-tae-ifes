@@ -13,7 +13,11 @@ export default function MarkdownLiteText({ text, className }: { text: string; cl
     <div className={className}>
       {blocos.map((bloco, i) => {
         if (bloco.tipo === 'heading') {
-          const headingClass = 'mb-2 mt-4 font-bold first:mt-0';
+          // Mesma gradação de 3 níveis usada pelo PDF (pdfGenerator.ts): nível 1 maior,
+          // nível 2 médio, níveis 3+ no menor tamanho — evita que subtítulos profundos
+          // fiquem visualmente idênticos ao título principal do memorial.
+          const sizeClass = bloco.nivel === 1 ? 'text-base' : bloco.nivel === 2 ? 'text-sm' : 'text-[13px]';
+          const headingClass = `mb-2 mt-4 font-bold first:mt-0 ${sizeClass}`;
           switch (Math.min(bloco.nivel, 6)) {
             case 1: return <h1 key={i} className={headingClass}>{bloco.texto}</h1>;
             case 2: return <h2 key={i} className={headingClass}>{bloco.texto}</h2>;

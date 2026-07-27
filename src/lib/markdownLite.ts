@@ -85,5 +85,33 @@ export function dividirEmBlocosMarkdown(texto: string): BlocoMarkdown[] {
     resultado.push({ tipo: 'paragrafo', texto: linhas.join(' ') });
   }
 
+  return mesclarListasAdjacentes(resultado);
+}
+
+/**
+ * Funde blocos de lista com marcadores (-, *, •...) consecutivos em um só. Texto gerado
+ * por IA costuma separar cada item de lista por linha em branco (parágrafos distintos);
+ * sem essa fusão, cada item vira uma lista de um único elemento.
+ * Listas numeradas ficam de fora de propósito: números reaparecem como pseudo-cabeçalhos
+ * de seção no texto da IA ("1. APRESENTAÇÃO...", "2. DESENVOLVIMENTO...", "2.1. ...") e
+ * fundi-los quebraria essa numeração de seções (ver teste correspondente).
+ */
+function mesclarListasAdjacentes(blocos: BlocoMarkdown[]): BlocoMarkdown[] {
+  const resultado: BlocoMarkdown[] = [];
+
+  for (const bloco of blocos) {
+    const anterior = resultado[resultado.length - 1];
+    if (
+      bloco.tipo === 'lista' &&
+      !bloco.ordenada &&
+      anterior?.tipo === 'lista' &&
+      !anterior.ordenada
+    ) {
+      anterior.itens.push(...bloco.itens);
+      continue;
+    }
+    resultado.push(bloco);
+  }
+
   return resultado;
 }
