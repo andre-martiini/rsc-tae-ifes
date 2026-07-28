@@ -6,7 +6,6 @@ const servidor: Servidor = {
   id: 'srv-1',
   siape: '1234567',
   nome_completo: 'João da Silva',
-  email_institucional: 'joao@ift.edu.br',
   lotacao: 'DTI',
   escolaridade_atual: 'Graduação',
   cargo: 'Assistente em Administração',

@@ -186,7 +186,6 @@ export default function LandingScreen() {
     id: `srv-${Date.now()}`,
     siape: form.siape.trim(),
     nome_completo: form.nome_completo.trim(),
-    email_institucional: '',
     instituicao: selectedServidorBase?.org_lotacao || '',
     lotacao: selectedServidorBase?.org_lotacao || '',
     cargo: selectedServidorBase?.descricao_cargo || '',

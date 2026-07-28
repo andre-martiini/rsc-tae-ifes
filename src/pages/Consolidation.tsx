@@ -195,7 +195,6 @@ export default function Consolidation() {
 
   const checks = useMemo(() => {
     const profileOk =
-      !!servidor.email_institucional?.trim() &&
       !!servidor.lotacao?.trim() &&
       !!servidor.situacao_funcional &&
       !!servidor.cargo?.trim() &&
@@ -831,7 +830,6 @@ export default function Consolidation() {
 
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Lotação:</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.lotacao}</p></div>
                       <div><span className="font-bold uppercase text-[10px] text-gray-500 block">Função/Encargo (se houver):</span> <p className="border-b border-gray-300 min-h-[20px]">{servidor.funcao_encargo || '—'}</p></div>
-                      <div className="md:col-span-2"><span className="font-bold uppercase text-[10px] text-gray-500 block">Telefone/E-mail:</span> <p className="border-b border-gray-300 min-h-[20px]">{[servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ')}</p></div>
                     </div>
                   </section>
 

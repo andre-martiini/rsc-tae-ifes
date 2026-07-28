@@ -15,7 +15,6 @@ export interface InstitutionConfig {
   networkName: string;
   logoPath: string;
   logoAlt: string;
-  emailPlaceholder: string;
   unitsLabel: string;
   units: string[];
   locationFallback: string;
@@ -30,7 +29,6 @@ export const institutionConfig: InstitutionConfig = {
   networkName: 'Rede Federal de Educação Profissional, Científica e Tecnológica',
   logoPath: '/logo_rede_federal.png',
   logoAlt: 'Marca genérica da Rede Federal',
-  emailPlaceholder: 'Ex.: nome.sobrenome@instituicao.edu.br',
   unitsLabel: 'Unidade/Lotação',
   units: [
     'Reitoria',

@@ -31,7 +31,6 @@ export interface Servidor {
   id: string;
   siape: string;
   nome_completo: string;
-  email_institucional: string;
   instituicao?: string;
   lotacao: string;
   escolaridade_atual: EscolaridadeAtual | string;
@@ -45,8 +44,6 @@ export interface Servidor {
   data_ingresso_ife?: string;
   /** Função ou encargo comissionado, se houver */
   funcao_encargo?: string;
-  /** Telefone de contato do servidor */
-  telefone?: string;
   database_siape_prefix?: string;
   database_cargo?: string;
   database_classe?: string;
