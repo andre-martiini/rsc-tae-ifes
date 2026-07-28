@@ -997,7 +997,6 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
-  writer.keyValue('Telefone/E-mail:', sanitize([servidor.telefone, servidor.email_institucional].filter(Boolean).join(' / ') || '-'));
   writer.keyValue('Nível de RSC pleiteado:', sanitize(nivelElegivel?.label ?? processo?.nivel_pleiteado_id ?? '-'));
 
   writer.section('2. Trajetória profissional, saberes e competências');

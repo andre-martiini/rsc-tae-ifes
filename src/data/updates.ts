@@ -14,6 +14,22 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '28 de julho de 2026',
+    title: 'Diploma ou certificado no dossiê e mais privacidade no Memorial',
+    description: 'O pacote do processo passou a exigir e incluir o comprovante da escolaridade utilizado no pedido. O Memorial também deixou de exibir automaticamente os dados de contato do servidor.',
+    features: [
+      'Novo campo obrigatório para anexar o diploma ou certificado de escolaridade entre os documentos de instrução do processo.',
+      'O diploma ou certificado é incluído no pacote exportado em arquivo próprio, identificado para conferência automática pelo sistema avaliador.',
+    ],
+    improvements: [
+      'O checklist de consolidação agora considera o diploma ou certificado juntamente com a portaria de estabilidade e os três extratos SIAPE obrigatórios.',
+      'O sistema avaliador reconhece o novo documento, mostra sua situação no checklist e permite consultá-lo durante a análise.',
+    ],
+    fixes: [
+      'Telefone e e-mail deixaram de ser inseridos automaticamente no PDF do Memorial, reduzindo a exposição desnecessária de dados pessoais.',
+    ],
+  },
+  {
     date: '27 de julho de 2026',
     title: 'Editor visual (WYSIWYG) no Memorial Descritivo',
     description: 'O campo do Memorial deixou de ser um texto simples: agora é um editor visual, com barra de formatação, que mostra negrito, títulos e listas prontos na tela — sem exibir os símbolos de Markdown (#, **, -) usados por trás.',
