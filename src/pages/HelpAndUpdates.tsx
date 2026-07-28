@@ -158,7 +158,7 @@ export default function HelpAndUpdates() {
   const faqs = [
     {
       q: 'Onde meus dados ficam salvos?',
-      a: 'Toda e qualquer informação que você insere neste sistema (como dados cadastrais, lançamentos e arquivos anexados) é armazenada exclusivamente de forma local no seu navegador web (através de tecnologias como LocalStorage e IndexedDB). Nossos servidores não guardam nem recebem nenhum dado pessoal ou profissional do seu dossiê. A única exceção é a ferramenta de feedback voluntário: quando utilizada, ela se conecta a um banco de dados externo para enviar a mensagem, transmitindo exclusivamente as informações registradas naquele momento (nome do servidor, e-mail cadastrado e o texto do feedback).',
+      a: 'Toda e qualquer informação que você insere neste sistema (como dados cadastrais, lançamentos e arquivos anexados) é armazenada exclusivamente de forma local no seu navegador web (através de tecnologias como LocalStorage e IndexedDB). Nossos servidores não guardam nem recebem nenhum dado pessoal ou profissional do seu dossiê. A única exceção é a ferramenta de feedback voluntário: quando utilizada, ela se conecta a um banco de dados externo e transmite somente o nome e o e-mail informados no próprio formulário, o texto da mensagem e eventuais imagens anexadas.',
     },
     {
       q: 'Como posso garantir que não vou perder meu progresso?',

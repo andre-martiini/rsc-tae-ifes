@@ -15,8 +15,8 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '28 de julho de 2026',
-    title: 'Diploma ou certificado no dossiê e mais privacidade no Memorial',
-    description: 'O pacote do processo passou a exigir e incluir o comprovante da escolaridade utilizado no pedido. O Memorial também deixou de exibir automaticamente os dados de contato do servidor.',
+    title: 'Diploma ou certificado no dossiê e mais privacidade no sistema',
+    description: 'O pacote do processo passou a exigir e incluir o comprovante da escolaridade utilizado no pedido. Para reduzir a coleta de dados pessoais, o cadastro do servidor também deixou de solicitar telefone e e-mail.',
     features: [
       'Novo campo obrigatório para anexar o diploma ou certificado de escolaridade entre os documentos de instrução do processo.',
       'O diploma ou certificado é incluído no pacote exportado em arquivo próprio, identificado para conferência automática pelo sistema avaliador.',
@@ -26,7 +26,7 @@ export const SYSTEM_UPDATES: UpdateEntry[] = [
       'O sistema avaliador reconhece o novo documento, mostra sua situação no checklist e permite consultá-lo durante a análise.',
     ],
     fixes: [
-      'Telefone e e-mail deixaram de ser inseridos automaticamente no PDF do Memorial, reduzindo a exposição desnecessária de dados pessoais.',
+      'Os campos cadastrais de telefone e e-mail do servidor foram retirados do sistema e deixaram de integrar o perfil, as validações e os documentos gerados.',
     ],
   },
   {

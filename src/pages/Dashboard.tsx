@@ -67,7 +67,6 @@ export default function Dashboard() {
   const profileFields = [
     { key: 'siape', label: 'SIAPE' },
     { key: 'nome_completo', label: 'Nome' },
-    { key: 'email_institucional', label: 'E-mail' },
     { key: 'instituicao', label: 'Instituição' },
     { key: 'lotacao', label: 'Lotação' },
     { key: 'cargo', label: 'Cargo' },

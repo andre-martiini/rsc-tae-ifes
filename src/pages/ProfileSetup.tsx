@@ -30,7 +30,6 @@ export default function ProfileSetup() {
   const [form, setForm] = useState({
     siape: servidor?.siape ?? '',
     nome_completo: servidor?.nome_completo ?? '',
-    email_institucional: servidor?.email_institucional ?? '',
     instituicao: servidor?.instituicao ?? '',
     lotacao: servidor?.lotacao ?? '',
     escolaridade_atual: servidor?.escolaridade_atual ?? '',
@@ -39,7 +38,6 @@ export default function ProfileSetup() {
     nivel_classificacao: servidor?.nivel_classificacao ?? '',
     data_ingresso_ife: (servidor?.data_ingresso_ife ?? servidor?.data_ingresso ?? '').split('T')[0],
     funcao_encargo: servidor?.funcao_encargo ?? '',
-    telefone: servidor?.telefone ?? '',
   });
 
   const set =
@@ -63,7 +61,6 @@ export default function ProfileSetup() {
       id: servidor?.id ?? activeSessionId,
       siape: form.siape.trim(),
       nome_completo: form.nome_completo.trim(),
-      email_institucional: form.email_institucional.trim(),
       instituicao: form.instituicao.trim(),
       lotacao: form.lotacao.trim(),
       escolaridade_atual: form.escolaridade_atual,
@@ -72,7 +69,6 @@ export default function ProfileSetup() {
       nivel_classificacao: form.nivel_classificacao as Servidor['nivel_classificacao'],
       data_ingresso_ife: form.data_ingresso_ife,
       funcao_encargo: form.funcao_encargo.trim() || undefined,
-      telefone: form.telefone.trim() || undefined,
     };
 
     setPerfil(perfil);
@@ -157,19 +153,6 @@ export default function ProfileSetup() {
                 </div>
               </div>
             )}
-
-            <div className="space-y-1.5">
-              <Label htmlFor="email_institucional">
-                E-mail Institucional <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="email_institucional"
-                type="email"
-                placeholder={institutionConfig.emailPlaceholder}
-                value={form.email_institucional}
-                onChange={set('email_institucional')}
-              />
-            </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
@@ -297,26 +280,14 @@ export default function ProfileSetup() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="funcao_encargo">Função/Encargo</Label>
-                <Input
-                  id="funcao_encargo"
-                  placeholder="Ex.: Coordenador(a), FG, CD ou equivalente"
-                  value={form.funcao_encargo}
-                  onChange={set('funcao_encargo')}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="telefone">Telefone</Label>
-                <Input
-                  id="telefone"
-                  placeholder="Ex.: (27) 99999-9999"
-                  value={form.telefone}
-                  onChange={set('telefone')}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="funcao_encargo">Função/Encargo</Label>
+              <Input
+                id="funcao_encargo"
+                placeholder="Ex.: Coordenador(a), FG, CD ou equivalente"
+                value={form.funcao_encargo}
+                onChange={set('funcao_encargo')}
+              />
             </div>
 
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">

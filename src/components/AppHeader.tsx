@@ -65,7 +65,6 @@ export default function AppHeader({
     const requiredFields = [
       'siape',
       'nome_completo',
-      'email_institucional',
       'instituicao',
       'lotacao',
       'cargo',

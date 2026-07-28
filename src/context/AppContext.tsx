@@ -83,6 +83,17 @@ function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
+/** Remove dados de contato presentes em perfis ou backups de versões antigas. */
+function sanitizeServidor(perfil: Servidor | null): Servidor | null {
+  if (!perfil) return null;
+  const {
+    email_institucional: _emailInstitucional,
+    telefone: _telefone,
+    ...servidorSemContato
+  } = perfil as Servidor & { email_institucional?: unknown; telefone?: unknown };
+  return servidorSemContato;
+}
+
 /**
  * Migra estados de auditoria persistidos antes do módulo unificado: operações
  * sem `origem`/`criada_em` recebem defaults (só a Triagem persistia antes).
@@ -311,7 +322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Active session data ─────────────────────────────────────────────────────
   const [servidor, setServidor] = useState<Servidor | null>(() => {
     const id = window.localStorage.getItem(GLOBAL_KEYS.active);
-    return id ? loadJson<Servidor | null>(`rsc-tae-${id}-perfil`, null) : null;
+    return id ? sanitizeServidor(loadJson<Servidor | null>(`rsc-tae-${id}-perfil`, null)) : null;
   });
 
   const [documentos, setDocumentos] = useState<Documento[]>(() => {
@@ -445,19 +456,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Session actions ─────────────────────────────────────────────────────────
 
   const createSession = (perfil: Servidor) => {
-    const id = perfil.id;
+    const perfilSanitizado = sanitizeServidor(perfil)!;
+    const id = perfilSanitizado.id;
     const now = new Date().toISOString();
     const summary: SessionSummary = {
       id,
-      siape: perfil.siape,
-      nome_completo: perfil.nome_completo,
+      siape: perfilSanitizado.siape,
+      nome_completo: perfilSanitizado.nome_completo,
       created_at: now,
       updated_at: now,
     };
 
     // Persist immediately so effects are consistent on first render
     const keys = sessionKeys(id);
-    window.localStorage.setItem(keys.perfil, JSON.stringify(perfil));
+    window.localStorage.setItem(keys.perfil, JSON.stringify(perfilSanitizado));
     window.localStorage.setItem(keys.documentos, JSON.stringify([]));
     window.localStorage.setItem(keys.lancamentos, JSON.stringify([]));
     window.localStorage.setItem(keys.processo, JSON.stringify(INITIAL_PROCESSO));
@@ -465,7 +477,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setSessions((prev) => [...prev, summary]);
     setActiveSessionId(id);
-    setServidor(perfil);
+    setServidor(perfilSanitizado);
     setDocumentos([]);
     setLancamentos([]);
     setProcesso(INITIAL_PROCESSO);
@@ -477,7 +489,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const keys = sessionKeys(id);
     window.localStorage.setItem(GLOBAL_KEYS.active, id);
     setActiveSessionId(id);
-    setServidor(loadJson<Servidor | null>(keys.perfil, null));
+    setServidor(sanitizeServidor(loadJson<Servidor | null>(keys.perfil, null)));
     setDocumentos(loadJson<Documento[]>(keys.documentos, []));
     const { list: migratedLancamentos, stats } = migrateLancamentos(loadJson<Lancamento[]>(keys.lancamentos, []));
     notifyMigration(stats);
@@ -516,7 +528,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const setPerfil = (data: Servidor) => {
-    setServidor(data);
+    setServidor(sanitizeServidor(data));
   };
 
   const updateProcesso = useCallback((updates: Partial<ProcessoRSC>) => {
@@ -525,7 +537,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const restoreSession = (session: RestoredSession) => {
     if (!activeSessionId) return;
-    setServidor(session.perfil);
+    setServidor(sanitizeServidor(session.perfil));
     setDocumentos(session.documentos);
     const { list: migratedLancamentos, stats } = migrateLancamentos(session.lancamentos);
     notifyMigration(stats);
@@ -537,18 +549,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const importSessionAsNew = (restored: RestoredSession) => {
     if (!restored.perfil) return;
-    const id = restored.perfil.id;
+    const perfilSanitizado = sanitizeServidor(restored.perfil)!;
+    const id = perfilSanitizado.id;
     const now = new Date().toISOString();
     const summary: SessionSummary = {
       id,
-      siape: restored.perfil.siape,
-      nome_completo: restored.perfil.nome_completo,
+      siape: perfilSanitizado.siape,
+      nome_completo: perfilSanitizado.nome_completo,
       created_at: now,
       updated_at: now,
     };
 
     const keys = sessionKeys(id);
-    window.localStorage.setItem(keys.perfil, JSON.stringify(restored.perfil));
+    window.localStorage.setItem(keys.perfil, JSON.stringify(perfilSanitizado));
     window.localStorage.setItem(keys.documentos, JSON.stringify(restored.documentos));
     window.localStorage.setItem(keys.lancamentos, JSON.stringify(restored.lancamentos));
     window.localStorage.setItem(keys.processo, JSON.stringify(restored.processo ?? INITIAL_PROCESSO));
@@ -568,7 +581,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     setActiveSessionId(id);
-    setServidor(restored.perfil);
+    setServidor(perfilSanitizado);
     setDocumentos(restored.documentos);
     const { list: migratedLancamentos, stats } = migrateLancamentos(restored.lancamentos);
     notifyMigration(stats);
