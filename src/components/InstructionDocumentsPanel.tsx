@@ -96,8 +96,13 @@ export default function InstructionDocumentsPanel() {
               Documentos para instrução do processo
             </h3>
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
-              Solicite os três extratos ao setor de Gestão de Pessoas do seu campus. Eles serão reunidos
-              automaticamente no pacote final e não pontuam como documentos comprobatórios.
+              Anexe o documento de escolaridade que fundamenta o pedido e solicite os três extratos ao
+              setor de Gestão de Pessoas do seu campus. Todos serão reunidos automaticamente no pacote final.
+              Não é necessário anexar aqui todos os certificados da sua trajetória: use apenas o documento
+              oficial que comprova o requisito de escolaridade. Se uma titulação formal superior for usada para
+              pontuar no Requisito VI, ela não pode ser a mesma já utilizada no IQ atual e deve continuar vinculada
+              ao respectivo lançamento. A aceitação de formação obtida antes do ingresso deve seguir a orientação
+              institucional vigente.
             </p>
           </div>
         </div>

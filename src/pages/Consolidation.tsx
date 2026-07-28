@@ -281,7 +281,7 @@ export default function Consolidation() {
         ok: instructionDocumentsOk,
         label: 'Documentos de instrução',
         detail: instructionDocumentsOk
-          ? 'Portaria de estabilidade e três extratos SIAPE anexados.'
+          ? 'Diploma/certificado, portaria de estabilidade e três extratos SIAPE anexados.'
           : `${requiredInstructionCount}/${REQUIRED_INSTRUCTION_CATEGORIES.length} documentos obrigatórios anexados.`,
         action: instructionDocumentsOk ? undefined : { label: 'Anexar documentos', onClick: () => scrollToSection('instruction-documents-section') },
       },
