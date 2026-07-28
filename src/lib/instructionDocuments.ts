@@ -10,6 +10,13 @@ export type InstructionDocumentSlot = {
 
 export const INSTRUCTION_DOCUMENT_SLOTS: readonly InstructionDocumentSlot[] = [
   {
+    categoria: 'diploma_certificado_escolaridade',
+    titulo: 'Diploma ou certificado de conclusão',
+    descricao:
+      'Anexe um único PDF com o diploma, certificado ou declaração oficial de conclusão que comprove a escolaridade exigida para o RSC pretendido, no mínimo a titulação imediatamente anterior à correspondente ao incentivo financeiro solicitado.',
+    obrigatorio: true,
+  },
+  {
     categoria: 'portaria_estabilidade',
     titulo: 'Portaria de estabilidade',
     descricao: 'Ato que comprova a conclusão do estágio probatório e a estabilidade no serviço público.',

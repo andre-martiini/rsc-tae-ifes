@@ -111,8 +111,12 @@ function drawTagOnPage(
   });
 }
 
-async function mergePdfDocumentSet(documents: Documento[]): Promise<Uint8Array | null> {
+async function mergePdfDocumentSet(
+  documents: Documento[],
+  docTypeTag?: string,
+): Promise<Uint8Array | null> {
   const merged = await PDFDocument.create();
+  const tagFont = docTypeTag ? await merged.embedFont(StandardFonts.Courier) : undefined;
 
   for (const document of documents) {
     if (!document.caminho_storage) continue;
@@ -122,7 +126,19 @@ async function mergePdfDocumentSet(documents: Documento[]): Promise<Uint8Array |
     try {
       const source = await PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true });
       const pages = await merged.copyPages(source, source.getPageIndices());
-      pages.forEach((page) => merged.addPage(page));
+      pages.forEach((page) => {
+        merged.addPage(page);
+        if (docTypeTag && tagFont) {
+          drawTagOnPage(
+            page,
+            `[RSC:DOC_TIPO:${docTypeTag}]`,
+            tagFont,
+            8,
+            rgb(0.6, 0.6, 0.6),
+            30,
+          );
+        }
+      });
     } catch (error) {
       console.error(`Erro ao incluir o documento de instrução ${document.nome_arquivo}:`, error);
     }
@@ -256,6 +272,17 @@ export async function exportPacoteRSC(params: {
   if (priorGrantDocument) {
     const priorGrantBytes = await mergePdfDocumentSet([priorGrantDocument]);
     if (priorGrantBytes) zip.file('05_Portaria_Concessao_Anterior_RSC.pdf', priorGrantBytes);
+  }
+
+  const qualificationDocument = getInstructionDocument(documentos, 'diploma_certificado_escolaridade');
+  if (qualificationDocument) {
+    const qualificationBytes = await mergePdfDocumentSet(
+      [qualificationDocument],
+      'DIPLOMA_CERTIFICADO_ESCOLARIDADE',
+    );
+    if (qualificationBytes) {
+      zip.file('07_Diploma_Certificado_Escolaridade.pdf', qualificationBytes);
+    }
   }
 
   // 5. Compactar e iniciar download do conjunto completo.

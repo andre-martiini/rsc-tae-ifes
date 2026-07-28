@@ -67,6 +67,7 @@ export interface Documento {
     | 'instrucao_processual';
   categoria_instrucao?:
     | 'portaria_estabilidade'
+    | 'diploma_certificado_escolaridade'
     | 'siape_dados_funcionais'
     | 'siape_posicao_carreira'
     | 'siape_cargo_confianca'
