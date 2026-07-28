@@ -5,6 +5,7 @@ import { getDocumentBlob } from './documentStorage';
 import {
   buildDossierDocumentOrder,
   compareItemsByDossierOrder,
+  getLancamentoDocumentIds,
   sortDocumentsByDossierOrder,
   sortLancamentosByDossierOrder,
 } from './documentOrdering';
@@ -111,6 +112,115 @@ function drawTagOnPage(
   });
 }
 
+/**
+ * Desenha uma página de capa para um registro SEM arquivo físico (link
+ * institucional que não pôde ser baixado/anexado automaticamente, ou
+ * autodeclaração). Sem esta página, o PDF unificado simplesmente pulava
+ * esses registros — a Memorial ficava com PAGINA_INICIO/FIM = 0 e o
+ * avaliador não tinha nenhuma evidência visível no dossiê, mesmo quando o
+ * servidor havia informado links reais na hora de lançar o item.
+ */
+function drawReferenceCoverPage(
+  pdfDoc: PDFDocument,
+  fonts: { body: any; bold: any; mono: any },
+  params: {
+    itemNumero: number;
+    inciso: string;
+    doc: Documento;
+    observacoes: string[];
+  },
+): PDFPage {
+  const page = pdfDoc.addPage([595.28, 841.89]);
+  const { width, height } = page.getSize();
+  const margin = 56;
+  let y = height - margin;
+
+  const isAutodeclaracao = !!params.doc.autodeclaracao;
+  const titulo = isAutodeclaracao
+    ? 'REGISTRO POR AUTODECLARAÇÃO (SEM ARQUIVO FÍSICO ANEXADO)'
+    : 'REFERÊNCIA INSTITUCIONAL (SEM ARQUIVO FÍSICO ANEXADO)';
+
+  page.drawText(titulo, { x: margin, y, size: 12, font: fonts.bold, color: rgb(0.7, 0.35, 0) });
+  y -= 22;
+  page.drawText(`Inciso ${params.inciso} — Item ${params.itemNumero}`, {
+    x: margin,
+    y,
+    size: 10,
+    font: fonts.bold,
+  });
+  y -= 20;
+
+  page.drawText(`Registro: ${params.doc.nome_arquivo}`, { x: margin, y, size: 9, font: fonts.body });
+  y -= 20;
+
+  if (params.doc.gedoc_links && params.doc.gedoc_links.length > 0) {
+    page.drawText('Links informados pelo servidor (não baixados/anexados automaticamente):', {
+      x: margin,
+      y,
+      size: 9,
+      font: fonts.bold,
+    });
+    y -= 16;
+    for (const link of params.doc.gedoc_links) {
+      page.drawText(`• ${link}`, { x: margin + 10, y, size: 8.5, font: fonts.mono, color: rgb(0.15, 0.15, 0.6) });
+      y -= 14;
+    }
+  } else if (isAutodeclaracao) {
+    page.drawText('Fato declarado pelo servidor sem documento comprobatório anexado.', {
+      x: margin,
+      y,
+      size: 9,
+      font: fonts.body,
+    });
+    y -= 16;
+  }
+
+  if (params.observacoes.length > 0) {
+    y -= 8;
+    page.drawText('Observações do servidor sobre este registro:', { x: margin, y, size: 9, font: fonts.bold });
+    y -= 16;
+    for (const obs of params.observacoes) {
+      const linhas = wrapText(obs, 90);
+      for (const linha of linhas) {
+        page.drawText(linha, { x: margin + 10, y, size: 8.5, font: fonts.body, color: rgb(0.25, 0.25, 0.25) });
+        y -= 13;
+      }
+      y -= 4;
+    }
+  }
+
+  y -= 12;
+  const avisoLinhas = wrapText(
+    'Este registro não possui arquivo digital verificável anexado ao dossiê. A comprovação do fato declarado ' +
+      'depende da verificação do(s) link(s) acima pela Comissão (CRSC), ou de diligência para complementação ' +
+      'documental junto ao servidor.',
+    88,
+  );
+  for (const linha of avisoLinhas) {
+    page.drawText(linha, { x: margin, y, size: 8.5, font: fonts.body, color: rgb(0.5, 0.2, 0.2) });
+    y -= 13;
+  }
+
+  return page;
+}
+
+function wrapText(text: string, maxCharsPerLine: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxCharsPerLine && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
 async function mergePdfDocumentSet(
   documents: Documento[],
   docTypeTag?: string,
@@ -166,6 +276,8 @@ export async function exportPacoteRSC(params: {
   // 1. Criar o PDF unificado e rastrear intervalos de páginas para cada documento em cada item
   const unifiedPdf = await PDFDocument.create();
   const courierFont = await unifiedPdf.embedFont(StandardFonts.Courier);
+  const helveticaFont = await unifiedPdf.embedFont(StandardFonts.Helvetica);
+  const helveticaBoldFont = await unifiedPdf.embedFont(StandardFonts.HelveticaBold);
   let currentPageIndex = 0;
   const documentPageRanges: Record<string, { startPage: number; endPage: number }> = {};
 
@@ -175,6 +287,39 @@ export async function exportPacoteRSC(params: {
     const physicalDocs = group.documentos.filter(
       (doc) => doc.caminho_storage && !doc.nome_arquivo.endsWith('.ref') && !doc.autodeclaracao,
     );
+    // Registros SEM arquivo físico (link institucional não baixado, ou
+    // autodeclaração) — antes eram completamente ignorados pelo PDF
+    // unificado, deixando a Memorial com PAGINA_INICIO/FIM = 0 e nenhuma
+    // evidência visível para o avaliador. Agora ganham uma página de capa.
+    const referenceOnlyDocs = group.documentos.filter(
+      (doc) => !doc.caminho_storage || doc.nome_arquivo.endsWith('.ref') || doc.autodeclaracao,
+    );
+
+    for (const doc of referenceOnlyDocs) {
+      const observacoes = group.lancamentos
+        .filter((entry) => getLancamentoDocumentIds(entry).includes(doc.id))
+        .map((entry) => entry.observacao)
+        .filter((obs): obs is string => !!obs && obs.trim().length > 0);
+
+      const page = drawReferenceCoverPage(
+        unifiedPdf,
+        { body: helveticaFont, bold: helveticaBoldFont, mono: courierFont },
+        { itemNumero, inciso: group.item.inciso, doc, observacoes },
+      );
+      currentPageIndex++;
+      const startPage = currentPageIndex;
+      const endPage = currentPageIndex;
+      const docHash = sanitizeForTag(doc.hash_arquivo || doc.id);
+      drawTagOnPage(
+        page,
+        `[RSC:EVIDENCIA_ITEM:${itemNumero}] [RSC:DOC_HASH:${docHash}]`,
+        courierFont,
+        8,
+        rgb(0.6, 0.6, 0.6),
+        16,
+      );
+      documentPageRanges[`${itemNumero}_${doc.id}`] = { startPage, endPage };
+    }
 
     for (const doc of physicalDocs) {
       const blob = await getDocumentBlob(doc.id);
