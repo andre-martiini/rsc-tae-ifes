@@ -66,7 +66,7 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
       siape: '1234567',
       data_ingresso: '2020-01-01',
       email_institucional: 'test@example.com',
-      telefone: '12345',
+      telefone: '(27) 98888-7777',
       cargo: 'Professor',
       lotacao: 'Campus Test',
       escolaridade: 'Doutorado',
@@ -119,6 +119,8 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
     const combinedText = streams.join('\n');
     
     expect(combinedText).toContain('[RSC:LANCAMENTO_ID:lanc-123456]');
+    expect(combinedText).not.toContain('test@example.com');
+    expect(combinedText).not.toContain('98888-7777');
   });
 
   it('renders memorial content with basic Markdown (heading, bullets, bold) without crashing and strips literal markers from the PDF stream', async () => {
