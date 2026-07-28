@@ -15,6 +15,15 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '28 de julho de 2026',
+    title: 'Correção: links institucionais e autodeclarações sem página no dossiê exportado',
+    description: 'Um item lançado por link institucional (ou por autodeclaração) sem que o arquivo tivesse sido baixado e anexado automaticamente era salvo normalmente, mas desaparecia por completo do PDF unificado de comprovantes — o Memorial registrava o item sem nenhuma página de evidência, e o sistema avaliador não tinha como conferir o que foi declarado.',
+    fixes: [
+      'Todo lançamento por link institucional ou autodeclaração agora gera uma página própria no PDF unificado de comprovantes, com os links informados (ou a nota de autodeclaração) e as observações do servidor — mesmo quando o download automático do link não é feito ou falha.',
+      'O Memorial deixa de registrar página "0" para esses lançamentos: a referência agora aponta para a página de evidência real incluída no pacote.',
+    ],
+  },
+  {
+    date: '28 de julho de 2026',
     title: 'Diploma ou certificado no dossiê e mais privacidade no sistema',
     description: 'O pacote do processo passou a exigir e incluir o comprovante da escolaridade utilizado no pedido. Para reduzir a coleta de dados pessoais, o cadastro do servidor também deixou de solicitar telefone e e-mail.',
     features: [
