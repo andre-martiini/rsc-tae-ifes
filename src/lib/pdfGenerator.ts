@@ -357,7 +357,7 @@ class Writer {
 
   private wrap(text: string, font: PDFFont, size: number, maxWidth: number): string[] {
     const pieces: string[] = [];
-    for (const paragraph of sanitize(text).split('\n')) {
+    for (const paragraph of sanitize(text, { preserveNewlines: true }).split('\n')) {
       if (!paragraph) {
         pieces.push('');
         continue;
@@ -377,6 +377,26 @@ class Writer {
       if (line) pieces.push(line);
     }
     return pieces.length ? pieces : [''];
+  }
+
+  private wrapTableCell(
+    text: string,
+    font: PDFFont,
+    size: number,
+    maxWidth: number,
+  ): { lines: string[]; paragraphStarts: number[] } {
+    const lines: string[] = [];
+    const paragraphStarts: number[] = [];
+
+    for (const paragraph of sanitize(text, { preserveNewlines: true }).split('\n')) {
+      paragraphStarts.push(lines.length);
+      lines.push(...this.wrap(paragraph, font, size, maxWidth));
+    }
+
+    return {
+      lines: lines.length > 0 ? lines : [''],
+      paragraphStarts,
+    };
   }
 
   private drawWrapped(
@@ -669,7 +689,12 @@ class Writer {
   table(headers: string[], rows: string[][], widths: number[]) {
     this.tableRow(headers, widths, true, 0.94);
     rows.forEach((row, index) => {
-      this.tableRow(row, widths, false, index % 2 === 0 ? 1 : 0.985);
+      this.tableDataRow(
+        row,
+        widths,
+        index % 2 === 0 ? 1 : 0.985,
+        () => this.tableRow(headers, widths, true, 0.94),
+      );
     });
   }
 
@@ -761,11 +786,122 @@ class Writer {
     const size = bold ? 7.5 : 7.8;
     const lineHeight = 9.4;
     const widthsPt = widths.map((w) => w * CONTENT_W);
-    const lineCounts = cells.map((cell, index) =>
-      this.wrap(cell, font, size, widthsPt[index] - 10).length,
+    const linesByCell = cells.map((cell, index) =>
+      this.wrap(cell, font, size, widthsPt[index] - 10),
     );
-    const height = Math.max(18, Math.max(...lineCounts) * lineHeight + 8);
+    const height = Math.max(18, Math.max(...linesByCell.map((lines) => lines.length)) * lineHeight + 8);
     this.ensure(height + 4);
+    this.drawTableRowLines(linesByCell, widthsPt, font, size, lineHeight, height, shade);
+  }
+
+  /**
+   * Divide linhas de dados maiores que a área útil entre páginas. As demais
+   * células acompanham a mesma faixa de linhas, mantendo a grade alinhada, e o
+   * cabeçalho da tabela é repetido em cada página de continuação.
+   */
+  private tableDataRow(
+    cells: string[],
+    widths: number[],
+    shade: number,
+    drawContinuationHeader: () => void,
+  ) {
+    const font = this.regular;
+    const size = 7.8;
+    const lineHeight = 9.4;
+    const widthsPt = widths.map((w) => w * CONTENT_W);
+    const wrappedCells = cells.map((cell, index) =>
+      this.wrapTableCell(cell, font, size, widthsPt[index] - 10),
+    );
+    const linesByCell = wrappedCells.map((cell) => cell.lines);
+    const totalLines = Math.max(...linesByCell.map((lines) => lines.length));
+    const primaryCellIndex = linesByCell.reduce(
+      (largestIndex, lines, index) =>
+        lines.length > linesByCell[largestIndex].length ? index : largestIndex,
+      0,
+    );
+    const primaryParagraphStarts = wrappedCells[primaryCellIndex].paragraphStarts;
+    const fullHeight = Math.max(18, totalLines * lineHeight + 8);
+    const pageBottom = MARGIN_BOTTOM + FOOTER_H;
+    const fullPageAvailable = CONTENT_TOP - pageBottom;
+
+    if (fullHeight + 4 <= this.y - pageBottom) {
+      this.drawTableRowLines(linesByCell, widthsPt, font, size, lineHeight, fullHeight, shade);
+      return;
+    }
+
+    // Se a linha cabe inteira em uma página limpa, preserve-a como uma unidade.
+    if (fullHeight + 4 <= fullPageAvailable) {
+      this.addPage();
+      drawContinuationHeader();
+      this.drawTableRowLines(linesByCell, widthsPt, font, size, lineHeight, fullHeight, shade);
+      return;
+    }
+
+    let lineOffset = 0;
+    while (lineOffset < totalLines) {
+      let capacity = Math.floor((this.y - pageBottom - 12) / lineHeight);
+      while (
+        capacity > 0
+        && Math.max(18, capacity * lineHeight + 8) + 4 > this.y - pageBottom
+      ) {
+        capacity -= 1;
+      }
+
+      if (capacity < 1) {
+        this.addPage();
+        drawContinuationHeader();
+        continue;
+      }
+
+      let segmentLineCount = Math.min(capacity, totalLines - lineOffset);
+      const targetEnd = lineOffset + segmentLineCount;
+
+      // Quando a célula dominante contém uma lista separada por quebras de
+      // linha (como os documentos), prefira quebrar antes do próximo item.
+      if (targetEnd < totalLines && !primaryParagraphStarts.includes(targetEnd)) {
+        const previousParagraphStart = primaryParagraphStarts
+          .filter((start) => start > lineOffset && start < targetEnd)
+          .at(-1);
+        if (previousParagraphStart !== undefined) {
+          segmentLineCount = previousParagraphStart - lineOffset;
+        }
+      }
+
+      const segmentLines = linesByCell.map((lines, index) => {
+        if (lineOffset > 0 && index !== primaryCellIndex && lines.length <= 6) {
+          return lines;
+        }
+        return lines.slice(lineOffset, lineOffset + segmentLineCount);
+      });
+      const segmentHeight = Math.max(18, segmentLineCount * lineHeight + 8);
+
+      this.drawTableRowLines(
+        segmentLines,
+        widthsPt,
+        font,
+        size,
+        lineHeight,
+        segmentHeight,
+        shade,
+      );
+      lineOffset += segmentLineCount;
+
+      if (lineOffset < totalLines) {
+        this.addPage();
+        drawContinuationHeader();
+      }
+    }
+  }
+
+  private drawTableRowLines(
+    linesByCell: string[][],
+    widthsPt: number[],
+    font: PDFFont,
+    size: number,
+    lineHeight: number,
+    height: number,
+    shade: number,
+  ) {
 
     this.page.drawRectangle({
       x: MARGIN_X,
@@ -778,7 +914,7 @@ class Writer {
     });
 
     let currentX = MARGIN_X;
-    cells.forEach((cell, index) => {
+    linesByCell.forEach((lines, index) => {
       if (index > 0) {
         this.page.drawLine({
           start: { x: currentX, y: this.y - height + 4 },
@@ -788,7 +924,6 @@ class Writer {
         });
       }
 
-      const lines = this.wrap(cell, font, size, widthsPt[index] - 10);
       lines.forEach((line, lineIndex) => {
         this.page.drawText(line, {
           x: currentX + 5,

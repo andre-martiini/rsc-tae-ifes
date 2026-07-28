@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { inflateSync } from 'zlib';
-import { generateMemorialDescritivo, parseInlineMarkdown } from './pdfGenerator';
+import {
+  generateMemorialDescritivo,
+  generateRequerimentoFormal,
+  parseInlineMarkdown,
+} from './pdfGenerator';
 import type { Servidor, Lancamento, ItemRSC, Documento } from '../data/mock';
 
 function decompressPdfStreams(pdfBytes: Uint8Array): string[] {
@@ -58,6 +62,91 @@ function decompressPdfStreams(pdfBytes: Uint8Array): string[] {
   return decompressedTexts;
 }
 
+function findTextYPositions(streams: string[], marker: string): number[] {
+  const positions: number[] = [];
+
+  for (const stream of streams) {
+    let currentY: number | undefined;
+    for (const line of stream.split(/\r?\n/)) {
+      const matrix = line.match(
+        /1\s+0\s+0\s+1\s+-?\d+(?:\.\d+)?\s+(-?\d+(?:\.\d+)?)\s+Tm/,
+      );
+      if (matrix) {
+        currentY = Number(matrix[1]);
+      }
+      if (currentY !== undefined && line.includes(marker)) {
+        positions.push(currentY);
+      }
+    }
+  }
+
+  return positions;
+}
+
+describe('pdfGenerator - generateRequerimentoFormal', () => {
+  it('pagina listas extensas de documentos sem desenhar conteúdo abaixo da área útil', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      email_institucional: 'test@example.com',
+      telefone: '12345',
+      cargo: 'Assistente em Administracao',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Mestrado',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+    const item: ItemRSC = {
+      id: 'item-3',
+      numero: 3,
+      inciso: 'I',
+      descricao: 'Atuacao em atividades de organizacao, fiscalizacao e execucao',
+      unidade_medida: 'Por designacao',
+      pontos_por_unidade: 4.5,
+      quantidade_automatica: false,
+      modo_calculo: 'manual',
+    };
+    const documentos: Documento[] = Array.from({ length: 30 }, (_, index) => ({
+      id: `doc-${index + 1}`,
+      servidor_id: servidor.id,
+      nome_arquivo: `DOC_${String(index + 1).padStart(2, '0')} comprovante detalhado de atividade administrativa institucional.pdf`,
+      data_upload: '2026-07-27T12:00:00.000Z',
+    }));
+    const lancamento: Lancamento = {
+      id: 'lanc-1',
+      servidor_id: servidor.id,
+      item_rsc_id: item.id,
+      comprovantes_ids: documentos.map((documento) => documento.id),
+      data_inicio: '2020-01-01',
+      data_fim: '2026-07-27',
+      quantidade_informada: 3,
+      pontos_calculados: 13.5,
+      status_auditoria: 'Aprovado',
+    };
+
+    const pdfBytes = await generateRequerimentoFormal(
+      servidor,
+      null,
+      { status: 'Rascunho' },
+      13.5,
+      1,
+      [lancamento],
+      [item],
+      documentos,
+    );
+    const streams = decompressPdfStreams(pdfBytes);
+
+    for (let index = 1; index <= documentos.length; index += 1) {
+      const marker = `DOC_${String(index).padStart(2, '0')}`;
+      const positions = findTextYPositions(streams, marker);
+      expect(positions, `${marker} deveria aparecer uma vez no PDF`).toHaveLength(1);
+      expect(positions[0], `${marker} foi desenhado abaixo da área útil`).toBeGreaterThan(68);
+    }
+  });
+});
+
 describe('pdfGenerator - generateMemorialDescritivo', () => {
   it('should generate a PDF containing [RSC:LANCAMENTO_ID:<id>] tags', async () => {
     const servidor: Servidor = {
@@ -69,7 +158,7 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
       telefone: '12345',
       cargo: 'Professor',
       lotacao: 'Campus Test',
-      escolaridade: 'Doutorado',
+      escolaridade_atual: 'Doutorado',
       nivel_classificacao: 'E',
       situacao_funcional: 'Ativo',
     };
@@ -183,7 +272,7 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
       telefone: '12345',
       cargo: 'Assistente em Administração',
       lotacao: 'Campus Vitória',
-      escolaridade: 'Mestrado',
+      escolaridade_atual: 'Mestrado',
       nivel_classificacao: 'D',
       situacao_funcional: 'Ativo',
     };
