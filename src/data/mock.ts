@@ -122,6 +122,9 @@ export interface ProcessoRSC {
   data_ultima_concessao?: string;
   /** Memorial narrativo exigido pelo art. 13, II e § 1º, do Decreto nº 13.048/2026. */
   memorial_texto?: string;
+  autodeclaracao_geral?: boolean;
+  autodeclaracao_nao_duplicidade?: boolean;
+  autodeclaracao_excede_atribuicoes?: boolean;
 }
 
 export { rolItensRSC as mockItensRSC };

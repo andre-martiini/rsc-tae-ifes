@@ -74,7 +74,7 @@ export interface InstrucaoSipac {
  */
 const CATALOGO_JUNTADA: Record<string, { tipoDocumentoSipac: string; naturezaSugerida: string }> = {
   '01_Requerimento_RSC.pdf': { tipoDocumentoSipac: 'Requerimento', naturezaSugerida: 'Ostensivo' },
-  '02_Memorial_RSC.pdf': { tipoDocumentoSipac: 'Memorial', naturezaSugerida: 'Restrito (sugerido)' },
+  '02_Memorial_RSC.pdf': { tipoDocumentoSipac: 'Memorial', naturezaSugerida: 'Ostensivo' },
   '03_Fichas_Funcionais_SIAPE.pdf': { tipoDocumentoSipac: 'Ficha funcional', naturezaSugerida: 'Restrito' },
   '04_Portaria_Estabilidade.pdf': { tipoDocumentoSipac: 'Portaria', naturezaSugerida: 'Ostensivo' },
   '05_Portaria_Concessao_Anterior_RSC.pdf': { tipoDocumentoSipac: 'Portaria', naturezaSugerida: 'Ostensivo' },

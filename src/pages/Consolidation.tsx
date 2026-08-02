@@ -67,10 +67,11 @@ export default function Consolidation() {
     [itensRSC, lancamentosDoServidor],
   );
 
-  const [autodeclaracaoGeral, setAutodeclaracaoGeral] = useState(false);
-  const [declaracaoNaoDuplicidade, setDeclaracaoNaoDuplicidade] = useState(false);
-  const [declaracaoExcedeAtribuicoes, setDeclaracaoExcedeAtribuicoes] = useState(false);
+  const autodeclaracaoGeral = processo.autodeclaracao_geral ?? false;
+  const declaracaoNaoDuplicidade = processo.autodeclaracao_nao_duplicidade ?? false;
+  const declaracaoExcedeAtribuicoes = processo.autodeclaracao_excede_atribuicoes ?? false;
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const [memorialSectionOpen, setMemorialSectionOpen] = useState(true);
   const niveisPleiteaveis = useMemo(
     () => getEligibleRscLevels(servidor.escolaridade_atual),
     [servidor.escolaridade_atual],
@@ -639,13 +640,30 @@ export default function Consolidation() {
         <section id="memorial-editor-section" className="mb-6 print:hidden">
           <div className="rounded-2xl border border-violet-100 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 className="text-base font-black uppercase tracking-tight text-gray-900">Memorial textual</h3>
-                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
-                  Apresente de forma breve e objetiva sua trajetória, as atividades relevantes, os saberes e competências
-                  demonstrados, as contribuições para a instituição e o alinhamento ao nível de RSC pleiteado.
-                </p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setMemorialSectionOpen((open) => !open)}
+                className="flex items-start gap-2 text-left"
+              >
+                <ChevronDown className={cn(
+                  "mt-1 h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200",
+                  !memorialSectionOpen && "-rotate-90"
+                )} />
+                <div>
+                  <h3 className="text-base font-black uppercase tracking-tight text-gray-900">
+                    Memorial textual
+                    {!memorialSectionOpen && (
+                      <span className="ml-2 text-xs font-bold normal-case tracking-normal text-gray-400">
+                        ({memorialTexto.length.toLocaleString('pt-BR')} caracteres)
+                      </span>
+                    )}
+                  </h3>
+                  <p className="mt-1 max-w-3xl text-sm leading-relaxed text-gray-500">
+                    Apresente de forma breve e objetiva sua trajetória, as atividades relevantes, os saberes e competências
+                    demonstrados, as contribuições para a instituição e o alinhamento ao nível de RSC pleiteado.
+                  </p>
+                </div>
+              </button>
               <Button
                 type="button"
                 variant="outline"
@@ -658,24 +676,36 @@ export default function Consolidation() {
               </Button>
             </div>
 
-            <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3 text-xs leading-relaxed text-violet-900">
-              A IA gera apenas uma minuta. Confira cada afirmação nos comprovantes, complemente os impactos que somente
-              você conhece e remova dados pessoais desnecessários, pois o memorial poderá ser publicado antes da decisão.
-            </div>
+            <AnimatePresence initial={false}>
+              {memorialSectionOpen && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2, ease: 'easeInOut' }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-4 rounded-xl border border-violet-100 bg-violet-50/50 px-4 py-3 text-xs leading-relaxed text-violet-900">
+                    A IA gera apenas uma minuta. Confira cada afirmação nos comprovantes, complemente os impactos que somente
+                    você conhece e remova dados pessoais desnecessários, pois o memorial poderá ser publicado antes da decisão.
+                  </div>
 
-            <label className="mt-5 block text-xs font-black uppercase tracking-widest text-gray-400">
-              Texto final revisado pelo servidor
-            </label>
-            <MemorialEditor
-              value={memorialTexto}
-              onChange={(markdown) => updateProcesso({ memorial_texto: markdown })}
-              placeholder="Ex.: Iniciei minha trajetória profissional... Ao longo da carreira, desenvolvi... Essas experiências contribuíram... Por esse conjunto, considero que minha trajetória se alinha ao nível..."
-              className="mt-2"
-            />
-            <div className="mt-2 flex flex-col gap-1 text-[11px] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-              <span>O texto é salvo automaticamente nesta sessão.</span>
-              <span className="font-bold tabular-nums">{memorialTexto.length.toLocaleString('pt-BR')} caracteres</span>
-            </div>
+                  <label className="mt-5 block text-xs font-black uppercase tracking-widest text-gray-400">
+                    Texto final revisado pelo servidor
+                  </label>
+                  <MemorialEditor
+                    value={memorialTexto}
+                    onChange={(markdown) => updateProcesso({ memorial_texto: markdown })}
+                    placeholder="Ex.: Iniciei minha trajetória profissional... Ao longo da carreira, desenvolvi... Essas experiências contribuíram... Por esse conjunto, considero que minha trajetória se alinha ao nível..."
+                    className="mt-2"
+                  />
+                  <div className="mt-2 flex flex-col gap-1 text-[11px] text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+                    <span>O texto é salvo automaticamente nesta sessão.</span>
+                    <span className="font-bold tabular-nums">{memorialTexto.length.toLocaleString('pt-BR')} caracteres</span>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </section>
 
@@ -691,7 +721,7 @@ export default function Consolidation() {
                   type="checkbox"
                   className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
                   checked={autodeclaracaoGeral}
-                  onChange={(e) => setAutodeclaracaoGeral(e.target.checked)}
+                  onChange={(e) => updateProcesso({ autodeclaracao_geral: e.target.checked })}
                 />
                 <div className="space-y-1">
                   <p className="text-[13px] font-bold text-gray-900">Veracidade das Informações</p>
@@ -706,7 +736,7 @@ export default function Consolidation() {
                   type="checkbox"
                   className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
                   checked={declaracaoNaoDuplicidade}
-                  onChange={(e) => setDeclaracaoNaoDuplicidade(e.target.checked)}
+                  onChange={(e) => updateProcesso({ autodeclaracao_nao_duplicidade: e.target.checked })}
                 />
                 <div className="space-y-1">
                   <p className="text-[13px] font-bold text-gray-900">Não-Duplicidade de Itens</p>
@@ -721,7 +751,7 @@ export default function Consolidation() {
                   type="checkbox"
                   className="mt-1 h-4 w-4 shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
                   checked={declaracaoExcedeAtribuicoes}
-                  onChange={(e) => setDeclaracaoExcedeAtribuicoes(e.target.checked)}
+                  onChange={(e) => updateProcesso({ autodeclaracao_excede_atribuicoes: e.target.checked })}
                 />
                 <div className="space-y-1">
                   <p className="text-[13px] font-bold text-gray-900">Atividades não ordinárias</p>
@@ -736,35 +766,8 @@ export default function Consolidation() {
 
         {/* Document Viewer */}
         <div className="space-y-4">
-          <div className="flex items-end justify-between px-1 print:hidden">
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setActiveTab('requerimento')}
-                className={cn(
-                  "relative h-11 px-6 text-xs font-black uppercase tracking-widest transition-all",
-                  activeTab === 'requerimento' ? "text-primary" : "text-gray-400 hover:text-gray-600"
-                )}
-              >
-                1. Requerimento
-                {activeTab === 'requerimento' && (
-                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('memorial')}
-                className={cn(
-                  "relative h-11 px-6 text-xs font-black uppercase tracking-widest transition-all",
-                  activeTab === 'memorial' ? "text-primary" : "text-gray-400 hover:text-gray-600"
-                )}
-              >
-                2. Memorial
-                {activeTab === 'memorial' && (
-                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
-                )}
-              </button>
-            </div>
-
-            <div className="flex gap-2">
+          <div className="space-y-3 print:hidden">
+            <div className="flex flex-wrap justify-end gap-2 px-1">
               <Button
                 type="button"
                 variant="outline"
@@ -806,6 +809,33 @@ export default function Consolidation() {
                 )}
                 Gerar Pacote PDF
               </Button>
+            </div>
+
+            <div className="flex items-center gap-1 border-b border-gray-100 px-1">
+              <button
+                onClick={() => setActiveTab('requerimento')}
+                className={cn(
+                  "relative h-11 px-6 text-xs font-black uppercase tracking-widest transition-all",
+                  activeTab === 'requerimento' ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                1. Requerimento
+                {activeTab === 'requerimento' && (
+                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                )}
+              </button>
+              <button
+                onClick={() => setActiveTab('memorial')}
+                className={cn(
+                  "relative h-11 px-6 text-xs font-black uppercase tracking-widest transition-all",
+                  activeTab === 'memorial' ? "text-primary" : "text-gray-400 hover:text-gray-600"
+                )}
+              >
+                2. Memorial
+                {activeTab === 'memorial' && (
+                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                )}
+              </button>
             </div>
           </div>
 

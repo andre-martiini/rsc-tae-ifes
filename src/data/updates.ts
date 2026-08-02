@@ -15,6 +15,18 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '02 de agosto de 2026',
+    title: 'Ajustes de usabilidade na tela de Consolidação',
+    description: 'Melhorias na tela de Consolidação para reduzir rolagem e evitar retrabalho no preenchimento.',
+    improvements: [
+      'Os botões Auditoria IA, Instrução do SIPAC e Gerar Pacote PDF agora ficam em uma linha própria acima das abas Requerimento/Memorial, sem disputar espaço com elas.',
+      'A seção do Memorial textual pode ser recolhida com um clique, facilitando o acesso à Autodeclaração Legal e aos botões de exportação sem rolar por um memorial extenso.',
+    ],
+    fixes: [
+      'As marcações da Autodeclaração Legal (veracidade, não-duplicidade, atividades não ordinárias) agora são salvas automaticamente e permanecem marcadas ao sair e voltar à sessão.',
+    ],
+  },
+  {
+    date: '02 de agosto de 2026',
     title: 'Instrução do processo no SIPAC direto na tela',
     description: 'Depois de montar o dossiê, criar o processo no SIPAC era um passo às cegas: cada servidor escolhia por conta própria a classificação, o assunto e a ordem de anexação dos documentos, o que gerava processos mal instruídos e devolvidos pela comissão. Agora a tela de Consolidação tem um roteiro pronto para essa etapa.',
     features: [
