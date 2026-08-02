@@ -14,6 +14,18 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '02 de agosto de 2026',
+    title: 'Instrução do processo no SIPAC direto na tela',
+    description: 'Depois de montar o dossiê, criar o processo no SIPAC era um passo às cegas: cada servidor escolhia por conta própria a classificação, o assunto e a ordem de anexação dos documentos, o que gerava processos mal instruídos e devolvidos pela comissão. Agora a tela de Consolidação tem um roteiro pronto para essa etapa.',
+    features: [
+      'Novo botão "Instrução do SIPAC" na tela de Consolidação, ao lado de "Auditoria IA" e "Gerar Pacote PDF". Fica disponível assim que todas as pendências do checklist são resolvidas — inclusive depois de gerar o pacote, para consultar com o SIPAC já aberto ao lado.',
+      'O roteiro aberto no botão mostra, em três blocos: os dados para cadastrar o processo (classificação, assunto, interessado e natureza, cada um com botão de copiar); a ordem exata de anexação dos arquivos do pacote gerado, incluindo a portaria de concessão anterior quando ela existir no seu caso; e o passo a passo das telas do SIPAC até movimentar o processo para a comissão.',
+    ],
+    improvements: [
+      'Nada de arquivo novo: o roteiro aparece só na tela, não gera nenhum download além do pacote ZIP que já existia.',
+    ],
+  },
+  {
     date: '28 de julho de 2026',
     title: 'Correção: links institucionais e autodeclarações sem página no dossiê exportado',
     description: 'Um item lançado por link institucional (ou por autodeclaração) sem que o arquivo tivesse sido baixado e anexado automaticamente era salvo normalmente, mas desaparecia por completo do PDF unificado de comprovantes — o Memorial registrava o item sem nenhuma página de evidência, e o sistema avaliador não tinha como conferir o que foi declarado.',

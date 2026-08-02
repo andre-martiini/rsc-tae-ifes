@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, AlertCircle, Loader2, Info, SearchCheck, Sparkles, ChevronDown } from 'lucide-react';
+import { CheckCircle2, Download, AlertCircle, Loader2, Info, SearchCheck, Sparkles, ChevronDown, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
 import AuditPromptModal from '../components/AuditPromptModal';
 import InstructionDocumentsPanel from '../components/InstructionDocumentsPanel';
+import InstrucaoSipacModal from '../components/InstrucaoSipacModal';
 import MainLayout from '../components/MainLayout';
 import MarkdownLiteText from '../components/MarkdownLiteText';
 import MemorialEditor from '../components/MemorialEditor';
@@ -21,6 +22,7 @@ import {
   sortLancamentosByDossierOrder,
 } from '../lib/documentOrdering';
 import { exportPacoteRSC } from '../lib/pacoteExport';
+import { getDocumentosExportadosEsperados } from '../lib/instrucaoSipac';
 import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import {
@@ -323,6 +325,11 @@ export default function Consolidation() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [auditPromptOpen, setAuditPromptOpen] = useState(false);
   const [memorialPromptOpen, setMemorialPromptOpen] = useState(false);
+  const [instrucaoSipacOpen, setInstrucaoSipacOpen] = useState(false);
+  const documentosExportadosEsperados = useMemo(
+    () => getDocumentosExportadosEsperados(documentos, servidor.id),
+    [documentos, servidor.id],
+  );
 
   const handleGenerate = async () => {
     if (!canGenerate) {
@@ -401,6 +408,13 @@ export default function Consolidation() {
         itensRSC={itensRSC}
         documentos={documentos}
         updateDocumento={updateDocumento}
+      />
+      <InstrucaoSipacModal
+        open={instrucaoSipacOpen}
+        onClose={() => setInstrucaoSipacOpen(false)}
+        servidor={servidor}
+        nivelPleiteado={nivelPleiteado}
+        documentosExportados={documentosExportadosEsperados}
       />
       <main className="mx-auto max-w-4xl px-4 py-6 print:max-w-none print:p-0 sm:py-8">
         {/* Pre-flight checklist — hidden on print */}
@@ -761,6 +775,25 @@ export default function Consolidation() {
                 <SearchCheck className="mr-2 h-4 w-4" />
                 Auditoria IA
               </Button>
+              <div className="group relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setInstrucaoSipacOpen(true)}
+                  disabled={!canGenerate}
+                  className="h-10 rounded-xl border-blue-200 bg-blue-50 px-4 text-xs font-black uppercase tracking-widest text-blue-700 shadow-sm transition-all hover:bg-blue-100 disabled:opacity-50"
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Instrução do SIPAC
+                </Button>
+                {!canGenerate && (
+                  <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-56 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100">
+                    <div className="rounded-lg border border-gray-200 bg-gray-900 px-3 py-2 text-[11px] font-normal normal-case leading-relaxed text-white shadow-xl">
+                      Disponível quando todas as pendências forem resolvidas
+                    </div>
+                  </div>
+                )}
+              </div>
               <Button
                 onClick={handleGenerate}
                 disabled={!canGenerate || isGenerating}
