@@ -19,6 +19,7 @@ export interface RestoredSession {
   processo: ProcessoRSC | null;
   triagem: EstadoTriagem | null;
   auditoria: EstadoAuditoria | null;
+  documentosNaoRestaurados: string[];
 }
 
 export async function importSession(file: File, currentServidorId?: string): Promise<RestoredSession> {
@@ -43,14 +44,21 @@ export async function importSession(file: File, currentServidorId?: string): Pro
     await deleteDocumentsByServidorId(currentServidorId);
   }
 
-  if (filesFolder && docs.length > 0) {
+  const documentosNaoRestaurados: string[] = [];
+  const idsNaoRestaurados = new Set<string>();
+
+  if (docs.length > 0) {
     for (const doc of docs) {
       if (!doc.caminho_storage || doc.nome_arquivo.endsWith('.ref') || doc.autodeclaracao) {
         continue;
       }
       const safeName = doc.nome_arquivo.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const entry = filesFolder.file(`${doc.id}_${safeName}`);
-      if (!entry) continue;
+      const entry = filesFolder?.file(`${doc.id}_${safeName}`);
+      if (!entry) {
+        documentosNaoRestaurados.push(doc.nome_arquivo);
+        idsNaoRestaurados.add(doc.id);
+        continue;
+      }
 
       try {
         const blobData = await entry.async('blob');
@@ -61,18 +69,25 @@ export async function importSession(file: File, currentServidorId?: string): Pro
           blob: blobData,
         });
       } catch {
-        // Non-critical: skip blobs that fail to restore
+        documentosNaoRestaurados.push(doc.nome_arquivo);
+        idsNaoRestaurados.add(doc.id);
       }
     }
   }
 
+  // Documentos sem arquivo restaurado não entram no estado — o registro apontaria
+  // para um blob inexistente no IndexedDB local, reproduzindo o erro "documento
+  // não encontrado no armazenamento local" ao tentar abrir no Dashboard.
+  const docsRestaurados = docs.filter((doc) => !idsNaoRestaurados.has(doc.id));
+
   // ── Return parsed state for React context ─────────────────────────────────
   return {
     perfil: (metadata['rsc-tae-perfil'] as Servidor) ?? null,
-    documentos: docs,
+    documentos: docsRestaurados,
     lancamentos: (metadata['rsc-tae-lancamentos'] ?? []) as Lancamento[],
     processo: (metadata['rsc-tae-processo'] as ProcessoRSC) ?? null,
     triagem: (metadata['rsc-tae-triagem'] as EstadoTriagem) ?? null,
     auditoria: (metadata['rsc-tae-auditoria'] as EstadoAuditoria) ?? null,
+    documentosNaoRestaurados,
   };
 }

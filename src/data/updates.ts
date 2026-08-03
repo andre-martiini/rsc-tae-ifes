@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '03 de agosto de 2026',
+    title: 'Correção: documento some ao restaurar backup em outro computador',
+    description: 'Um usuário relatou que, após lançar um documento e depois restaurar um backup (.zip) — por exemplo, ao continuar o preenchimento em outro computador ou navegador — o documento aparecia normalmente no Dashboard, mas ao clicar para visualizá-lo surgia a mensagem "documento não encontrado no armazenamento local". Identificamos a causa: em certos casos o arquivo não era incluído no backup, mas a informação sobre ele era restaurada mesmo assim, deixando um registro "fantasma" na tela.',
+    fixes: [
+      'Ao salvar um backup, o sistema agora avisa quando algum documento não pôde ser incluído no arquivo .zip, em vez de deixá-lo de fora sem aviso.',
+      'Ao restaurar um backup, um documento sem o arquivo correspondente dentro do .zip deixa de aparecer no Dashboard como se estivesse completo — o sistema avisa quais documentos precisam ser reenviados, evitando a mensagem de erro ao tentar abri-los.',
+    ],
+  },
+  {
     date: '02 de agosto de 2026',
     title: 'Ajustes de usabilidade na tela de Consolidação',
     description: 'Melhorias na tela de Consolidação para reduzir rolagem e evitar retrabalho no preenchimento.',

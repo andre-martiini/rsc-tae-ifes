@@ -153,7 +153,14 @@ export default function LandingScreen() {
       const { importSession } = await import('../lib/sessionImport');
       const restored = await importSession(file);
       importSessionAsNew(restored);
-      toast.success('Progresso restaurado com sucesso!');
+      if (restored.documentosNaoRestaurados.length > 0) {
+        toast.warning(
+          `Progresso restaurado, mas ${restored.documentosNaoRestaurados.length} documento(s) não estavam no backup: ${restored.documentosNaoRestaurados.join(', ')}. Será preciso reenviá-los.`,
+          { duration: 12000 },
+        );
+      } else {
+        toast.success('Progresso restaurado com sucesso!');
+      }
       navigate('/dashboard');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Arquivo inválido.';

@@ -33,7 +33,7 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export async function exportSession(activeSessionId: string): Promise<void> {
+export async function exportSession(activeSessionId: string): Promise<{ documentosSemArquivo: string[] }> {
   const zip = new JSZip();
   const keys = sessionKeys(activeSessionId);
 
@@ -62,24 +62,28 @@ export async function exportSession(activeSessionId: string): Promise<void> {
   zip.file('metadata.json', JSON.stringify(metadata, null, 2));
 
   // ── PDF blobs from IndexedDB ───────────────────────────────────────────────
+  const documentosSemArquivo: string[] = [];
   const documentsRaw = window.localStorage.getItem(keys.documentos);
   if (documentsRaw) {
-    try {
-      const docs = JSON.parse(documentsRaw) as Documento[];
-      const filesFolder = zip.folder('files');
-      if (filesFolder) {
-        for (const doc of docs) {
-          if (!doc.caminho_storage || doc.nome_arquivo.endsWith('.ref') || doc.autodeclaracao) {
+    const docs = JSON.parse(documentsRaw) as Documento[];
+    const filesFolder = zip.folder('files');
+    if (filesFolder) {
+      for (const doc of docs) {
+        if (!doc.caminho_storage || doc.nome_arquivo.endsWith('.ref') || doc.autodeclaracao) {
+          continue;
+        }
+        try {
+          const blob = await getDocumentBlob(doc.id);
+          if (!blob) {
+            documentosSemArquivo.push(doc.nome_arquivo);
             continue;
           }
-          const blob = await getDocumentBlob(doc.id);
-          if (!blob) continue;
           const safeName = doc.nome_arquivo.replace(/[^a-zA-Z0-9._-]/g, '_');
           filesFolder.file(`${doc.id}_${safeName}`, blob);
+        } catch {
+          documentosSemArquivo.push(doc.nome_arquivo);
         }
       }
-    } catch {
-      // Non-critical: metadata will still be exported even if file blobs fail
     }
   }
 
@@ -87,4 +91,6 @@ export async function exportSession(activeSessionId: string): Promise<void> {
   const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   const date = new Date().toISOString().slice(0, 10);
   triggerDownload(zipBlob, `RSC-TAE_backup_${date}.zip`);
+
+  return { documentosSemArquivo };
 }
