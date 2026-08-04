@@ -99,6 +99,15 @@ describe('buildInstrucaoSipac', () => {
     expect(instrucao.secaoC.passos.length).toBeGreaterThan(0);
     expect(instrucao.dataVigencia).toBeTruthy();
   });
+
+  // Plano de ação 2026-08-04, P2: orientação para evitar o problema relatado
+  // em reunião (PDF comprimido externamente virou imagem, sem texto extraível).
+  it('avisa para não compactar o PDF externamente antes de anexar no SIPAC', () => {
+    const instrucao = buildInstrucaoSipac(servidor, { label: 'RSC-PCCTAE I' }, ARQUIVOS_COMPLETOS);
+    const avisoCompactacao = instrucao.secaoC.avisos.find((a) => /compacta/i.test(a));
+    expect(avisoCompactacao).toBeDefined();
+    expect(avisoCompactacao).toMatch(/imagens?/i);
+  });
 });
 
 describe('getDocumentosExportadosEsperados', () => {

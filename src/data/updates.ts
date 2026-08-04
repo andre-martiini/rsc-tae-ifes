@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '04 de agosto de 2026',
+    title: 'Orientação sobre qualidade do PDF na instrução do processo no SIPAC',
+    description:
+      'Relato em reunião: um processo cujo comprovante excedeu o limite do SIPAC foi comprimido com uma ferramenta externa e virou uma sequência de imagens — nem o avaliador nem a IA conseguiram mais ler o conteúdo.',
+    improvements: [
+      'O roteiro "Instrução do processo no SIPAC" ganhou dois avisos novos: não compactar o PDF gerado com ferramentas externas (o sistema já divide automaticamente o caderno de comprovantes em partes quando excede o limite do protocolo) e preferir digitalizações de boa resolução, com OCR quando possível.',
+    ],
+  },
+  {
     date: '03 de agosto de 2026',
     title: 'Observações agora aparecem no Memorial, aviso de quantidade duplicada e comprovantes grandes divididos automaticamente',
     description:
