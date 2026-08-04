@@ -124,6 +124,8 @@ const AVISOS_FIXOS = [
   'Não renomeie os arquivos do ZIP (os nomes são contrato com o sistema avaliador).',
   'Não edite os PDFs gerados (eles carregam marcações internas que guiam a avaliação).',
   'Anexe todos os documentos, na ordem indicada.',
+  'Não remova nenhuma página dos PDFs gerados — inclusive a página final "EXTRATO ESTRUTURADO DE DADOS" do Memorial, que é parte integrante do documento.',
+  'Se o ZIP trouxer os documentos comprobatórios divididos em partes (06_..._parte-1-de-N.pdf), anexe TODAS as partes, na ordem numerada.',
 ];
 
 const PASSOS_FIXOS = [

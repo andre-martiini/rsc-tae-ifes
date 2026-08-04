@@ -120,6 +120,167 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
     expect(combinedText).not.toContain('Telefone/E-mail');
   });
 
+  it('emits [RSC:QUANTIDADE:...] in both tag branches and the "não remover" warning on the extract page', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Assistente',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Graduação',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const itensRSC: ItemRSC[] = [
+      {
+        id: 'item-1',
+        numero: 1,
+        inciso: 'I',
+        descricao: 'Atividade sem comprovante',
+        unidade_medida: 'Unidade',
+        pontos_por_unidade: 10,
+        quantidade_automatica: false,
+        modo_calculo: 'manual',
+      },
+      {
+        id: 'item-2',
+        numero: 2,
+        inciso: 'II',
+        descricao: 'Atividade com comprovante',
+        unidade_medida: 'Unidade',
+        pontos_por_unidade: 10,
+        quantidade_automatica: false,
+        modo_calculo: 'manual',
+      },
+    ];
+
+    const documentos: Documento[] = [
+      {
+        id: 'doc-1',
+        servidor_id: 's1',
+        nome_arquivo: 'portaria.pdf',
+        caminho_storage: 'doc-1',
+        hash_arquivo: 'abc123hash',
+      } as Documento,
+    ];
+
+    const lancamentos: Lancamento[] = [
+      // Ramo autodeclaração (sem comprovantes).
+      {
+        id: 'lanc-auto',
+        servidor_id: 's1',
+        item_rsc_id: 'item-1',
+        quantidade_informada: 3,
+        pontos_calculados: 30,
+        status_auditoria: 'Aprovado',
+        data_inicio: '2021-01-01',
+        data_fim: '2021-12-31',
+      },
+      // Ramo com comprovante físico.
+      {
+        id: 'lanc-doc',
+        servidor_id: 's1',
+        item_rsc_id: 'item-2',
+        comprovantes_ids: ['doc-1'],
+        quantidade_informada: 2.5,
+        pontos_calculados: 25,
+        status_auditoria: 'Aprovado',
+        data_inicio: '2021-01-01',
+        data_fim: '2021-12-31',
+      },
+    ];
+
+    const pdfBytes = await generateMemorialDescritivo(
+      servidor,
+      null,
+      lancamentos,
+      itensRSC,
+      documentos,
+      undefined,
+      { '2_doc-1': { startPage: 1, endPage: 4 } },
+    );
+
+    const combinedText = decompressPdfStreams(pdfBytes).join('\n');
+
+    // Ambos os ramos declaram a quantidade, em pt-BR (vírgula decimal).
+    expect(combinedText).toContain('[RSC:QUANTIDADE:3]');
+    expect(combinedText).toContain('[RSC:QUANTIDADE:2,5]');
+    // Hash do documento espelhado a partir do caderno unificado.
+    expect(combinedText).toContain('[RSC:DOC_HASH:abc123hash]');
+    // Redundância mínima no rodapé da última página de conteúdo + extrato.
+    expect(combinedText).toContain('[RSC:TOTAL_PONTOS:55]');
+
+    // Advertência visível contra a remoção da página do extrato. O texto é
+    // desenhado palavra a palavra, então cada token é verificado isolado.
+    expect(combinedText).toContain('INTEGRANTE');
+    expect(combinedText).toContain('REMOVER.');
+  });
+
+  it('renders the servidor observação in the visible Memorial text, not only in the hidden tag', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Assistente',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Graduação',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const itensRSC: ItemRSC[] = [
+      {
+        id: 'item-1',
+        numero: 7,
+        inciso: 'III',
+        descricao: 'Participacao em comissao',
+        unidade_medida: 'Unidade',
+        pontos_por_unidade: 10,
+        quantidade_automatica: false,
+        modo_calculo: 'manual',
+      },
+    ];
+
+    const lancamentos: Lancamento[] = [
+      {
+        id: 'lanc-obs',
+        servidor_id: 's1',
+        item_rsc_id: 'item-1',
+        quantidade_informada: 1,
+        pontos_calculados: 10,
+        status_auditoria: 'Aprovado',
+        data_inicio: '2021-01-01',
+        data_fim: '2021-12-31',
+        observacao: 'Designacao publicada no boletim interno numero 42.',
+      },
+    ];
+
+    const pdfBytes = await generateMemorialDescritivo(
+      servidor,
+      null,
+      lancamentos,
+      itensRSC,
+      [],
+      undefined,
+      undefined,
+    );
+
+    const combinedText = decompressPdfStreams(pdfBytes).join('\n');
+
+    // Seção legível 2.1: a descrição do item e o texto da observação passam a
+    // ser desenhados no corpo do PDF (token a token). Antes desta correção,
+    // NENHUM dos dois aparecia fora das tags ocultas do extrato.
+    expect(combinedText).toContain('Participacao');
+    expect(combinedText).toContain('comissao');
+    expect(combinedText).toContain('boletim');
+    expect(combinedText).toContain('interno');
+    // A tag oculta continua presente para o avaliador.
+    expect(combinedText).toContain('[RSC:OBSERVACAO:Designacao publicada no boletim interno numero 42.]');
+  });
+
   it('renders memorial content with basic Markdown (heading, bullets, bold) without crashing and strips literal markers from the PDF stream', async () => {
     const servidor: Servidor = {
       id: 's1',

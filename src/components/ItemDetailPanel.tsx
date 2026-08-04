@@ -39,6 +39,7 @@ import { Label } from './ui/label';
 import { generateLLMPrompt } from '../lib/llmPrompt';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
 import { mapearUsoDocumentos, codigosItensDosUsos, type UsoDocumento } from '../lib/duplicateDetection';
+import { deveAvisarQuantidadeDuplicada, somarQuantidadeLancada } from '../lib/quantidadeDuplicada';
 import SingleAuditPromptModal from './SingleAuditPromptModal';
 
 type UploadMeta = {
@@ -103,6 +104,18 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     lancamentoParaPrompt: any;
     newDoc: Documento;
     usos: UsoDocumento[];
+  } | null>(null);
+  // Aviso de quantidade possivelmente duplicada (o novo lançamento repete o
+  // total do item em vez de declarar só as unidades novas). Ver
+  // `lib/quantidadeDuplicada.ts`.
+  const [quantidadeWarning, setQuantidadeWarning] = useState<{
+    lancamentoParaPrompt: any;
+    newDoc?: Documento;
+    lancamentosExistentes: number;
+    qtdJaLancada: number;
+    pontosJaLancados: number;
+    quantidadeNova: number;
+    docsNovos: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -532,6 +545,25 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           return;
         }
         toast.info(`O arquivo "${newDoc.nome_arquivo}" já estava no sistema — o documento existente foi reaproveitado, sem criar cópia.`);
+      }
+
+      // Guard contra dupla contagem de quantidade: em itens manuais, o total
+      // do item é a SOMA dos lançamentos, então cada novo lançamento deve
+      // declarar apenas as unidades novas. Aviso dispensável — um único
+      // comprovante pode legitimamente provar várias unidades.
+      const docsNovos = allComprovanteIds.length;
+      if (deveAvisarQuantidadeDuplicada(item.modo_calculo, itemLancamentos, quantidadeNumerica, docsNovos)) {
+        setQuantidadeWarning({
+          lancamentoParaPrompt,
+          newDoc,
+          lancamentosExistentes: itemLancamentos.length,
+          qtdJaLancada: somarQuantidadeLancada(itemLancamentos),
+          pontosJaLancados: itemPontos,
+          quantidadeNova: quantidadeNumerica,
+          docsNovos,
+        });
+        setSaving(false);
+        return;
       }
 
       finishSave(lancamentoParaPrompt, newDoc);
@@ -1519,6 +1551,67 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     className="text-gray-500 hover:bg-gray-100"
                   >
                     Cancelar
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Aviso de quantidade possivelmente duplicada */}
+      <AnimatePresence>
+        {quantidadeWarning && (
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+            >
+              <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-amber-50" />
+              <div className="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-blue-50" />
+
+              <div className="relative p-8">
+                <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-100 text-amber-600 shadow-inner">
+                  <AlertCircle className="h-8 w-8" />
+                </div>
+
+                <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Confira a quantidade deste lançamento</h3>
+
+                <div className="space-y-4">
+                  <p className="text-sm leading-relaxed text-gray-600">
+                    Este item já tem <strong className="text-gray-900">{quantidadeWarning.lancamentosExistentes} lançamento(s)</strong> somando{' '}
+                    <strong className="text-gray-900">{formatPointValue(quantidadeWarning.qtdJaLancada)} unidade(s)</strong>{' '}
+                    ({formatPointValue(quantidadeWarning.pontosJaLancados)} pts). Você está criando um novo lançamento com{' '}
+                    <strong className="text-gray-900">{formatPointValue(quantidadeWarning.quantidadeNova)} unidade(s)</strong>, mas anexando{' '}
+                    <strong className="text-gray-900">{quantidadeWarning.docsNovos} comprovante(s)</strong>.
+                  </p>
+
+                  <p className="text-sm text-gray-500">
+                    A quantidade deste lançamento deve conter APENAS as unidades novas — o total do item é a soma de todos
+                    os lançamentos. Se um único comprovante realmente prova várias unidades (ex.: uma portaria que lista
+                    todas as designações), pode salvar assim mesmo.
+                  </p>
+                </div>
+
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    onClick={() => setQuantidadeWarning(null)}
+                    className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
+                  >
+                    Corrigir quantidade
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      const pendente = quantidadeWarning;
+                      setQuantidadeWarning(null);
+                      finishSave(pendente.lancamentoParaPrompt, pendente.newDoc);
+                    }}
+                    className="text-gray-500 hover:bg-gray-100"
+                  >
+                    Salvar assim mesmo
                   </Button>
                 </div>
               </div>

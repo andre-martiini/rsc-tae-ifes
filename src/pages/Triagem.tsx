@@ -46,6 +46,7 @@ import { gerarPromptAuditoriaEstruturada, excedeLimiteTokens } from '../lib/audi
 import { parseResultadoAuditoria } from '../lib/auditoriaParser';
 import { getEligibleRscLevel } from '../lib/rsc';
 import { getLancamentoDocumentIds, itemDossierCode } from '../lib/documentOrdering';
+import { deveAvisarQuantidadeDuplicada } from '../lib/quantidadeDuplicada';
 import { getDocumentBlob } from '../lib/documentStorage';
 import { cn } from '../lib/utils';
 
@@ -486,8 +487,28 @@ export default function Triagem() {
     return calculateLancamentoPoints(qtdManual, item.pontos_por_unidade);
   }, [itensRSC]);
 
+  // ── Mesclar sugestão a lançamento existente do mesmo item ─────────────
+  // Definido antes de `handleConfirmar` porque o guard de quantidade
+  // duplicada precisa saber se existe um lançamento-alvo para mesclar.
+  const lancamentoExistenteParaMesclar = useCallback((sugestao: SugestaoTriagem) => {
+    if (!sugestao.item_rsc_id) return null;
+    const candidatos = lancamentosDoServidor.filter(
+      (l) => l.item_rsc_id === sugestao.item_rsc_id && l.id !== sugestao.lancamento_id,
+    );
+    if (candidatos.length === 0) return null;
+    // Prefere o lançamento que já compartilha documentos com a sugestão.
+    const comDocsEmComum = candidatos.find((l) =>
+      getLancamentoDocumentIds(l).some((id) => sugestao.documentos_ids.includes(id)),
+    );
+    return comDocsEmComum ?? candidatos[0];
+  }, [lancamentosDoServidor]);
+
+  // `handleMesclar` é declarado depois de `handleConfirmar` (ele próprio
+  // depende de outros callbacks); a ref quebra o ciclo sem reordenar tudo.
+  const handleMesclarRef = useRef<((sugestao: SugestaoTriagem) => void) | null>(null);
+
   // ── Confirmar sugestão ─────────────────────────────────────────────────
-  const handleConfirmar = useCallback((sugestao: SugestaoTriagem, editado = false, quantidadeOverride?: number, ignorarAvisoDuplicidade = false): boolean => {
+  const handleConfirmar = useCallback((sugestao: SugestaoTriagem, editado = false, quantidadeOverride?: number, ignorarAvisoDuplicidade = false, ignorarAvisoQuantidade = false): boolean => {
     if (!sugestao.item_rsc_id || !servidor) return false;
 
     const item = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
@@ -547,6 +568,38 @@ export default function Triagem() {
 
     const pontos = calculateLancamentoPoints(quantidade, item.pontos_por_unidade);
 
+    // Guard contra dupla contagem de quantidade: se já existe lançamento do
+    // mesmo item e a sugestão traz uma quantidade >= à dele sem trazer
+    // comprovantes novos suficientes, o mais provável é que a IA tenha
+    // repetido o TOTAL do item. O total correto é a soma dos lançamentos —
+    // mesclar soma apenas o delta. Aviso dispensável, nunca bloqueio.
+    if (!ignorarAvisoQuantidade) {
+      const alvo = lancamentoExistenteParaMesclar(sugestao);
+      if (
+        alvo &&
+        deveAvisarQuantidadeDuplicada(item.modo_calculo, [alvo], quantidade, sugestao.documentos_ids.length) &&
+        quantidade >= alvo.quantidade_informada
+      ) {
+        toast.warning(
+          `O item ${itemDossierCode(item)} já tem um lançamento com ${formatPointValue(alvo.quantidade_informada)} unidade(s). ` +
+          `Esta sugestão declara ${formatPointValue(quantidade)} unidade(s) com apenas ${sugestao.documentos_ids.length} comprovante(s) — ` +
+          'confirmar como lançamento novo pode contar as mesmas unidades duas vezes.',
+          {
+            duration: 14000,
+            action: {
+              label: 'Mesclar ao lançamento existente',
+              onClick: () => { handleMesclarRef.current?.(sugestao); },
+            },
+            cancel: {
+              label: 'Criar novo assim mesmo',
+              onClick: () => { handleConfirmar(sugestao, editado, quantidadeOverride, true, true); },
+            },
+          },
+        );
+        return false;
+      }
+    }
+
     const lancamentoData = {
       servidor_id: servidor.id,
       item_rsc_id: sugestao.item_rsc_id,
@@ -565,7 +618,7 @@ export default function Triagem() {
     });
     toast.success(`Lançamento criado: +${formatPointValue(pontos)} pts`);
     return true;
-  }, [servidor, itensRSC, addLancamento, atualizarSugestao, usoDocumentos]);
+  }, [servidor, itensRSC, addLancamento, atualizarSugestao, usoDocumentos, lancamentoExistenteParaMesclar]);
 
   // ── Confirmar editada ─────────────────────────────────────────────────
   const handleConfirmarEditada = useCallback((sugestao: SugestaoTriagem) => {
@@ -592,20 +645,6 @@ export default function Triagem() {
     atualizarSugestao(sugestao.id, { status: 'descartada' });
     toast.info('Sugestão descartada.');
   }, [atualizarSugestao]);
-
-  // ── Mesclar sugestão a lançamento existente do mesmo item ─────────────
-  const lancamentoExistenteParaMesclar = useCallback((sugestao: SugestaoTriagem) => {
-    if (!sugestao.item_rsc_id) return null;
-    const candidatos = lancamentosDoServidor.filter(
-      (l) => l.item_rsc_id === sugestao.item_rsc_id && l.id !== sugestao.lancamento_id,
-    );
-    if (candidatos.length === 0) return null;
-    // Prefere o lançamento que já compartilha documentos com a sugestão.
-    const comDocsEmComum = candidatos.find((l) =>
-      getLancamentoDocumentIds(l).some((id) => sugestao.documentos_ids.includes(id)),
-    );
-    return comDocsEmComum ?? candidatos[0];
-  }, [lancamentosDoServidor]);
 
   const handleMesclar = useCallback((sugestao: SugestaoTriagem) => {
     if (!sugestao.item_rsc_id) return;
@@ -648,6 +687,8 @@ export default function Triagem() {
       `${novosDocs.length} comprovante(s) novo(s), ${delta >= 0 ? '+' : ''}${formatPointValue(delta)} pts.`,
     );
   }, [lancamentoExistenteParaMesclar, itensRSC, updateLancamento, atualizarSugestao]);
+
+  handleMesclarRef.current = handleMesclar;
 
   // ── Confirmar todas com confiança alta ────────────────────────────────
   const handleConfirmarTodasAltas = useCallback(() => {
