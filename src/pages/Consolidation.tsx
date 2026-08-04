@@ -339,7 +339,7 @@ export default function Consolidation() {
     }
     setIsGenerating(true);
     try {
-      await exportPacoteRSC({
+      const comprovantes = await exportPacoteRSC({
         servidor,
         nivelElegivel: nivelPleiteado,
         lancamentos: lancamentosDoServidor,
@@ -363,6 +363,28 @@ export default function Consolidation() {
         submitted_at: new Date().toISOString(),
       });
       toast.success('Pacote RSC gerado e baixado com sucesso!');
+
+      // O caderno de comprovantes pode ter sido dividido para caber no limite
+      // de tamanho do protocolo — o servidor PRECISA saber disso, sob pena de
+      // anexar só a primeira parte e protocolar um dossiê incompleto.
+      if (comprovantes.dividido) {
+        toast.warning(
+          `Os documentos comprobatórios foram divididos em ${comprovantes.partes.length} arquivos ` +
+          `(${comprovantes.partes.map((p) => p.arquivo).join(', ')}) porque o caderno único ultrapassaria o ` +
+          'limite de 35 MB por anexo. Anexe TODAS as partes ao processo, na ordem numerada. O arquivo ' +
+          '06_Mapa_Paginas_Comprovantes.json indica em qual parte está cada página citada no Memorial.',
+          { duration: 24000 },
+        );
+      }
+
+      if (comprovantes.excedeLimiteMesmoDividido) {
+        toast.error(
+          'Um dos documentos comprobatórios sozinho já ultrapassa 35 MB e não pôde ser dividido sem cortar o ' +
+          'documento ao meio. Reduza o tamanho desse arquivo na origem (redigitalize em resolução menor) e ' +
+          'gere o pacote novamente.',
+          { duration: 24000 },
+        );
+      }
     } catch (err) {
       console.error('Erro ao gerar pacote:', err);
       toast.error('Erro ao gerar o pacote. Tente novamente.');

@@ -1039,6 +1039,43 @@ export async function generateMemorialDescritivo(
     }
   }
 
+  // 2.1 — Observações por lançamento.
+  //
+  // Bug relatado pelos servidores: a observação digitada no painel do item
+  // só era gravada na tag oculta [RSC:OBSERVACAO:...] da página do extrato
+  // estruturado (e, quando o registro não tinha arquivo físico, na capa do
+  // caderno de comprovantes). Em nenhum lugar do texto legível do Memorial
+  // ela aparecia — para o servidor, era como se o campo fosse descartado.
+  const lancamentosComObservacao = sortLancamentosByDossierOrder(lancamentos, itensRSC)
+    .map((entry) => ({ entry, item: itensRSC.find((i) => i.id === entry.item_rsc_id) }))
+    .filter((linha): linha is { entry: Lancamento; item: ItemRSC } => {
+      const texto = linha.entry.observacao?.trim();
+      return !!linha.item && !!texto;
+    });
+
+  if (lancamentosComObservacao.length > 0) {
+    writer.gap(14);
+    writer.section('2.1. Observações do Servidor sobre os Itens Lançados');
+    writer.text(
+      'Notas complementares registradas pelo servidor no momento do lançamento de cada item do rol.',
+      { size: 8, color: COLORS.muted },
+    );
+    writer.gap(6);
+
+    for (const { entry, item } of lancamentosComObservacao) {
+      writer.text(
+        `Inciso ${item.inciso} — Item ${item.numero}: ${sanitize(item.descricao)}`,
+        { size: 9, bold: true, lineHeight: 13 },
+      );
+      writer.text(`Observação: ${sanitize(entry.observacao ?? '')}`, {
+        size: 9,
+        lineHeight: 13,
+        indent: 10,
+      });
+      writer.gap(7);
+    }
+  }
+
   writer.gap(18);
   writer.section('3. Assinatura do Servidor');
   writer.gap(22);
@@ -1046,15 +1083,39 @@ export async function generateMemorialDescritivo(
   writer.gap(8);
   writer.text('Data: ______ / ______ / __________', { size: 9 });
 
-  // Injeção de página de metadados dedicada (Extrato Estruturado de Dados) para o Sistema 2
-  writer.addPage();
-  writer.text('EXTRATO ESTRUTURADO DE DADOS', { align: 'center', bold: true, size: 10 });
-  writer.gap(12);
-
   const grayColor = rgb(0.6, 0.6, 0.6);
   const sanitizedNome = sanitizeForTag(servidor.nome_completo);
   const sanitizedSiape = sanitizeForTag(servidor.siape);
   const totalPontosStr = formatPointValue(totalPontos);
+
+  // Redundância mínima no rodapé da última página de CONTEÚDO: servidores às
+  // vezes removem a página do extrato estruturado ao protocolar no SIPAC,
+  // achando que é "lixo técnico". Com estas três tags aqui, o avaliador ainda
+  // consegue identificar o documento, o servidor e o total pleiteado.
+  writer.ensure(50);
+  writer.gap(10);
+  writer.drawTag(`[RSC:DOC_TIPO:MEMORIAL]`, { y: writer.y - 10, color: grayColor, size: 8 });
+  writer.drawTag(`[RSC:SIAPE:${sanitizedSiape}]`, { y: writer.y - 20, color: grayColor, size: 8 });
+  writer.drawTag(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { y: writer.y - 30, color: grayColor, size: 8 });
+  writer.y -= 35;
+
+  // Injeção de página de metadados dedicada (Extrato Estruturado de Dados) para o Sistema 2
+  writer.addPage();
+  writer.text('EXTRATO ESTRUTURADO DE DADOS', { align: 'center', bold: true, size: 10 });
+  writer.gap(6);
+  writer.text('PÁGINA INTEGRANTE DO MEMORIAL — NÃO REMOVER.', {
+    align: 'center',
+    bold: true,
+    size: 10,
+    color: rgb(0.7, 0.1, 0.1),
+  });
+  writer.gap(4);
+  writer.text(
+    'Contém os dados estruturados necessários à análise automática pela CRSC-PCCTAE. Remover ou editar esta página ' +
+      'impede a importação automática do dossiê e pode atrasar a avaliação do seu pedido.',
+    { align: 'center', size: 8.5, color: COLORS.muted },
+  );
+  writer.gap(12);
 
   writer.text(`[RSC:DOC_TIPO:MEMORIAL]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:START]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
@@ -1073,6 +1134,9 @@ export async function generateMemorialDescritivo(
     const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0 ? l.comprovantes_ids : (l.documento_id ? [l.documento_id] : []);
     const incisoRomano = item.inciso;
     const pontosStr = formatPointValue(l.pontos_calculados);
+    // A quantidade explícita permite ao avaliador conferir se o total do item
+    // é a soma dos lançamentos (e detectar lançamentos que repetem o total).
+    const quantidadeStr = formatPointValue(l.quantidade_informada ?? 0);
     const lancamentoIdTag = sanitizeForTag(l.id);
 
     if (docIds.length === 0) {
@@ -1080,6 +1144,7 @@ export async function generateMemorialDescritivo(
       writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:QUANTIDADE:${quantidadeStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PAGINA_INICIO:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:PAGINA_FIM:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:DOC_REF:AUTODECLARACAO]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
@@ -1102,9 +1167,16 @@ export async function generateMemorialDescritivo(
         writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:QUANTIDADE:${quantidadeStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        // Espelha o [RSC:DOC_HASH:...] gravado no rodapé de cada página do
+        // caderno unificado (pacoteExport.ts), permitindo ao avaliador
+        // confrontar a integridade do arquivo referenciado.
+        if (docItem?.hash_arquivo) {
+          writer.text(`[RSC:DOC_HASH:${sanitizeForTag(docItem.hash_arquivo)}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        }
         if (l.observacao) {
           const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
           writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });

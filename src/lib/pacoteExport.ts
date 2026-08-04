@@ -13,6 +13,7 @@ import { sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
 import { getInstructionDocument } from './instructionDocuments';
 import { sanitizeForTag } from './utils';
+import { dividirEmLotes, nomeParteComprovantes, LIMITE_TAMANHO_ARQUIVO_BYTES } from './loteArquivos';
 import {
   generateMemorialDescritivo,
   generateRequerimentoFormal,
@@ -258,6 +259,25 @@ async function mergePdfDocumentSet(
   return merged.save();
 }
 
+/** Uma parte (arquivo) do caderno de comprovantes exportado. */
+export interface ParteComprovantes {
+  arquivo: string;
+  /** Primeira página GLOBAL do caderno contida neste arquivo (base 1). */
+  paginaGlobalInicio: number;
+  /** Última página GLOBAL do caderno contida neste arquivo (base 1). */
+  paginaGlobalFim: number;
+  bytes: number;
+}
+
+/** Resultado da exportação do caderno de comprovantes, para aviso na UI. */
+export interface ComprovantesExportados {
+  partes: ParteComprovantes[];
+  /** `true` quando o caderno precisou ser dividido por causa do limite de tamanho. */
+  dividido: boolean;
+  /** `true` quando alguma parte segue acima do limite (documento único grande demais). */
+  excedeLimiteMesmoDividido: boolean;
+}
+
 export async function exportPacoteRSC(params: {
   servidor: Servidor;
   nivelElegivel: NivelRsc | null;
@@ -265,7 +285,7 @@ export async function exportPacoteRSC(params: {
   itensRSC: ItemRSC[];
   documentos: Documento[];
   processo: ProcessoRSC;
-}): Promise<void> {
+}): Promise<ComprovantesExportados> {
   const { servidor, nivelElegivel, lancamentos, itensRSC, documentos, processo } = params;
 
   const zip = new JSZip();
@@ -280,6 +300,19 @@ export async function exportPacoteRSC(params: {
   const helveticaBoldFont = await unifiedPdf.embedFont(StandardFonts.HelveticaBold);
   let currentPageIndex = 0;
   const documentPageRanges: Record<string, { startPage: number; endPage: number }> = {};
+
+  // Segmentos indivisíveis do caderno unificado, na ordem em que as páginas
+  // entram nele. Alimentam a divisão em partes quando o PDF único estoura o
+  // limite de tamanho do protocolo (ver `loteArquivos.ts`). O `bytes` é o
+  // tamanho do PDF de origem — pdf-lib copia os fluxos de conteúdo quase na
+  // íntegra, então é uma estimativa próxima da contribuição real de cada
+  // documento para o arquivo final.
+  const segmentosUnificado: {
+    nome: string;
+    primeiraPagina: number;
+    ultimaPagina: number;
+    bytes: number;
+  }[] = [];
 
   for (const group of groups) {
     const itemNumero = group.item.numero;
@@ -319,6 +352,8 @@ export async function exportPacoteRSC(params: {
         16,
       );
       documentPageRanges[`${itemNumero}_${doc.id}`] = { startPage, endPage };
+      // Capa gerada aqui mesmo: só texto, contribuição desprezível.
+      segmentosUnificado.push({ nome: doc.nome_arquivo, primeiraPagina: startPage, ultimaPagina: endPage, bytes: 4096 });
     }
 
     for (const doc of physicalDocs) {
@@ -353,6 +388,12 @@ export async function exportPacoteRSC(params: {
         const endPage = currentPageIndex;
         const docRefKey = `${itemNumero}_${doc.id}`;
         documentPageRanges[docRefKey] = { startPage, endPage };
+        segmentosUnificado.push({
+          nome: doc.nome_arquivo,
+          primeiraPagina: startPage,
+          ultimaPagina: endPage,
+          bytes: bytes.byteLength,
+        });
 
       } catch (err) {
         console.error(`Erro ao mesclar o documento ${doc.nome_arquivo}:`, err);
@@ -371,7 +412,80 @@ export async function exportPacoteRSC(params: {
   }
 
   const unifiedPdfBytes = await unifiedPdf.save();
-  zip.file('06_Documentos_Comprobatorios_Unificados.pdf', unifiedPdfBytes);
+
+  // Divisão em partes quando o caderno único ultrapassa o limite aceito no
+  // protocolo. A numeração de páginas gravada no Memorial
+  // ([RSC:PAGINA_INICIO]/[RSC:PAGINA_FIM]) permanece CONTÍGUA e global, como
+  // se o caderno continuasse sendo um PDF só — é o contrato que o avaliador
+  // espera. O mapa exportado junto traduz essas páginas globais para
+  // (arquivo, página dentro do arquivo).
+  const comprovantes: ComprovantesExportados = {
+    partes: [],
+    dividido: false,
+    excedeLimiteMesmoDividido: false,
+  };
+
+  if (unifiedPdfBytes.byteLength <= LIMITE_TAMANHO_ARQUIVO_BYTES || segmentosUnificado.length === 0) {
+    zip.file('06_Documentos_Comprobatorios_Unificados.pdf', unifiedPdfBytes);
+    comprovantes.partes.push({
+      arquivo: '06_Documentos_Comprobatorios_Unificados.pdf',
+      paginaGlobalInicio: 1,
+      paginaGlobalFim: Math.max(1, currentPageIndex),
+      bytes: unifiedPdfBytes.byteLength,
+    });
+  } else {
+    const lotes = dividirEmLotes(segmentosUnificado, (segmento) => segmento.bytes, LIMITE_TAMANHO_ARQUIVO_BYTES);
+    comprovantes.dividido = true;
+
+    for (let i = 0; i < lotes.length; i++) {
+      const lote = lotes[i];
+      const parteDoc = await PDFDocument.create();
+      const indices: number[] = [];
+      for (const segmento of lote) {
+        for (let p = segmento.primeiraPagina; p <= segmento.ultimaPagina; p++) indices.push(p - 1);
+      }
+
+      const paginasCopiadas = await parteDoc.copyPages(unifiedPdf, indices);
+      paginasCopiadas.forEach((page) => parteDoc.addPage(page));
+
+      const parteBytes = await parteDoc.save();
+      const nomeArquivo = nomeParteComprovantes(i + 1, lotes.length);
+      zip.file(nomeArquivo, parteBytes);
+
+      if (parteBytes.byteLength > LIMITE_TAMANHO_ARQUIVO_BYTES) {
+        // Um único documento maior que o limite não tem como ser dividido sem
+        // cortar o documento ao meio — o usuário precisa reduzi-lo na origem.
+        comprovantes.excedeLimiteMesmoDividido = true;
+      }
+
+      comprovantes.partes.push({
+        arquivo: nomeArquivo,
+        paginaGlobalInicio: lote[0].primeiraPagina,
+        paginaGlobalFim: lote[lote.length - 1].ultimaPagina,
+        bytes: parteBytes.byteLength,
+      });
+    }
+
+    // Mapa auxiliar: sem ele, o avaliador (ou a Comissão) não tem como saber
+    // em qual arquivo está a página global citada pelo Memorial.
+    zip.file(
+      '06_Mapa_Paginas_Comprovantes.json',
+      JSON.stringify(
+        {
+          observacao:
+            'As páginas citadas no Memorial ([RSC:PAGINA_INICIO]/[RSC:PAGINA_FIM]) são contínuas e globais, ' +
+            'como se os comprovantes fossem um único PDF. Este mapa indica em qual arquivo cada faixa de ' +
+            'páginas globais foi protocolada. Para achar a página dentro do arquivo: ' +
+            'pagina_no_arquivo = pagina_global - paginaGlobalInicio + 1.',
+          total_paginas: currentPageIndex,
+          limite_bytes_por_arquivo: LIMITE_TAMANHO_ARQUIVO_BYTES,
+          partes: comprovantes.partes,
+        },
+        null,
+        2,
+      ),
+    );
+  }
 
   // 2. Gerar o Requerimento
   const requerimentoBytes = await generateRequerimentoFormal(
@@ -435,4 +549,6 @@ export async function exportPacoteRSC(params: {
   const siape = servidor.siape.replace(/\D/g, '');
   const date = new Date().toISOString().slice(0, 10);
   triggerDownload(zipBlob, `RSC-TAE_Dossie_${siape}_${date}.zip`);
+
+  return comprovantes;
 }
