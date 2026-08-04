@@ -15,6 +15,19 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '03 de agosto de 2026',
+    title: 'Observações agora aparecem no Memorial, aviso de quantidade duplicada e comprovantes grandes divididos automaticamente',
+    description:
+      'Duas correções pedidas por usuários e uma novidade para quem tem muitos comprovantes digitalizados.',
+    fixes: [
+      'Corrigido: a observação digitada em cada item lançado era salva, mas não aparecia em lugar nenhum legível do Memorial gerado — só ficava guardada de forma invisível para o sistema avaliador. Agora o Memorial traz uma seção "Observações do Servidor sobre os Itens Lançados", listando o item e a observação de cada lançamento que tiver uma.',
+      'Corrigido: ao lançar um novo item com quantidade igual ou maior que a de um lançamento já existente do mesmo item, mas sem comprovantes suficientes para justificar isso, era possível contar as mesmas unidades duas vezes sem perceber. O sistema agora avisa nesse momento — tanto ao cadastrar manualmente quanto ao confirmar uma sugestão da Triagem por IA — e oferece juntar ao lançamento existente em vez de criar um novo.',
+    ],
+    features: [
+      'Quando o caderno de Documentos Comprobatórios ultrapassa 35 MB (limite de anexo do protocolo no SIPAC), o sistema agora divide automaticamente os comprovantes em várias partes numeradas (ex.: "parte-1-de-3"), sem cortar nenhum documento ao meio. Ao gerar o pacote, você verá um aviso pedindo para anexar todas as partes, na ordem, ao protocolar o processo.',
+    ],
+  },
+  {
+    date: '03 de agosto de 2026',
     title: 'Correção: documento some ao restaurar backup em outro computador',
     description: 'Um usuário relatou que, após lançar um documento e depois restaurar um backup (.zip) — por exemplo, ao continuar o preenchimento em outro computador ou navegador — o documento aparecia normalmente no Dashboard, mas ao clicar para visualizá-lo surgia a mensagem "documento não encontrado no armazenamento local". Identificamos a causa: em certos casos o arquivo não era incluído no backup, mas a informação sobre ele era restaurada mesmo assim, deixando um registro "fantasma" na tela.',
     fixes: [
