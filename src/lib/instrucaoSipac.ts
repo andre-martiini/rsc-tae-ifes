@@ -126,6 +126,8 @@ const AVISOS_FIXOS = [
   'Anexe todos os documentos, na ordem indicada.',
   'Não remova nenhuma página dos PDFs gerados — inclusive a página final "EXTRATO ESTRUTURADO DE DADOS" do Memorial, que é parte integrante do documento.',
   'Se o ZIP trouxer os documentos comprobatórios divididos em partes (06_..._parte-1-de-N.pdf), anexe TODAS as partes, na ordem numerada.',
+  'Não passe o PDF gerado por ferramentas externas de compactação antes de anexar no SIPAC — isso costuma transformar o PDF em uma sequência de imagens, o que impede a extração de texto (nem você nem a IA do avaliador conseguem mais ler o conteúdo). Se algum arquivo ainda assim exceder o limite do SIPAC, o próprio sistema já divide o caderno de comprovantes em partes automaticamente.',
+  'Prefira documentos escaneados com boa resolução e, se possível, já com OCR (texto pesquisável) — fotos ou digitalizações de baixa qualidade também prejudicam a leitura automática do conteúdo.',
 ];
 
 const PASSOS_FIXOS = [
