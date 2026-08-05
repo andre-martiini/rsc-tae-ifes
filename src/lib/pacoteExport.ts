@@ -15,6 +15,7 @@ import { getInstructionDocument } from './instructionDocuments';
 import { sanitizeForTag } from './utils';
 import { dividirEmLotes, nomeParteComprovantes, LIMITE_TAMANHO_ARQUIVO_BYTES } from './loteArquivos';
 import {
+  generateExtratoAvulso,
   generateMemorialDescritivo,
   generateRequerimentoFormal,
   type ComprovacaoItemResumo,
@@ -611,4 +612,27 @@ export async function exportPacoteRSC(params: {
   triggerDownload(zipBlob, `RSC-TAE_Dossie_${siape}_${date}.zip`);
 
   return comprovantes;
+}
+
+/**
+ * "Extrato de dados avulso" (Fase 3, plano de ação 2026-08-05): baixa só a
+ * página com o bloco [RSC:START]…[RSC:END], para o servidor enviar à
+ * comissão quando o pacote original protocolado foi alterado depois (ex.:
+ * a página do extrato foi removida por engano). Não recalcula as páginas do
+ * caderno de comprovantes já protocolado — os lançamentos saem sem
+ * PAGINA_INICIO/FIM (como uma autodeclaração), então o avaliador reconstrói
+ * itens/pontos/observações, mas não cruza evidência por página; é
+ * instrumento de trabalho da bancada, não substitui o dossiê protocolado.
+ */
+export async function exportExtratoAvulso(params: {
+  servidor: Servidor;
+  lancamentos: Lancamento[];
+  itensRSC: ItemRSC[];
+  documentos: Documento[];
+}): Promise<void> {
+  const { servidor, lancamentos, itensRSC, documentos } = params;
+  const bytes = await generateExtratoAvulso(servidor, lancamentos, itensRSC, documentos);
+  const siape = servidor.siape.replace(/\D/g, '');
+  const date = new Date().toISOString().slice(0, 10);
+  triggerDownload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `Extrato_Avulso_RSC-TAE_${siape}_${date}.pdf`);
 }

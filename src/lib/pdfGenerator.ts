@@ -810,46 +810,71 @@ class Writer {
  * pelo avaliador para reconstruir os lançamentos automaticamente. Histori-
  * camente vivia só no Memorial; a partir de 2026-08-05 passou a ser anexada
  * ao Requerimento (documento que não é publicado nas páginas do IF, ao
- * contrário do Memorial — ver plano de ação 2026-08-05 do avaliador-RSC-TAE).
+ * contrário do Memorial), e também pode ser emitida sozinha (Fase 3 —
+ * "extrato avulso", para quando o servidor alterou o pacote depois de
+ * protocolar e a comissão precisa reconstruir os lançamentos sem reprocessar
+ * tudo — ver plano de ação 2026-08-05 do avaliador-RSC-TAE).
+ *
  * `docTipoPai` carimba a página com o documento que a está hospedando, para
- * o classificador do avaliador atribuir o papel correto.
+ * o classificador do avaliador atribuir o papel correto. Não chama
+ * `writer.addPage()` — o chamador decide se a página do extrato entra numa
+ * página nova (Requerimento, que já tem conteúdo anterior) ou na página
+ * corrente (extrato avulso, cujo `writer.init()` já criou a única página).
  */
 function appendExtratoEstruturadoPage(
   writer: Writer,
   params: {
-    docTipoPai: 'REQUERIMENTO' | 'MEMORIAL';
+    docTipoPai: 'REQUERIMENTO' | 'MEMORIAL' | 'EXTRATO_AVULSO';
     servidor: Servidor;
     lancamentos: Lancamento[];
     itensRSC: ItemRSC[];
     documentos: Documento[];
     documentPageRanges?: Record<string, { startPage: number; endPage: number }>;
+    /** Só preenchido no extrato avulso (Fase 3) — carimba a data/hora de emissão para a comissão avaliar a atualidade do documento. */
+    emitidoEm?: string;
   },
 ): void {
-  const { docTipoPai, servidor, lancamentos, itensRSC, documentos, documentPageRanges } = params;
+  const { docTipoPai, servidor, lancamentos, itensRSC, documentos, documentPageRanges, emitidoEm } = params;
   const grayColor = rgb(0.6, 0.6, 0.6);
   const sanitizedNome = sanitizeForTag(servidor.nome_completo);
   const sanitizedSiape = sanitizeForTag(servidor.siape);
   const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
   const totalPontosStr = formatPointValue(totalPontos);
 
-  writer.addPage();
   writer.text('EXTRATO ESTRUTURADO DE DADOS', { align: 'center', bold: true, size: 10 });
   writer.gap(6);
-  writer.text(`PÁGINA INTEGRANTE DO ${docTipoPai} — NÃO REMOVER.`, {
-    align: 'center',
-    bold: true,
-    size: 10,
-    color: rgb(0.7, 0.1, 0.1),
-  });
+  writer.text(
+    docTipoPai === 'EXTRATO_AVULSO'
+      ? 'DOCUMENTO AVULSO — NÃO É PEÇA OFICIAL DO PROCESSO.'
+      : `PÁGINA INTEGRANTE DO ${docTipoPai} — NÃO REMOVER.`,
+    {
+      align: 'center',
+      bold: true,
+      size: 10,
+      color: rgb(0.7, 0.1, 0.1),
+    },
+  );
   writer.gap(4);
   writer.text(
-    'Contém os dados estruturados necessários à análise automática pela CRSC-PCCTAE. Remover ou editar esta página ' +
-      'impede a importação automática do dossiê e pode atrasar a avaliação do seu pedido.',
+    docTipoPai === 'EXTRATO_AVULSO'
+      ? 'Reproduz os dados estruturados de um pacote já protocolado, para a comissão reconstruir os lançamentos ' +
+          'sem reprocessar o dossiê inteiro — por exemplo quando o pacote original foi alterado após o protocolo. ' +
+          'Não substitui o Requerimento nem o Memorial protocolados.'
+      : 'Contém os dados estruturados necessários à análise automática pela CRSC-PCCTAE. Remover ou editar esta ' +
+          'página impede a importação automática do dossiê e pode atrasar a avaliação do seu pedido.',
     { align: 'center', size: 8.5, color: COLORS.muted },
   );
   writer.gap(12);
 
   writer.text(`[RSC:DOC_TIPO:${docTipoPai}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  if (emitidoEm) {
+    writer.text(`[RSC:EMITIDO_EM:${sanitizeForTag(emitidoEm)}]`, {
+      size: 8,
+      color: grayColor,
+      lineHeight: 10,
+      font: writer.courier,
+    });
+  }
   writer.text(`[RSC:START]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:SIAPE:${sanitizedSiape}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
   writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
@@ -1073,6 +1098,7 @@ export async function generateRequerimentoFormal(
   writer.drawTag(`[RSC:NIVEL_PRETENDIDO:${sanitizedNivel}]`, { y: writer.y - 40, color: grayColor, size: 8 });
   writer.y -= 45;
 
+  writer.addPage();
   appendExtratoEstruturadoPage(writer, {
     docTipoPai: 'REQUERIMENTO',
     servidor,
@@ -1080,6 +1106,45 @@ export async function generateRequerimentoFormal(
     itensRSC,
     documentos,
     documentPageRanges,
+  });
+
+  return doc.save();
+}
+
+/**
+ * "Extrato de dados avulso" (Fase 3, plano de ação 2026-08-05): PDF de uma
+ * única página com o mesmo bloco [RSC:START]…[RSC:END] do Requerimento,
+ * para o servidor emitir isoladamente quando o pacote original foi alterado
+ * depois do protocolo (ex.: removeu a página do extrato). A comissão
+ * carrega este arquivo no avaliador para reconstruir os lançamentos sem
+ * reprocessar o dossiê inteiro — não é peça oficial do processo, é
+ * instrumento de trabalho da bancada.
+ */
+export async function generateExtratoAvulso(
+  servidor: Servidor,
+  lancamentos: Lancamento[],
+  itensRSC: ItemRSC[],
+  documentos: Documento[],
+  documentPageRanges?: Record<string, { startPage: number; endPage: number }>,
+  emitidoEm: string = new Date().toISOString(),
+): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const writer = new Writer({
+    doc,
+    title: 'Extrato Estruturado de Dados (Avulso)',
+    subtitle: 'Reconstrução dos lançamentos para a comissão — não é peça oficial do processo',
+    footerRight: `${servidor.siape} · Extrato Avulso`,
+  });
+  await writer.init();
+
+  appendExtratoEstruturadoPage(writer, {
+    docTipoPai: 'EXTRATO_AVULSO',
+    servidor,
+    lancamentos,
+    itensRSC,
+    documentos,
+    documentPageRanges,
+    emitidoEm,
   });
 
   return doc.save();
