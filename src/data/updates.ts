@@ -15,6 +15,16 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '05 de agosto de 2026',
+    title: 'Aviso quando um documento não pode ser incluído no pacote (PDF protegido, corrompido ou sem páginas)',
+    description:
+      'Antes desta correção, um documento comprobatório com senha/proteção, corrompido ou sem conteúdo era simplesmente pulado ao montar o caderno de comprovantes ou o pacote final — o download terminava com a mensagem de sucesso normal, mas o documento saía faltando (ou virava página em branco) sem nenhum aviso.',
+    fixes: [
+      'O sistema agora detecta PDFs protegidos/criptografados, corrompidos ou sem páginas ao mesclar o caderno de comprovantes e o pacote final, e pula esses arquivos em vez de gerar páginas em branco silenciosamente.',
+      'Ao gerar o pacote, se algum documento não pôde ser incluído, o aviso de sucesso é substituído por um alerta detalhado listando cada arquivo afetado e o motivo (protegido por senha, corrompido, sem páginas ou não encontrado no armazenamento local) — o usuário sabe exatamente o que corrigir antes de protocolar.',
+    ],
+  },
+  {
+    date: '05 de agosto de 2026',
     title: 'Página de dados estruturados sai do Memorial e passa para o Requerimento',
     description:
       'O Memorial é publicado separadamente nas páginas do Instituto Federal, e a página técnica "EXTRATO ESTRUTURADO DE DADOS" no final dele não deveria aparecer nessa publicação. Ela passa a ser gerada no final do Requerimento (documento que não é publicado), sem nenhuma mudança na sua forma de preencher o processo.',
