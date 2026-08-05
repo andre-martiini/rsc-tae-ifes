@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { inflateSync } from 'zlib';
-import { generateMemorialDescritivo, parseInlineMarkdown } from './pdfGenerator';
-import type { Servidor, Lancamento, ItemRSC, Documento } from '../data/mock';
+import { generateMemorialDescritivo, generateRequerimentoFormal, parseInlineMarkdown } from './pdfGenerator';
+import type { Servidor, Lancamento, ItemRSC, Documento, ProcessoRSC } from '../data/mock';
 
 function decompressPdfStreams(pdfBytes: Uint8Array): string[] {
   const decompressedTexts: string[] = [];
@@ -59,7 +59,7 @@ function decompressPdfStreams(pdfBytes: Uint8Array): string[] {
 }
 
 describe('pdfGenerator - generateMemorialDescritivo', () => {
-  it('should generate a PDF containing [RSC:LANCAMENTO_ID:<id>] tags', async () => {
+  it('should generate a PDF, without the extrato estruturado (movido para o Requerimento em 2026-08-05)', async () => {
     const servidor: Servidor = {
       id: 's1',
       nome_completo: 'Test Servidor',
@@ -98,29 +98,174 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
       },
     ];
 
-    const documentos: Documento[] = [];
-
-    const pdfBytes = await generateMemorialDescritivo(
-      servidor,
-      null,
-      lancamentos,
-      itensRSC,
-      documentos,
-      undefined,
-      undefined
-    );
+    const pdfBytes = await generateMemorialDescritivo(servidor, null, lancamentos, itensRSC);
 
     expect(pdfBytes).toBeInstanceOf(Uint8Array);
     expect(pdfBytes.length).toBeGreaterThan(0);
 
     const streams = decompressPdfStreams(pdfBytes);
     const combinedText = streams.join('\n');
-    
-    expect(combinedText).toContain('[RSC:LANCAMENTO_ID:lanc-123456]');
+
     expect(combinedText).not.toContain('Telefone/E-mail');
+    // Regressão: o bloco de item ([RSC:ITEM_START]/[RSC:LANCAMENTO_ID]/[RSC:START])
+    // não deve mais aparecer no Memorial — ele foi para o Requerimento.
+    expect(combinedText).not.toContain('[RSC:LANCAMENTO_ID:lanc-123456]');
+    expect(combinedText).not.toContain('[RSC:START]');
+    expect(combinedText).not.toContain('[RSC:ITEM_START:');
+    // As 3 tags de rodapé (redundância anti-remoção) continuam presentes.
+    expect(combinedText).toContain('[RSC:DOC_TIPO:MEMORIAL]');
+    expect(combinedText).toContain('[RSC:SIAPE:1234567]');
+    expect(combinedText).toContain('[RSC:TOTAL_PONTOS:10]');
   });
 
-  it('emits [RSC:QUANTIDADE:...] in both tag branches and the "não remover" warning on the extract page', async () => {
+  it('renders the servidor observação in the visible Memorial text, not only in the hidden tag', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Assistente',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Graduação',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const itensRSC: ItemRSC[] = [
+      {
+        id: 'item-1',
+        numero: 7,
+        inciso: 'III',
+        descricao: 'Participacao em comissao',
+        unidade_medida: 'Unidade',
+        pontos_por_unidade: 10,
+        quantidade_automatica: false,
+        modo_calculo: 'manual',
+      },
+    ];
+
+    const lancamentos: Lancamento[] = [
+      {
+        id: 'lanc-obs',
+        servidor_id: 's1',
+        item_rsc_id: 'item-1',
+        quantidade_informada: 1,
+        pontos_calculados: 10,
+        status_auditoria: 'Aprovado',
+        data_inicio: '2021-01-01',
+        data_fim: '2021-12-31',
+        observacao: 'Designacao publicada no boletim interno numero 42.',
+      },
+    ];
+
+    const pdfBytes = await generateMemorialDescritivo(servidor, null, lancamentos, itensRSC);
+
+    const combinedText = decompressPdfStreams(pdfBytes).join('\n');
+
+    // Seção legível 2.1: a descrição do item e o texto da observação passam a
+    // ser desenhados no corpo do PDF (token a token). Antes desta correção,
+    // NENHUM dos dois aparecia fora das tags ocultas do extrato.
+    expect(combinedText).toContain('Participacao');
+    expect(combinedText).toContain('comissao');
+    expect(combinedText).toContain('boletim');
+    expect(combinedText).toContain('interno');
+    // A tag oculta [RSC:OBSERVACAO:...] não está mais aqui — foi para o
+    // extrato estruturado do Requerimento (ver describe abaixo).
+    expect(combinedText).not.toContain('[RSC:OBSERVACAO:');
+  });
+
+  it('renders memorial content with basic Markdown (heading, bullets, bold) without crashing and strips literal markers from the PDF stream', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Professor',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Doutorado',
+      nivel_classificacao: 'E',
+      situacao_funcional: 'Ativo',
+    };
+    const itensRSC: ItemRSC[] = [];
+    const lancamentos: Lancamento[] = [];
+
+    const memorialMarkdown = [
+      '## Formacao Academica',
+      '',
+      'Concluiu **Mestrado em Educacao** em 2020, com foco em *gestao publica*.',
+      '',
+      '- Item de lista um',
+      '- Item de lista dois',
+    ].join('\n');
+
+    const pdfBytes = await generateMemorialDescritivo(servidor, null, lancamentos, itensRSC, {
+      status: 'Rascunho',
+      memorial_texto: memorialMarkdown,
+    });
+
+    expect(pdfBytes).toBeInstanceOf(Uint8Array);
+    const streams = decompressPdfStreams(pdfBytes);
+    const combinedText = streams.join('\n');
+
+    // Words are drawn one Tj per token (see Writer.richText), so assert each
+    // token individually rather than a joined phrase.
+    expect(combinedText).not.toContain('**');
+    expect(combinedText).toContain('Formacao');
+    expect(combinedText).toContain('Academica');
+    expect(combinedText).toContain('Mestrado');
+    expect(combinedText).toContain('Educacao');
+    expect(combinedText).toContain('Item');
+    expect(combinedText).toContain('lista');
+  });
+
+  it('renders complex AI output with Unicode symbols and line breaks without generating spurious question marks (?)', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'José da Silva',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Assistente em Administração',
+      lotacao: 'Campus Vitória',
+      escolaridade_atual: 'Mestrado',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const memorialTextWithComplexMarkdown = [
+      '# Memorial Descritivo - Trajetória',
+      'Desempenhei atividades com foco em eficiência… e inovação.',
+      'Esta linha é a continuação do mesmo parágrafo,\ncom quebra de linha simples e traço – e aspas “especiais”.\u200B',
+      '',
+      '• Primeira atividade relevante',
+      '◦ Segunda atividade com reticências…',
+      '▪ Terceira atividade',
+      '',
+      '1. Item numerado um',
+      '2. Item numerado dois',
+    ].join('\n');
+
+    const pdfBytes = await generateMemorialDescritivo(servidor, null, [], [], {
+      status: 'Rascunho',
+      memorial_texto: memorialTextWithComplexMarkdown,
+    });
+
+    expect(pdfBytes).toBeInstanceOf(Uint8Array);
+    const streams = decompressPdfStreams(pdfBytes);
+    const combinedText = streams.join('\n');
+
+    // NENHUM ponto de interrogação deve ter sido gerado na conversão de texto
+    // (com exceção de pontuação legítima se existisse no texto, o que não há neste caso)
+    expect(combinedText).not.toContain('?');
+    expect(combinedText).toContain('Desempenhei');
+    expect(combinedText).toContain('especiais');
+  });
+});
+
+// Plano de ação 2026-08-05: o extrato estruturado ([RSC:START]…[RSC:END])
+// deixou de ser gerado dentro do Memorial e passou a ser anexado ao final do
+// Requerimento — o Memorial é publicado nas páginas do IF, o Requerimento não.
+describe('pdfGenerator - generateRequerimentoFormal (extrato estruturado)', () => {
+  it('emits [RSC:LANCAMENTO_ID]/[RSC:QUANTIDADE] em ambos os ramos de tag, DOC_HASH, páginas e o aviso "não remover" na página de extrato', async () => {
     const servidor: Servidor = {
       id: 's1',
       nome_completo: 'Test Servidor',
@@ -177,6 +322,7 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
         status_auditoria: 'Aprovado',
         data_inicio: '2021-01-01',
         data_fim: '2021-12-31',
+        observacao: 'Designacao publicada no boletim interno numero 42.',
       },
       // Ramo com comprovante físico.
       {
@@ -192,190 +338,46 @@ describe('pdfGenerator - generateMemorialDescritivo', () => {
       },
     ];
 
-    const pdfBytes = await generateMemorialDescritivo(
+    const processo: ProcessoRSC = { status: 'Rascunho' };
+
+    const pdfBytes = await generateRequerimentoFormal(
       servidor,
       null,
+      processo,
+      55,
+      2,
       lancamentos,
       itensRSC,
       documentos,
-      undefined,
       { '2_doc-1': { startPage: 1, endPage: 4 } },
     );
 
     const combinedText = decompressPdfStreams(pdfBytes).join('\n');
 
+    expect(combinedText).toContain('[RSC:LANCAMENTO_ID:lanc-auto]');
+    expect(combinedText).toContain('[RSC:LANCAMENTO_ID:lanc-doc]');
     // Ambos os ramos declaram a quantidade, em pt-BR (vírgula decimal).
     expect(combinedText).toContain('[RSC:QUANTIDADE:3]');
     expect(combinedText).toContain('[RSC:QUANTIDADE:2,5]');
+    // Páginas do caderno de comprovantes, herdadas de documentPageRanges.
+    expect(combinedText).toContain('[RSC:PAGINA_INICIO:1]');
+    expect(combinedText).toContain('[RSC:PAGINA_FIM:4]');
     // Hash do documento espelhado a partir do caderno unificado.
     expect(combinedText).toContain('[RSC:DOC_HASH:abc123hash]');
-    // Redundância mínima no rodapé da última página de conteúdo + extrato.
+    // Observação do lançamento autodeclarado.
+    expect(combinedText).toContain('[RSC:OBSERVACAO:Designacao publicada no boletim interno numero 42.]');
+    // Redundância mínima do rodapé + total no extrato.
     expect(combinedText).toContain('[RSC:TOTAL_PONTOS:55]');
+    // A página do extrato agora se identifica como parte do Requerimento.
+    expect(combinedText).toContain('[RSC:DOC_TIPO:REQUERIMENTO]');
+    expect(combinedText).toContain('[RSC:START]');
+    expect(combinedText).toContain('[RSC:END]');
 
     // Advertência visível contra a remoção da página do extrato. O texto é
     // desenhado palavra a palavra, então cada token é verificado isolado.
     expect(combinedText).toContain('INTEGRANTE');
+    expect(combinedText).toContain('REQUERIMENTO');
     expect(combinedText).toContain('REMOVER.');
-  });
-
-  it('renders the servidor observação in the visible Memorial text, not only in the hidden tag', async () => {
-    const servidor: Servidor = {
-      id: 's1',
-      nome_completo: 'Test Servidor',
-      siape: '1234567',
-      data_ingresso: '2020-01-01',
-      cargo: 'Assistente',
-      lotacao: 'Campus Test',
-      escolaridade_atual: 'Graduação',
-      nivel_classificacao: 'D',
-      situacao_funcional: 'Ativo',
-    };
-
-    const itensRSC: ItemRSC[] = [
-      {
-        id: 'item-1',
-        numero: 7,
-        inciso: 'III',
-        descricao: 'Participacao em comissao',
-        unidade_medida: 'Unidade',
-        pontos_por_unidade: 10,
-        quantidade_automatica: false,
-        modo_calculo: 'manual',
-      },
-    ];
-
-    const lancamentos: Lancamento[] = [
-      {
-        id: 'lanc-obs',
-        servidor_id: 's1',
-        item_rsc_id: 'item-1',
-        quantidade_informada: 1,
-        pontos_calculados: 10,
-        status_auditoria: 'Aprovado',
-        data_inicio: '2021-01-01',
-        data_fim: '2021-12-31',
-        observacao: 'Designacao publicada no boletim interno numero 42.',
-      },
-    ];
-
-    const pdfBytes = await generateMemorialDescritivo(
-      servidor,
-      null,
-      lancamentos,
-      itensRSC,
-      [],
-      undefined,
-      undefined,
-    );
-
-    const combinedText = decompressPdfStreams(pdfBytes).join('\n');
-
-    // Seção legível 2.1: a descrição do item e o texto da observação passam a
-    // ser desenhados no corpo do PDF (token a token). Antes desta correção,
-    // NENHUM dos dois aparecia fora das tags ocultas do extrato.
-    expect(combinedText).toContain('Participacao');
-    expect(combinedText).toContain('comissao');
-    expect(combinedText).toContain('boletim');
-    expect(combinedText).toContain('interno');
-    // A tag oculta continua presente para o avaliador.
-    expect(combinedText).toContain('[RSC:OBSERVACAO:Designacao publicada no boletim interno numero 42.]');
-  });
-
-  it('renders memorial content with basic Markdown (heading, bullets, bold) without crashing and strips literal markers from the PDF stream', async () => {
-    const servidor: Servidor = {
-      id: 's1',
-      nome_completo: 'Test Servidor',
-      siape: '1234567',
-      data_ingresso: '2020-01-01',
-      cargo: 'Professor',
-      lotacao: 'Campus Test',
-      escolaridade_atual: 'Doutorado',
-      nivel_classificacao: 'E',
-      situacao_funcional: 'Ativo',
-    };
-    const itensRSC: ItemRSC[] = [];
-    const lancamentos: Lancamento[] = [];
-    const documentos: Documento[] = [];
-
-    const memorialMarkdown = [
-      '## Formacao Academica',
-      '',
-      'Concluiu **Mestrado em Educacao** em 2020, com foco em *gestao publica*.',
-      '',
-      '- Item de lista um',
-      '- Item de lista dois',
-    ].join('\n');
-
-    const pdfBytes = await generateMemorialDescritivo(
-      servidor,
-      null,
-      lancamentos,
-      itensRSC,
-      documentos,
-      { status: 'Rascunho', memorial_texto: memorialMarkdown },
-      undefined,
-    );
-
-    expect(pdfBytes).toBeInstanceOf(Uint8Array);
-    const streams = decompressPdfStreams(pdfBytes);
-    const combinedText = streams.join('\n');
-
-    // Words are drawn one Tj per token (see Writer.richText), so assert each
-    // token individually rather than a joined phrase.
-    expect(combinedText).not.toContain('**');
-    expect(combinedText).toContain('Formacao');
-    expect(combinedText).toContain('Academica');
-    expect(combinedText).toContain('Mestrado');
-    expect(combinedText).toContain('Educacao');
-    expect(combinedText).toContain('Item');
-    expect(combinedText).toContain('lista');
-  });
-
-  it('renders complex AI output with Unicode symbols and line breaks without generating spurious question marks (?)', async () => {
-    const servidor: Servidor = {
-      id: 's1',
-      nome_completo: 'José da Silva',
-      siape: '1234567',
-      data_ingresso: '2020-01-01',
-      cargo: 'Assistente em Administração',
-      lotacao: 'Campus Vitória',
-      escolaridade_atual: 'Mestrado',
-      nivel_classificacao: 'D',
-      situacao_funcional: 'Ativo',
-    };
-
-    const memorialTextWithComplexMarkdown = [
-      '# Memorial Descritivo - Trajetória',
-      'Desempenhei atividades com foco em eficiência… e inovação.',
-      'Esta linha é a continuação do mesmo parágrafo,\ncom quebra de linha simples e traço – e aspas “especiais”.\u200B',
-      '',
-      '• Primeira atividade relevante',
-      '◦ Segunda atividade com reticências…',
-      '▪ Terceira atividade',
-      '',
-      '1. Item numerado um',
-      '2. Item numerado dois',
-    ].join('\n');
-
-    const pdfBytes = await generateMemorialDescritivo(
-      servidor,
-      null,
-      [],
-      [],
-      [],
-      { status: 'Rascunho', memorial_texto: memorialTextWithComplexMarkdown },
-      undefined,
-    );
-
-    expect(pdfBytes).toBeInstanceOf(Uint8Array);
-    const streams = decompressPdfStreams(pdfBytes);
-    const combinedText = streams.join('\n');
-
-    // NENHUM ponto de interrogação deve ter sido gerado na conversão de texto
-    // (com exceção de pontuação legítima se existisse no texto, o que não há neste caso)
-    expect(combinedText).not.toContain('?');
-    expect(combinedText).toContain('Desempenhei');
-    expect(combinedText).toContain('especiais');
   });
 });
 
