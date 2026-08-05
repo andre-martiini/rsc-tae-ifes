@@ -11,6 +11,7 @@ import {
   UploadCloud,
   X,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   ChevronUp,
   Clipboard,
@@ -112,6 +113,7 @@ export default function Triagem() {
   const [editQuantidade, setEditQuantidade] = useState('1');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | 'pendente' | 'confirmada' | 'descartada'>('todos');
   const [viewerDoc, setViewerDoc] = useState<Documento | null>(null);
+  const [viewerGroupDocs, setViewerGroupDocs] = useState<Documento[]>([]);
   const [viewerUrl, setViewerUrl] = useState<string | null>(null);
   const [viewerLoading, setViewerLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
@@ -125,8 +127,9 @@ export default function Triagem() {
   }
 
   // ── Visualização de documento ──────────────────────────────────────────
-  const handleViewDoc = useCallback(async (doc: Documento) => {
+  const handleViewDoc = useCallback(async (doc: Documento, group?: Documento[]) => {
     setViewerDoc(doc);
+    setViewerGroupDocs(group ?? [doc]);
     setViewerUrl(null);
     setViewerError(null);
     setViewerLoading(true);
@@ -148,6 +151,16 @@ export default function Triagem() {
       setViewerLoading(false);
     }
   }, []);
+
+  const viewerIndex = viewerDoc ? viewerGroupDocs.findIndex((d) => d.id === viewerDoc.id) : -1;
+
+  const handleViewPrev = useCallback(() => {
+    if (viewerIndex > 0) handleViewDoc(viewerGroupDocs[viewerIndex - 1], viewerGroupDocs);
+  }, [viewerIndex, viewerGroupDocs, handleViewDoc]);
+
+  const handleViewNext = useCallback(() => {
+    if (viewerIndex >= 0 && viewerIndex < viewerGroupDocs.length - 1) handleViewDoc(viewerGroupDocs[viewerIndex + 1], viewerGroupDocs);
+  }, [viewerIndex, viewerGroupDocs, handleViewDoc]);
 
   // Revogar URL do objeto quando o visualizador fechar
   useEffect(() => {
@@ -1478,7 +1491,13 @@ export default function Triagem() {
                                     {visibleDocs.map((doc, i) => (
                                       <li key={doc.id} className="flex items-start gap-1.5">
                                         <span className="mt-0.5 h-1 w-1 shrink-0 rounded-full bg-gray-400" />
-                                        <span className="break-all">{doc.nome_arquivo}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleViewDoc(doc, sugestaoDocs)}
+                                          className="break-all text-left hover:text-primary hover:underline"
+                                        >
+                                          {doc.nome_arquivo}
+                                        </button>
                                       </li>
                                     ))}
                                     {hiddenCount > 0 && (
@@ -1706,10 +1725,10 @@ export default function Triagem() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleViewDoc(sugestaoDocs[0])}
+                                      onClick={() => handleViewDoc(sugestaoDocs[0], sugestaoDocs)}
                                     >
                                       <Eye className="mr-1 h-3.5 w-3.5" />
-                                      Visualizar{sugestaoDocs.length > 1 ? ` (1 de ${sugestaoDocs.length})` : ''}
+                                      Visualizar{sugestaoDocs.length > 1 ? ` (${sugestaoDocs.length} documentos)` : ''}
                                     </Button>
                                   )}
                                   {sugestao.status === 'pendente' && sugestao.item_rsc_id && (
@@ -1990,7 +2009,32 @@ export default function Triagem() {
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-3">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-bold text-gray-900">{viewerDoc.nome_arquivo}</p>
+                {viewerGroupDocs.length > 1 && (
+                  <p className="text-xs text-gray-500">Documento {viewerIndex + 1} de {viewerGroupDocs.length}</p>
+                )}
               </div>
+              {viewerGroupDocs.length > 1 && (
+                <div className="ml-3 flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={handleViewPrev}
+                    disabled={viewerIndex <= 0}
+                    title="Documento anterior"
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleViewNext}
+                    disabled={viewerIndex >= viewerGroupDocs.length - 1}
+                    title="Próximo documento"
+                    className="rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={() => setViewerDoc(null)}
