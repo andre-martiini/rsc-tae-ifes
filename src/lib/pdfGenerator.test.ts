@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { inflateSync } from 'zlib';
-import { generateMemorialDescritivo, generateRequerimentoFormal, parseInlineMarkdown } from './pdfGenerator';
+import { generateExtratoAvulso, generateMemorialDescritivo, generateRequerimentoFormal, parseInlineMarkdown } from './pdfGenerator';
 import type { Servidor, Lancamento, ItemRSC, Documento, ProcessoRSC } from '../data/mock';
 
 function decompressPdfStreams(pdfBytes: Uint8Array): string[] {
@@ -378,6 +378,64 @@ describe('pdfGenerator - generateRequerimentoFormal (extrato estruturado)', () =
     expect(combinedText).toContain('INTEGRANTE');
     expect(combinedText).toContain('REQUERIMENTO');
     expect(combinedText).toContain('REMOVER.');
+  });
+});
+
+// Plano de ação 2026-08-05, Fase 3: PDF de uma única página com o extrato
+// estruturado, emitido isoladamente (sem reprocessar o dossiê inteiro) para
+// complementar um pacote já protocolado cujo extrato foi alterado/removido.
+describe('pdfGenerator - generateExtratoAvulso', () => {
+  it('gera uma única página, carimbada como EXTRATO_AVULSO, com data de emissão e o bloco completo', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Assistente',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Graduação',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const itensRSC: ItemRSC[] = [
+      {
+        id: 'item-1',
+        numero: 1,
+        inciso: 'I',
+        descricao: 'Atividade sem comprovante',
+        unidade_medida: 'Unidade',
+        pontos_por_unidade: 10,
+        quantidade_automatica: false,
+        modo_calculo: 'manual',
+      },
+    ];
+
+    const lancamentos: Lancamento[] = [
+      {
+        id: 'lanc-avulso',
+        servidor_id: 's1',
+        item_rsc_id: 'item-1',
+        quantidade_informada: 1,
+        pontos_calculados: 10,
+        status_auditoria: 'Aprovado',
+        data_inicio: '2021-01-01',
+        data_fim: '2021-12-31',
+      },
+    ];
+
+    const pdfBytes = await generateExtratoAvulso(servidor, lancamentos, itensRSC, [], undefined, '2026-08-05T12:00:00.000Z');
+
+    const combinedText = decompressPdfStreams(pdfBytes).join('\n');
+
+    expect(combinedText).toContain('[RSC:DOC_TIPO:EXTRATO_AVULSO]');
+    expect(combinedText).toContain('[RSC:EMITIDO_EM:2026-08-05T12:00:00.000Z]');
+    expect(combinedText).toContain('[RSC:START]');
+    expect(combinedText).toContain('[RSC:LANCAMENTO_ID:lanc-avulso]');
+    expect(combinedText).toContain('[RSC:END]');
+    // Não é peça oficial — o texto de advertência é distinto do usado no Requerimento/Memorial.
+    expect(combinedText).toContain('AVULSO');
+    expect(combinedText).toContain('OFICIAL');
   });
 });
 

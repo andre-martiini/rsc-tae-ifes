@@ -21,7 +21,7 @@ import {
   getLancamentoDocumentIds,
   sortLancamentosByDossierOrder,
 } from '../lib/documentOrdering';
-import { exportPacoteRSC } from '../lib/pacoteExport';
+import { exportExtratoAvulso, exportPacoteRSC } from '../lib/pacoteExport';
 import { getDocumentosExportadosEsperados } from '../lib/instrucaoSipac';
 import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
@@ -404,6 +404,24 @@ export default function Consolidation() {
       toast.error('Erro ao gerar o pacote. Tente novamente.');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const [isGeneratingExtratoAvulso, setIsGeneratingExtratoAvulso] = useState(false);
+  const handleBaixarExtratoAvulso = async () => {
+    setIsGeneratingExtratoAvulso(true);
+    try {
+      await exportExtratoAvulso({ servidor, lancamentos: lancamentosDoServidor, itensRSC, documentos });
+      toast.success(
+        'Extrato de dados avulso gerado. Envie este arquivo à comissão junto com uma explicação da alteração — ' +
+          'ele não substitui o Requerimento/Memorial já protocolados.',
+        { duration: 15000 },
+      );
+    } catch (err) {
+      console.error('Erro ao gerar extrato avulso:', err);
+      toast.error('Erro ao gerar o extrato avulso. Tente novamente.');
+    } finally {
+      setIsGeneratingExtratoAvulso(false);
     }
   };
 
@@ -845,6 +863,28 @@ export default function Consolidation() {
                 )}
                 Gerar Pacote PDF
               </Button>
+              <div className="group relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBaixarExtratoAvulso}
+                  disabled={lancamentosDoServidor.length === 0 || isGeneratingExtratoAvulso}
+                  className="h-10 rounded-xl border-amber-200 bg-amber-50 px-4 text-xs font-black uppercase tracking-widest text-amber-700 shadow-sm transition-all hover:bg-amber-100 disabled:opacity-50"
+                >
+                  {isGeneratingExtratoAvulso ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="mr-2 h-4 w-4" />
+                  )}
+                  Extrato Avulso
+                </Button>
+                <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 scale-95 opacity-0 transition-all group-hover:scale-100 group-hover:opacity-100">
+                  <div className="rounded-lg border border-gray-200 bg-gray-900 px-3 py-2 text-[11px] font-normal normal-case leading-relaxed text-white shadow-xl">
+                    Use apenas se o pacote já protocolado precisar ser complementado — por exemplo, se a página do
+                    extrato foi removida por engano ao anexar no SIPAC. Não substitui o Requerimento/Memorial.
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-1 border-b border-gray-100 px-1">

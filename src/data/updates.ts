@@ -15,6 +15,15 @@ export interface UpdateEntry {
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
     date: '05 de agosto de 2026',
+    title: 'Novo botão "Extrato Avulso" para complementar um pacote já protocolado',
+    description:
+      'Alguns usuários alteram os PDFs gerados depois de exportar o pacote — por exemplo, removem por engano a página "EXTRATO ESTRUTURADO DE DADOS" ao anexar no SIPAC. Antes, a única saída era reprotocolar o dossiê inteiro.',
+    features: [
+      'Novo botão "Extrato Avulso" na tela de Consolidação baixa só essa página, isoladamente, sem precisar reprocessar o dossiê. Envie o arquivo à comissão junto com uma explicação — ele complementa o pacote já protocolado, mas não o substitui.',
+    ],
+  },
+  {
+    date: '05 de agosto de 2026',
     title: 'Aviso quando um documento não pode ser incluído no pacote (PDF protegido, corrompido ou sem páginas)',
     description:
       'Antes desta correção, um documento comprobatório com senha/proteção, corrompido ou sem conteúdo era simplesmente pulado ao montar o caderno de comprovantes ou o pacote final — o download terminava com a mensagem de sucesso normal, mas o documento saía faltando (ou virava página em branco) sem nenhum aviso.',
