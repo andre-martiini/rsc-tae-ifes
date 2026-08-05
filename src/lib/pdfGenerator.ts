@@ -17,7 +17,7 @@ import {
 } from './documentOrdering';
 import { addPointValues, formatPointValue, sumPointValues } from './points';
 import { getDistinctRscCriterionCount } from './rsc';
-import { formatarDataSegura, sanitizeForTag } from './utils';
+import { formatarDataSegura, sanitizeForTag, sanitizeObservacaoForTag } from './utils';
 import { periodosDoLancamento } from './periodos';
 import { parseInlineMarkdown, dividirEmBlocosMarkdown } from './markdownLite';
 
@@ -906,7 +906,7 @@ function appendExtratoEstruturadoPage(
       writer.text(`[RSC:PAGINA_FIM:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       writer.text(`[RSC:DOC_REF:AUTODECLARACAO]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       if (l.observacao) {
-        const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+        const cleanObs = sanitizeObservacaoForTag(l.observacao);
         writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
       }
       writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
@@ -935,7 +935,7 @@ function appendExtratoEstruturadoPage(
           writer.text(`[RSC:DOC_HASH:${sanitizeForTag(docItem.hash_arquivo)}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         }
         if (l.observacao) {
-          const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+          const cleanObs = sanitizeObservacaoForTag(l.observacao);
           writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
         }
         writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
