@@ -805,6 +805,122 @@ class Writer {
   }
 }
 
+/**
+ * Página "EXTRATO ESTRUTURADO DE DADOS" ([RSC:START]…[RSC:END]) consumida
+ * pelo avaliador para reconstruir os lançamentos automaticamente. Histori-
+ * camente vivia só no Memorial; a partir de 2026-08-05 passou a ser anexada
+ * ao Requerimento (documento que não é publicado nas páginas do IF, ao
+ * contrário do Memorial — ver plano de ação 2026-08-05 do avaliador-RSC-TAE).
+ * `docTipoPai` carimba a página com o documento que a está hospedando, para
+ * o classificador do avaliador atribuir o papel correto.
+ */
+function appendExtratoEstruturadoPage(
+  writer: Writer,
+  params: {
+    docTipoPai: 'REQUERIMENTO' | 'MEMORIAL';
+    servidor: Servidor;
+    lancamentos: Lancamento[];
+    itensRSC: ItemRSC[];
+    documentos: Documento[];
+    documentPageRanges?: Record<string, { startPage: number; endPage: number }>;
+  },
+): void {
+  const { docTipoPai, servidor, lancamentos, itensRSC, documentos, documentPageRanges } = params;
+  const grayColor = rgb(0.6, 0.6, 0.6);
+  const sanitizedNome = sanitizeForTag(servidor.nome_completo);
+  const sanitizedSiape = sanitizeForTag(servidor.siape);
+  const totalPontos = sumPointValues(lancamentos.map((entry) => entry.pontos_calculados));
+  const totalPontosStr = formatPointValue(totalPontos);
+
+  writer.addPage();
+  writer.text('EXTRATO ESTRUTURADO DE DADOS', { align: 'center', bold: true, size: 10 });
+  writer.gap(6);
+  writer.text(`PÁGINA INTEGRANTE DO ${docTipoPai} — NÃO REMOVER.`, {
+    align: 'center',
+    bold: true,
+    size: 10,
+    color: rgb(0.7, 0.1, 0.1),
+  });
+  writer.gap(4);
+  writer.text(
+    'Contém os dados estruturados necessários à análise automática pela CRSC-PCCTAE. Remover ou editar esta página ' +
+      'impede a importação automática do dossiê e pode atrasar a avaliação do seu pedido.',
+    { align: 'center', size: 8.5, color: COLORS.muted },
+  );
+  writer.gap(12);
+
+  writer.text(`[RSC:DOC_TIPO:${docTipoPai}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:START]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:SIAPE:${sanitizedSiape}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+  writer.text(`[RSC:CATALOGO:${CATALOG_VERSION}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+
+  // Mantem as tags na mesma ordem documental usada na aba Documentos e na Auditoria IA.
+  const sortedLancamentosForTags = sortLancamentosByDossierOrder(lancamentos, itensRSC);
+
+  for (const l of sortedLancamentosForTags) {
+    const item = itensRSC.find((i) => i.id === l.item_rsc_id);
+    if (!item) continue;
+
+    const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0 ? l.comprovantes_ids : (l.documento_id ? [l.documento_id] : []);
+    const incisoRomano = item.inciso;
+    const pontosStr = formatPointValue(l.pontos_calculados);
+    // A quantidade explícita permite ao avaliador conferir se o total do item
+    // é a soma dos lançamentos (e detectar lançamentos que repetem o total).
+    const quantidadeStr = formatPointValue(l.quantidade_informada ?? 0);
+    const lancamentoIdTag = sanitizeForTag(l.id);
+
+    if (docIds.length === 0) {
+      writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:QUANTIDADE:${quantidadeStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:PAGINA_INICIO:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:PAGINA_FIM:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      writer.text(`[RSC:DOC_REF:AUTODECLARACAO]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      if (l.observacao) {
+        const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+        writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      }
+      writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+    } else {
+      for (const docId of docIds) {
+        const docItem = documentos.find((d) => d.id === docId);
+        const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
+        const range = docRefKey && documentPageRanges ? documentPageRanges[docRefKey] : undefined;
+
+        const startPage = range ? range.startPage : 0;
+        const endPage = range ? range.endPage : 0;
+        const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
+
+        writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:QUANTIDADE:${quantidadeStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        // Espelha o [RSC:DOC_HASH:...] gravado no rodapé de cada página do
+        // caderno unificado (pacoteExport.ts), permitindo ao avaliador
+        // confrontar a integridade do arquivo referenciado.
+        if (docItem?.hash_arquivo) {
+          writer.text(`[RSC:DOC_HASH:${sanitizeForTag(docItem.hash_arquivo)}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        }
+        if (l.observacao) {
+          const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
+          writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+        }
+        writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+      }
+    }
+  }
+
+  writer.text(`[RSC:END]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
+}
+
 export async function generateRequerimentoFormal(
   servidor: Servidor,
   nivelPleiteado: NivelRsc | null,
@@ -814,6 +930,7 @@ export async function generateRequerimentoFormal(
   lancamentos: Lancamento[],
   itensRSC: ItemRSC[],
   documentos: Documento[],
+  documentPageRanges?: Record<string, { startPage: number; endPage: number }>,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const writer = new Writer({
@@ -956,6 +1073,15 @@ export async function generateRequerimentoFormal(
   writer.drawTag(`[RSC:NIVEL_PRETENDIDO:${sanitizedNivel}]`, { y: writer.y - 40, color: grayColor, size: 8 });
   writer.y -= 45;
 
+  appendExtratoEstruturadoPage(writer, {
+    docTipoPai: 'REQUERIMENTO',
+    servidor,
+    lancamentos,
+    itensRSC,
+    documentos,
+    documentPageRanges,
+  });
+
   return doc.save();
 }
 
@@ -965,9 +1091,7 @@ export async function generateMemorialDescritivo(
   nivelElegivel: NivelRsc | null,
   lancamentos: Lancamento[],
   itensRSC: ItemRSC[],
-  documentos: Documento[],
   processo?: ProcessoRSC,
-  documentPageRanges?: Record<string, { startPage: number; endPage: number }>,
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const writer = new Writer({
@@ -1098,95 +1222,6 @@ export async function generateMemorialDescritivo(
   writer.drawTag(`[RSC:SIAPE:${sanitizedSiape}]`, { y: writer.y - 20, color: grayColor, size: 8 });
   writer.drawTag(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { y: writer.y - 30, color: grayColor, size: 8 });
   writer.y -= 35;
-
-  // Injeção de página de metadados dedicada (Extrato Estruturado de Dados) para o Sistema 2
-  writer.addPage();
-  writer.text('EXTRATO ESTRUTURADO DE DADOS', { align: 'center', bold: true, size: 10 });
-  writer.gap(6);
-  writer.text('PÁGINA INTEGRANTE DO MEMORIAL — NÃO REMOVER.', {
-    align: 'center',
-    bold: true,
-    size: 10,
-    color: rgb(0.7, 0.1, 0.1),
-  });
-  writer.gap(4);
-  writer.text(
-    'Contém os dados estruturados necessários à análise automática pela CRSC-PCCTAE. Remover ou editar esta página ' +
-      'impede a importação automática do dossiê e pode atrasar a avaliação do seu pedido.',
-    { align: 'center', size: 8.5, color: COLORS.muted },
-  );
-  writer.gap(12);
-
-  writer.text(`[RSC:DOC_TIPO:MEMORIAL]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-  writer.text(`[RSC:START]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-  writer.text(`[RSC:SIAPE:${sanitizedSiape}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-  writer.text(`[RSC:NOME:${sanitizedNome}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-  writer.text(`[RSC:TOTAL_PONTOS:${totalPontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-  writer.text(`[RSC:CATALOGO:${CATALOG_VERSION}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-
-  // Mantem as tags na mesma ordem documental usada na aba Documentos e na Auditoria IA.
-  const sortedLancamentosForTags = sortLancamentosByDossierOrder(lancamentos, itensRSC);
-
-  for (const l of sortedLancamentosForTags) {
-    const item = itensRSC.find((i) => i.id === l.item_rsc_id);
-    if (!item) continue;
-
-    const docIds = l.comprovantes_ids && l.comprovantes_ids.length > 0 ? l.comprovantes_ids : (l.documento_id ? [l.documento_id] : []);
-    const incisoRomano = item.inciso;
-    const pontosStr = formatPointValue(l.pontos_calculados);
-    // A quantidade explícita permite ao avaliador conferir se o total do item
-    // é a soma dos lançamentos (e detectar lançamentos que repetem o total).
-    const quantidadeStr = formatPointValue(l.quantidade_informada ?? 0);
-    const lancamentoIdTag = sanitizeForTag(l.id);
-
-    if (docIds.length === 0) {
-      writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:QUANTIDADE:${quantidadeStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:PAGINA_INICIO:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:PAGINA_FIM:0]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      writer.text(`[RSC:DOC_REF:AUTODECLARACAO]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      if (l.observacao) {
-        const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
-        writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      }
-      writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-    } else {
-      for (const docId of docIds) {
-        const docItem = documentos.find((d) => d.id === docId);
-        const docRefKey = docItem ? `${item.numero}_${docItem.id}` : '';
-        const range = docRefKey && documentPageRanges ? documentPageRanges[docRefKey] : undefined;
-
-        const startPage = range ? range.startPage : 0;
-        const endPage = range ? range.endPage : 0;
-        const docRefName = docItem ? sanitizeForTag(docItem.nome_arquivo) : 'AUTODECLARACAO';
-
-        writer.text(`[RSC:ITEM_START:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:LANCAMENTO_ID:${lancamentoIdTag}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:INCISO:${incisoRomano}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:PONTOS:${pontosStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:QUANTIDADE:${quantidadeStr}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:PAGINA_INICIO:${startPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:PAGINA_FIM:${endPage}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        writer.text(`[RSC:DOC_REF:${docRefName}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        // Espelha o [RSC:DOC_HASH:...] gravado no rodapé de cada página do
-        // caderno unificado (pacoteExport.ts), permitindo ao avaliador
-        // confrontar a integridade do arquivo referenciado.
-        if (docItem?.hash_arquivo) {
-          writer.text(`[RSC:DOC_HASH:${sanitizeForTag(docItem.hash_arquivo)}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        }
-        if (l.observacao) {
-          const cleanObs = l.observacao.replace(/[\[\]]/g, '').replace(/[\r\n]+/g, ' ').trim();
-          writer.text(`[RSC:OBSERVACAO:${cleanObs}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-        }
-        writer.text(`[RSC:ITEM_END:${item.numero}]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
-      }
-    }
-  }
-
-  writer.text(`[RSC:END]`, { size: 8, color: grayColor, lineHeight: 10, font: writer.courier });
 
   return doc.save();
 }

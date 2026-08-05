@@ -14,6 +14,15 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '05 de agosto de 2026',
+    title: 'Página de dados estruturados sai do Memorial e passa para o Requerimento',
+    description:
+      'O Memorial é publicado separadamente nas páginas do Instituto Federal, e a página técnica "EXTRATO ESTRUTURADO DE DADOS" no final dele não deveria aparecer nessa publicação. Ela passa a ser gerada no final do Requerimento (documento que não é publicado), sem nenhuma mudança na sua forma de preencher o processo.',
+    improvements: [
+      'O aviso "não remova esta página" na instrução do SIPAC agora aponta para o Requerimento, e o sistema avaliador da comissão já foi atualizado para ler o extrato em qualquer um dos dois documentos — pacotes gerados antes desta mudança continuam sendo aceitos normalmente.',
+    ],
+  },
+  {
     date: '04 de agosto de 2026',
     title: 'Orientação sobre qualidade do PDF na instrução do processo no SIPAC',
     description:

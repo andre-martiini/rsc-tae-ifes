@@ -362,7 +362,21 @@ export default function Consolidation() {
         itens_distintos_submissao: itensDistintos,
         submitted_at: new Date().toISOString(),
       });
-      toast.success('Pacote RSC gerado e baixado com sucesso!');
+      if (comprovantes.falhas.length > 0) {
+        // Documentos que não puderam ser mesclados corretamente (PDF protegido,
+        // corrompido, sem páginas etc.) — antes disso o pacote baixava com
+        // páginas em branco no lugar do documento e o toast dizia "sucesso"
+        // sem nenhum aviso. Agora o documento é pulado (não vira folha muda) e
+        // o usuário é avisado explicitamente do que falta corrigir.
+        toast.error(
+          `O pacote foi gerado, mas ${comprovantes.falhas.length} documento(s) não puderam ser incluídos: ` +
+          comprovantes.falhas.map((f) => `"${f.documento}" (${f.motivo})`).join('; ') +
+          '. Corrija o(s) arquivo(s) indicado(s) e gere o pacote novamente antes de protocolar.',
+          { duration: 30000 },
+        );
+      } else {
+        toast.success('Pacote RSC gerado e baixado com sucesso!');
+      }
 
       // O caderno de comprovantes pode ter sido dividido para caber no limite
       // de tamanho do protocolo — o servidor PRECISA saber disso, sob pena de

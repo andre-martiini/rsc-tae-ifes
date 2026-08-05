@@ -222,21 +222,50 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
   return lines;
 }
 
+/** Falha ao mesclar um documento no PDF final — usada para avisar o usuário em vez de deixar a página sair muda/faltando em silêncio. */
+export interface FalhaMesclagem {
+  documento: string;
+  motivo: string;
+}
+
 async function mergePdfDocumentSet(
   documents: Documento[],
   docTypeTag?: string,
-): Promise<Uint8Array | null> {
+): Promise<{ bytes: Uint8Array | null; falhas: FalhaMesclagem[] }> {
   const merged = await PDFDocument.create();
   const tagFont = docTypeTag ? await merged.embedFont(StandardFonts.Courier) : undefined;
+  const falhas: FalhaMesclagem[] = [];
 
   for (const document of documents) {
     if (!document.caminho_storage) continue;
     const blob = await getDocumentBlob(document.id);
-    if (!blob) continue;
+    if (!blob) {
+      falhas.push({
+        documento: document.nome_arquivo,
+        motivo: 'Arquivo não encontrado no armazenamento local do navegador (pode ter sido perdido ou corrompido).',
+      });
+      continue;
+    }
 
     try {
       const source = await PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true });
+      if (source.isEncrypted) {
+        // pdf-lib não decripta o conteúdo de verdade — só evita lançar
+        // exceção. Copiar as páginas produziria folhas em branco no PDF
+        // final sem nenhum aviso (ver relato de páginas em branco no
+        // caderno de comprobatórios). Melhor pular e avisar do que mesclar
+        // conteúdo ilegível silenciosamente.
+        falhas.push({
+          documento: document.nome_arquivo,
+          motivo: 'O PDF está protegido/criptografado — o conteúdo não pode ser copiado corretamente e sairia em branco no arquivo final. Remova a proteção do arquivo (ex.: reimprimindo/exportando sem senha) e anexe novamente.',
+        });
+        continue;
+      }
       const pages = await merged.copyPages(source, source.getPageIndices());
+      if (pages.length === 0) {
+        falhas.push({ documento: document.nome_arquivo, motivo: 'O PDF não contém páginas.' });
+        continue;
+      }
       pages.forEach((page) => {
         merged.addPage(page);
         if (docTypeTag && tagFont) {
@@ -252,11 +281,15 @@ async function mergePdfDocumentSet(
       });
     } catch (error) {
       console.error(`Erro ao incluir o documento de instrução ${document.nome_arquivo}:`, error);
+      falhas.push({
+        documento: document.nome_arquivo,
+        motivo: `Falha ao ler o arquivo (${error instanceof Error ? error.message : 'formato inválido ou arquivo corrompido'}).`,
+      });
     }
   }
 
-  if (merged.getPageCount() === 0) return null;
-  return merged.save();
+  if (merged.getPageCount() === 0) return { bytes: null, falhas };
+  return { bytes: await merged.save(), falhas };
 }
 
 /** Uma parte (arquivo) do caderno de comprovantes exportado. */
@@ -276,6 +309,8 @@ export interface ComprovantesExportados {
   dividido: boolean;
   /** `true` quando alguma parte segue acima do limite (documento único grande demais). */
   excedeLimiteMesmoDividido: boolean;
+  /** Documentos que não puderam ser mesclados corretamente (PDF protegido, corrompido, sem páginas etc.) — a UI deve avisar o usuário em vez de reportar sucesso. */
+  falhas: FalhaMesclagem[];
 }
 
 export async function exportPacoteRSC(params: {
@@ -300,6 +335,7 @@ export async function exportPacoteRSC(params: {
   const helveticaBoldFont = await unifiedPdf.embedFont(StandardFonts.HelveticaBold);
   let currentPageIndex = 0;
   const documentPageRanges: Record<string, { startPage: number; endPage: number }> = {};
+  const falhasMesclagem: FalhaMesclagem[] = [];
 
   // Segmentos indivisíveis do caderno unificado, na ordem em que as páginas
   // entram nele. Alimentam a divisão em partes quando o PDF único estoura o
@@ -358,14 +394,34 @@ export async function exportPacoteRSC(params: {
 
     for (const doc of physicalDocs) {
       const blob = await getDocumentBlob(doc.id);
-      if (!blob) continue;
+      if (!blob) {
+        falhasMesclagem.push({
+          documento: doc.nome_arquivo,
+          motivo: 'Arquivo não encontrado no armazenamento local do navegador (pode ter sido perdido ou corrompido).',
+        });
+        continue;
+      }
 
       try {
         const bytes = await blob.arrayBuffer();
         const sourceDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        if (sourceDoc.isEncrypted) {
+          // pdf-lib não decripta o conteúdo — só evita lançar exceção ao
+          // carregar. Copiar as páginas aqui produz folhas em branco no
+          // caderno final sem nenhum aviso. Pular e reportar é melhor do
+          // que entregar um comprobatório ilegível.
+          falhasMesclagem.push({
+            documento: doc.nome_arquivo,
+            motivo: 'O PDF está protegido/criptografado — o conteúdo não pode ser copiado corretamente e sairia em branco no caderno final. Remova a proteção do arquivo (ex.: reimprimindo/exportando sem senha) e anexe novamente.',
+          });
+          continue;
+        }
         const pages = await unifiedPdf.copyPages(sourceDoc, sourceDoc.getPageIndices());
 
-        if (pages.length === 0) continue;
+        if (pages.length === 0) {
+          falhasMesclagem.push({ documento: doc.nome_arquivo, motivo: 'O PDF não contém páginas.' });
+          continue;
+        }
 
         const startPage = currentPageIndex + 1;
         const docHash = sanitizeForTag(doc.hash_arquivo || doc.id);
@@ -397,6 +453,10 @@ export async function exportPacoteRSC(params: {
 
       } catch (err) {
         console.error(`Erro ao mesclar o documento ${doc.nome_arquivo}:`, err);
+        falhasMesclagem.push({
+          documento: doc.nome_arquivo,
+          motivo: `Falha ao ler o arquivo (${err instanceof Error ? err.message : 'formato inválido ou arquivo corrompido'}).`,
+        });
       }
     }
   }
@@ -423,6 +483,7 @@ export async function exportPacoteRSC(params: {
     partes: [],
     dividido: false,
     excedeLimiteMesmoDividido: false,
+    falhas: falhasMesclagem,
   };
 
   if (unifiedPdfBytes.byteLength <= LIMITE_TAMANHO_ARQUIVO_BYTES || segmentosUnificado.length === 0) {
@@ -487,7 +548,9 @@ export async function exportPacoteRSC(params: {
     );
   }
 
-  // 2. Gerar o Requerimento
+  // 2. Gerar o Requerimento — inclui, ao final, o extrato estruturado que o
+  // avaliador usa para reconstruir os lançamentos (deslocado do Memorial em
+  // 2026-08-05: o Memorial é publicado nas páginas do IF, o Requerimento não).
   const requerimentoBytes = await generateRequerimentoFormal(
     servidor,
     nivelElegivel,
@@ -497,19 +560,12 @@ export async function exportPacoteRSC(params: {
     lancamentos,
     itensRSC,
     documentos,
+    documentPageRanges,
   );
   zip.file('01_Requerimento_RSC.pdf', requerimentoBytes);
 
-  // 3. Gerar o Memorial textual com as referências estruturadas de página
-  const memorialBytes = await generateMemorialDescritivo(
-    servidor,
-    nivelElegivel,
-    lancamentos,
-    itensRSC,
-    documentos,
-    processo,
-    documentPageRanges,
-  );
+  // 3. Gerar o Memorial textual
+  const memorialBytes = await generateMemorialDescritivo(servidor, nivelElegivel, lancamentos, itensRSC, processo);
   zip.file('02_Memorial_RSC.pdf', memorialBytes);
 
   // 4. Reunir os documentos funcionais exigidos para instrução do processo.
@@ -518,30 +574,34 @@ export async function exportPacoteRSC(params: {
     getInstructionDocument(documentos, 'siape_posicao_carreira'),
     getInstructionDocument(documentos, 'siape_cargo_confianca'),
   ].filter((doc): doc is Documento => !!doc);
-  const siapeBytes = await mergePdfDocumentSet(siapeDocuments);
-  if (siapeBytes) zip.file('03_Fichas_Funcionais_SIAPE.pdf', siapeBytes);
+  const siapeResult = await mergePdfDocumentSet(siapeDocuments);
+  if (siapeResult.bytes) zip.file('03_Fichas_Funcionais_SIAPE.pdf', siapeResult.bytes);
+  comprovantes.falhas.push(...siapeResult.falhas);
 
   const stabilityDocument = getInstructionDocument(documentos, 'portaria_estabilidade');
   if (stabilityDocument) {
-    const stabilityBytes = await mergePdfDocumentSet([stabilityDocument]);
-    if (stabilityBytes) zip.file('04_Portaria_Estabilidade.pdf', stabilityBytes);
+    const stabilityResult = await mergePdfDocumentSet([stabilityDocument]);
+    if (stabilityResult.bytes) zip.file('04_Portaria_Estabilidade.pdf', stabilityResult.bytes);
+    comprovantes.falhas.push(...stabilityResult.falhas);
   }
 
   const priorGrantDocument = getInstructionDocument(documentos, 'portaria_concessao_anterior');
   if (priorGrantDocument) {
-    const priorGrantBytes = await mergePdfDocumentSet([priorGrantDocument]);
-    if (priorGrantBytes) zip.file('05_Portaria_Concessao_Anterior_RSC.pdf', priorGrantBytes);
+    const priorGrantResult = await mergePdfDocumentSet([priorGrantDocument]);
+    if (priorGrantResult.bytes) zip.file('05_Portaria_Concessao_Anterior_RSC.pdf', priorGrantResult.bytes);
+    comprovantes.falhas.push(...priorGrantResult.falhas);
   }
 
   const qualificationDocument = getInstructionDocument(documentos, 'diploma_certificado_escolaridade');
   if (qualificationDocument) {
-    const qualificationBytes = await mergePdfDocumentSet(
+    const qualificationResult = await mergePdfDocumentSet(
       [qualificationDocument],
       'DIPLOMA_CERTIFICADO_ESCOLARIDADE',
     );
-    if (qualificationBytes) {
-      zip.file('07_Diploma_Certificado_Escolaridade.pdf', qualificationBytes);
+    if (qualificationResult.bytes) {
+      zip.file('07_Diploma_Certificado_Escolaridade.pdf', qualificationResult.bytes);
     }
+    comprovantes.falhas.push(...qualificationResult.falhas);
   }
 
   // 5. Compactar e iniciar download do conjunto completo.
