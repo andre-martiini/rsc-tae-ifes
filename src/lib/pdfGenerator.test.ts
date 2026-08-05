@@ -379,6 +379,71 @@ describe('pdfGenerator - generateRequerimentoFormal (extrato estruturado)', () =
     expect(combinedText).toContain('REQUERIMENTO');
     expect(combinedText).toContain('REMOVER.');
   });
+
+  it('sanitiza acentos e travessão na observação para que a tag oculta saia íntegra do PDF (fonte Courier padrão não suporta esses bytes)', async () => {
+    const servidor: Servidor = {
+      id: 's1',
+      nome_completo: 'Test Servidor',
+      siape: '1234567',
+      data_ingresso: '2020-01-01',
+      cargo: 'Assistente',
+      lotacao: 'Campus Test',
+      escolaridade_atual: 'Graduação',
+      nivel_classificacao: 'D',
+      situacao_funcional: 'Ativo',
+    };
+
+    const itensRSC: ItemRSC[] = [
+      {
+        id: 'item-1',
+        numero: 1,
+        inciso: 'I',
+        descricao: 'Atividade sem comprovante',
+        unidade_medida: 'Unidade',
+        pontos_por_unidade: 10,
+        quantidade_automatica: false,
+        modo_calculo: 'manual',
+      },
+    ];
+
+    const lancamentos: Lancamento[] = [
+      {
+        id: 'lanc-acento',
+        servidor_id: 's1',
+        item_rsc_id: 'item-1',
+        quantidade_informada: 1,
+        pontos_calculados: 10,
+        status_auditoria: 'Aprovado',
+        data_inicio: '2021-01-01',
+        data_fim: '2021-12-31',
+        observacao: 'Validação cruzada emissor x avaliador — plano 2026-08-05.',
+      },
+    ];
+
+    const processo: ProcessoRSC = { status: 'Rascunho' };
+
+    const pdfBytes = await generateRequerimentoFormal(
+      servidor,
+      null,
+      processo,
+      10,
+      1,
+      lancamentos,
+      itensRSC,
+      [],
+    );
+
+    const combinedText = decompressPdfStreams(pdfBytes).join('\n');
+
+    // Acentos removidos (ç→c, ã→a) e travessão convertido para hífen ASCII —
+    // sem isso, os bytes gravados pela fonte Courier padrão corrompiam ao
+    // serem extraídos do PDF (bug pré-existente à Fase 2, ver
+    // docs/plano-acao-2026-08-05-extrato-no-requerimento-e-extrato-avulso.md).
+    expect(combinedText).toContain(
+      '[RSC:OBSERVACAO:Validacao cruzada emissor x avaliador - plano 2026-08-05.]',
+    );
+    expect(combinedText).not.toContain('[RSC:OBSERVACAO:Validação');
+  });
 });
 
 // Plano de ação 2026-08-05, Fase 3: PDF de uma única página com o extrato

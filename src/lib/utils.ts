@@ -49,6 +49,32 @@ export function sanitizeForTag(value: string): string {
 }
 
 /**
+ * Sanitiza texto livre (ex.: observa\u00e7\u00e3o de um lan\u00e7amento) para grava\u00e7\u00e3o na
+ * tag oculta `[RSC:OBSERVACAO:...]`, desenhada com a fonte Courier padr\u00e3o do
+ * pdf-lib: remove acentos e converte pontua\u00e7\u00e3o tipogr\u00e1fica (aspas curvas,
+ * travess\u00e3o, retic\u00eancias) para equivalentes ASCII, e descarta qualquer
+ * caractere remanescente fora do intervalo ASCII imprim\u00edvel \u2014 sem isso, a
+ * fonte grava bytes que n\u00e3o sobrevivem \u00e0 extra\u00e7\u00e3o de texto do PDF. Tamb\u00e9m
+ * remove colchetes e quebras de linha, que quebrariam o parser de tags
+ * `[RSC:CHAVE:valor]`. Diferente de sanitizeForTag, preserva espa\u00e7os e
+ * pontua\u00e7\u00e3o b\u00e1sica: o valor \u00e9 lido por humanos, n\u00e3o usado como identificador.
+ */
+export function sanitizeObservacaoForTag(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/[[\]]/g, '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/[^\x20-\x7e]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Normaliza textos para buscas e comparações (remove acentos, caracteres especiais, capitalização e espaços extras).
  */
 export function normalizeText(text?: string): string {
