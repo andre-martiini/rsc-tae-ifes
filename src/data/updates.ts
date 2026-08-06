@@ -14,6 +14,31 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '06 de agosto de 2026',
+    title: 'Novos jeitos de classificar e corrigir documentos, na Triagem e em Documentos',
+    description:
+      'Feedback de usuários: documentos que a IA não conseguiu classificar ficavam sem nenhuma ação possível na revisão, e um documento lançado no item errado só podia ser corrigido desvinculando-o e reanexando o arquivo do zero.',
+    features: [
+      'Aba "Sem vínculo" (Documentos): novo botão "Vincular a um item" abre um seletor do catálogo — se o item já tiver lançamento, o documento é adicionado a ele; senão, cria um lançamento novo.',
+      'Documento já vinculado (Documentos): novo botão "Mover este documento para outro item" troca o vínculo em uma única ação, sem precisar desvincular e reanexar o arquivo.',
+      'Revisão da Triagem: sugestões que a IA marcou como "não classificáveis" agora têm o botão "Atribuir item e confirmar", para escolher o item ali mesmo, sem precisar ir a Documentos depois.',
+      'Revisão da Triagem: quando a IA agrupa documentos de itens diferentes na mesma sugestão, um novo botão ao lado de cada arquivo do grupo retira só aquele documento e o manda para "Não classificáveis", pronto para reclassificar.',
+    ],
+    fixes: [
+      'Corrigido: quando a IA esquecia de incluir um documento na resposta colada, ele desaparecia silenciosamente da revisão (só reaparecia sem explicação na aba "Sem vínculo"). Agora esses documentos são sinalizados automaticamente como "não classificáveis", com aviso explicando o motivo.',
+    ],
+  },
+  {
+    date: '05 de agosto de 2026',
+    title: 'Corrigido: só era possível visualizar o primeiro documento de um grupo na revisão da Triagem',
+    description:
+      'Quando a IA agrupava mais de um comprovante sob a mesma sugestão, o botão "Visualizar" na revisão da Triagem sempre abria o primeiro documento do grupo — não havia como abrir os demais para confirmar ou descartar a sugestão com segurança.',
+    fixes: [
+      'O botão agora mostra "Visualizar (N documentos)" e cada nome de arquivo listado no grupo abre o visualizador diretamente nesse documento.',
+      'O visualizador ganhou navegação "anterior/próximo" com contador de posição, permitindo percorrer todos os documentos do grupo sem fechar e reabrir o modal.',
+    ],
+  },
+  {
     date: '05 de agosto de 2026',
     title: 'Novo botão "Extrato Avulso" para complementar um pacote já protocolado',
     description:

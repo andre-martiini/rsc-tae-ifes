@@ -26,6 +26,7 @@ import {
   GitMerge,
   PlusCircle,
   Copy,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import MainLayout from '../components/MainLayout';
@@ -38,7 +39,7 @@ import type { EstadoTriagem, SugestaoTriagem } from '../data/triagem';
 import { needsTranscription, transcribeDocument, type PrepStatus } from '../lib/transcricao';
 import { estimatePromptTokens } from '../lib/auditPrompt';
 import { calculateLancamentoPoints, formatPointValue } from '../lib/points';
-import { abrangenciaPeriodos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, periodoValido, periodosDoLancamento, mesclarPeriodos, intersecaoPeriodos } from '../lib/periodos';
+import { totalDiasPeriodos, unidadesAnoFracao, unidadesMes, periodosDoLancamento, intersecaoPeriodos } from '../lib/periodos';
 import { mapearUsoDocumentos, codigosItensDosUsos, encontrarDuplicatasPorConteudo, chaveConteudo } from '../lib/duplicateDetection';
 import { gerarLotesTriagem } from '../lib/triagemPrompt';
 import { parseResultadoTriagem } from '../lib/triagemParser';
@@ -46,8 +47,9 @@ import { pareceJson, pareceSerPrompt } from '../lib/jsonDetect';
 import { gerarPromptAuditoriaEstruturada, excedeLimiteTokens } from '../lib/auditoriaPrompt';
 import { parseResultadoAuditoria } from '../lib/auditoriaParser';
 import { getEligibleRscLevel } from '../lib/rsc';
-import { getLancamentoDocumentIds, itemDossierCode } from '../lib/documentOrdering';
+import { itemDossierCode } from '../lib/documentOrdering';
 import { deveAvisarQuantidadeDuplicada } from '../lib/quantidadeDuplicada';
+import { calcularNovoLancamento, calcularMesclagemLancamento, encontrarLancamentoParaMesclar } from '../lib/lancamentoVinculo';
 import { getDocumentBlob } from '../lib/documentStorage';
 import { cn } from '../lib/utils';
 
@@ -449,10 +451,32 @@ export default function Triagem() {
 
     setErrosColagem(resultado.erros);
 
+    const haProximoLoteTriagem = haMultiplosLotesTriagem && loteAtualTriagem < totalLotesTriagem - 1;
+
+    // Ao concluir o último (ou único) lote, sinaliza como "não classificável"
+    // todo documento da triagem que a IA simplesmente omitiu da resposta —
+    // sem isso, o documento some silenciosamente da revisão e só reaparece
+    // (sem explicação) na aba "Sem vínculo" de Documentos.
+    let sugestoesOmitidas: SugestaoTriagem[] = [];
+    if (!haProximoLoteTriagem) {
+      const sugestoesAcumuladas = [...(triagem?.sugestoes ?? []), ...resultado.sugestoes];
+      const idsComSugestao = new Set(sugestoesAcumuladas.flatMap((s) => s.documentos_ids));
+      const idsOmitidos = (triagem?.documento_ids ?? []).filter((id) => !idsComSugestao.has(id));
+      sugestoesOmitidas = idsOmitidos.map((docId) => ({
+        id: `sug-omitido-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        documentos_ids: [docId],
+        item_rsc_id: null,
+        confianca: 'baixa',
+        periodos: [],
+        justificativa: 'A IA não incluiu este documento na resposta colada — classifique manualmente ou descarte.',
+        status: 'pendente',
+      }));
+    }
+
     setTriagem((current) => ({
       schema_version: 1,
       documento_ids: current?.documento_ids ?? [],
-      sugestoes: [...(current?.sugestoes ?? []), ...resultado.sugestoes],
+      sugestoes: [...(current?.sugestoes ?? []), ...resultado.sugestoes, ...sugestoesOmitidas],
       ultima_colagem_em: new Date().toISOString(),
       erros_ultima_colagem: resultado.erros,
     }));
@@ -461,7 +485,6 @@ export default function Triagem() {
       toast.warning(`${resultado.erros.length} aviso(s) na validação. Verifique abaixo.`);
     }
 
-    const haProximoLoteTriagem = haMultiplosLotesTriagem && loteAtualTriagem < totalLotesTriagem - 1;
     if (haProximoLoteTriagem) {
       const proximo = loteAtualTriagem + 1;
       setUltimoLoteConcluidoTriagem(loteAtualTriagem + 1);
@@ -473,15 +496,24 @@ export default function Triagem() {
       return;
     }
 
-    if (resultado.sugestoes.length > 0) {
-      toast.success(`${resultado.sugestoes.length} sugestão(ões) processada(s).`);
+    if (sugestoesOmitidas.length > 0) {
+      toast.warning(
+        `${sugestoesOmitidas.length} documento(s) não apareceram na resposta da IA e foram marcados como "não classificável" para revisão manual.`,
+        { duration: 10000 },
+      );
+    }
+
+    if (resultado.sugestoes.length > 0 || sugestoesOmitidas.length > 0) {
+      if (resultado.sugestoes.length > 0) {
+        toast.success(`${resultado.sugestoes.length} sugestão(ões) processada(s).`);
+      }
       setEtapa('revisao');
     } else {
       toast.warning('Nenhuma sugestão válida encontrada na resposta colada.');
     }
 
     setRespostaColada('');
-  }, [respostaColada, triagemDocs, itensRSC, setTriagem, haMultiplosLotesTriagem, loteAtualTriagem, totalLotesTriagem]);
+  }, [respostaColada, triagemDocs, itensRSC, setTriagem, haMultiplosLotesTriagem, loteAtualTriagem, totalLotesTriagem, triagem]);
 
   // ── Preview de pontos ──────────────────────────────────────────────────
   const previewPontos = useCallback((sugestao: SugestaoTriagem): number => {
@@ -505,15 +537,12 @@ export default function Triagem() {
   // duplicada precisa saber se existe um lançamento-alvo para mesclar.
   const lancamentoExistenteParaMesclar = useCallback((sugestao: SugestaoTriagem) => {
     if (!sugestao.item_rsc_id) return null;
-    const candidatos = lancamentosDoServidor.filter(
-      (l) => l.item_rsc_id === sugestao.item_rsc_id && l.id !== sugestao.lancamento_id,
+    return encontrarLancamentoParaMesclar(
+      sugestao.item_rsc_id,
+      lancamentosDoServidor,
+      sugestao.documentos_ids,
+      sugestao.lancamento_id,
     );
-    if (candidatos.length === 0) return null;
-    // Prefere o lançamento que já compartilha documentos com a sugestão.
-    const comDocsEmComum = candidatos.find((l) =>
-      getLancamentoDocumentIds(l).some((id) => sugestao.documentos_ids.includes(id)),
-    );
-    return comDocsEmComum ?? candidatos[0];
   }, [lancamentosDoServidor]);
 
   // `handleMesclar` é declarado depois de `handleConfirmar` (ele próprio
@@ -567,19 +596,14 @@ export default function Triagem() {
     // reais das designações no dossiê e no prompt de auditoria (sem isso,
     // data_inicio/fim cairiam na data de hoje e induziriam a IA auditora a
     // apontar "período incorreto" em todo lançamento).
-    const periodos = sugestao.periodos.filter((p) => periodoValido(p));
-    const abrang = abrangenciaPeriodos(periodos);
-
-    let quantidade: number;
-    if (item.modo_calculo === 'auto_ano_fracao') {
-      quantidade = unidadesAnoFracao(totalDiasPeriodos(periodos));
-    } else if (item.modo_calculo === 'auto_mes') {
-      quantidade = unidadesMes(totalDiasPeriodos(periodos));
-    } else {
-      quantidade = quantidadeOverride ?? sugestao.quantidade_sugerida ?? Math.max(1, sugestao.documentos_ids.length);
-    }
-
-    const pontos = calculateLancamentoPoints(quantidade, item.pontos_por_unidade);
+    const resultado = calcularNovoLancamento({
+      servidorId: servidor.id,
+      item,
+      documentosIds: sugestao.documentos_ids,
+      periodos: sugestao.periodos,
+      quantidadeOverride: quantidadeOverride ?? sugestao.quantidade_sugerida,
+      dataReferencia: new Date().toISOString().slice(0, 10),
+    });
 
     // Guard contra dupla contagem de quantidade: se já existe lançamento do
     // mesmo item e a sugestão traz uma quantidade >= à dele sem trazer
@@ -590,12 +614,12 @@ export default function Triagem() {
       const alvo = lancamentoExistenteParaMesclar(sugestao);
       if (
         alvo &&
-        deveAvisarQuantidadeDuplicada(item.modo_calculo, [alvo], quantidade, sugestao.documentos_ids.length) &&
-        quantidade >= alvo.quantidade_informada
+        deveAvisarQuantidadeDuplicada(item.modo_calculo, [alvo], resultado.quantidade_informada, sugestao.documentos_ids.length) &&
+        resultado.quantidade_informada >= alvo.quantidade_informada
       ) {
         toast.warning(
           `O item ${itemDossierCode(item)} já tem um lançamento com ${formatPointValue(alvo.quantidade_informada)} unidade(s). ` +
-          `Esta sugestão declara ${formatPointValue(quantidade)} unidade(s) com apenas ${sugestao.documentos_ids.length} comprovante(s) — ` +
+          `Esta sugestão declara ${formatPointValue(resultado.quantidade_informada)} unidade(s) com apenas ${sugestao.documentos_ids.length} comprovante(s) — ` +
           'confirmar como lançamento novo pode contar as mesmas unidades duas vezes.',
           {
             duration: 14000,
@@ -613,30 +637,23 @@ export default function Triagem() {
       }
     }
 
-    const lancamentoData = {
-      servidor_id: servidor.id,
-      item_rsc_id: sugestao.item_rsc_id,
-      comprovantes_ids: sugestao.documentos_ids,
-      periodos: periodos.length > 0 ? periodos : undefined,
-      data_inicio: abrang?.inicio ?? new Date().toISOString().slice(0, 10),
-      data_fim: abrang?.fim ?? new Date().toISOString().slice(0, 10),
-      quantidade_informada: quantidade,
-      pontos_calculados: pontos,
-    };
-
-    const novoLancamento = addLancamento(lancamentoData);
+    const novoLancamento = addLancamento(resultado);
     atualizarSugestao(sugestao.id, {
       status: editado ? 'editada' : 'confirmada',
       lancamento_id: novoLancamento.id,
     });
-    toast.success(`Lançamento criado: +${formatPointValue(pontos)} pts`);
+    toast.success(`Lançamento criado: +${formatPointValue(resultado.pontos_calculados)} pts`);
     return true;
   }, [servidor, itensRSC, addLancamento, atualizarSugestao, usoDocumentos, lancamentoExistenteParaMesclar]);
 
   // ── Confirmar editada ─────────────────────────────────────────────────
   const handleConfirmarEditada = useCallback((sugestao: SugestaoTriagem) => {
     const item = itensRSC.find((i) => i.id === editItemRscId);
-    if (!item || !servidor) return;
+    if (!servidor) return;
+    if (!item) {
+      toast.error('Selecione um item do catálogo antes de confirmar.');
+      return;
+    }
 
     const isDateBased = item.modo_calculo === 'auto_ano_fracao' || item.modo_calculo === 'auto_mes';
     // Em itens manuais o diálogo não edita períodos — preserva os da sugestão.
@@ -659,45 +676,55 @@ export default function Triagem() {
     toast.info('Sugestão descartada.');
   }, [atualizarSugestao]);
 
+  // ── Retirar um documento de um grupo pendente ───────────────────────────
+  // Quando a IA agrupa documentos de itens diferentes sob a mesma sugestão,
+  // permite tirar só o documento errado do grupo em vez de descartar a
+  // sugestão inteira — ele vira uma sugestão "não classificável" própria,
+  // pronta para o usuário atribuir o item correto via "Atribuir item e confirmar".
+  const handleRetirarDocumentoDoGrupo = useCallback((sugestao: SugestaoTriagem, docId: string) => {
+    if (sugestao.documentos_ids.length <= 1) return;
+    atualizarSugestao(sugestao.id, {
+      documentos_ids: sugestao.documentos_ids.filter((id) => id !== docId),
+    });
+    const novaSugestao: SugestaoTriagem = {
+      id: `sug-movido-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      documentos_ids: [docId],
+      item_rsc_id: null,
+      confianca: 'baixa',
+      periodos: [],
+      justificativa: 'Documento retirado manualmente de outro grupo durante a revisão.',
+      status: 'pendente',
+    };
+    setTriagem((current) => (current ? { ...current, sugestoes: [...current.sugestoes, novaSugestao] } : current));
+    toast.info('Documento movido para "Não classificáveis" — use "Atribuir item e confirmar" para escolher o item correto.');
+  }, [atualizarSugestao, setTriagem]);
+
   const handleMesclar = useCallback((sugestao: SugestaoTriagem) => {
     if (!sugestao.item_rsc_id) return;
     const alvo = lancamentoExistenteParaMesclar(sugestao);
     const item = itensRSC.find((i) => i.id === sugestao.item_rsc_id);
     if (!alvo || !item) return;
 
-    const docsAtuais = getLancamentoDocumentIds(alvo);
-    const novosDocs = sugestao.documentos_ids.filter((id) => !docsAtuais.includes(id));
-    const comprovantes = [...docsAtuais, ...novosDocs];
-    const periodos = mesclarPeriodos([
-      ...periodosDoLancamento(alvo),
-      ...sugestao.periodos.filter(periodoValido),
-    ]);
-
-    let quantidade = alvo.quantidade_informada;
-    if (item.modo_calculo === 'auto_ano_fracao') {
-      quantidade = unidadesAnoFracao(totalDiasPeriodos(periodos));
-    } else if (item.modo_calculo === 'auto_mes') {
-      quantidade = unidadesMes(totalDiasPeriodos(periodos));
-    } else if (novosDocs.length > 0) {
-      quantidade = alvo.quantidade_informada + (sugestao.quantidade_sugerida ?? novosDocs.length);
-    }
-
-    const pontos = calculateLancamentoPoints(quantidade, item.pontos_por_unidade);
-    const abr = abrangenciaPeriodos(periodos);
-    const delta = pontos - alvo.pontos_calculados;
+    const resultado = calcularMesclagemLancamento({
+      item,
+      alvo,
+      documentosIds: sugestao.documentos_ids,
+      periodosNovos: sugestao.periodos,
+      quantidadeAdicional: sugestao.quantidade_sugerida,
+    });
 
     updateLancamento(alvo.id, {
-      comprovantes_ids: comprovantes,
-      periodos: periodos.length > 0 ? periodos : undefined,
-      quantidade_informada: quantidade,
-      pontos_calculados: pontos,
-      data_inicio: abr?.inicio ?? alvo.data_inicio,
-      data_fim: abr?.fim ?? alvo.data_fim,
+      comprovantes_ids: resultado.comprovantes_ids,
+      periodos: resultado.periodos,
+      quantidade_informada: resultado.quantidade_informada,
+      pontos_calculados: resultado.pontos_calculados,
+      data_inicio: resultado.data_inicio,
+      data_fim: resultado.data_fim,
     });
     atualizarSugestao(sugestao.id, { status: 'confirmada', lancamento_id: alvo.id });
     toast.success(
       `Sugestão mesclada ao lançamento existente do item ${itemDossierCode(item)}: ` +
-      `${novosDocs.length} comprovante(s) novo(s), ${delta >= 0 ? '+' : ''}${formatPointValue(delta)} pts.`,
+      `${resultado.novosDocumentos.length} comprovante(s) novo(s), ${resultado.deltaPontos >= 0 ? '+' : ''}${formatPointValue(resultado.deltaPontos)} pts.`,
     );
   }, [lancamentoExistenteParaMesclar, itensRSC, updateLancamento, atualizarSugestao]);
 
@@ -1494,10 +1521,20 @@ export default function Triagem() {
                                         <button
                                           type="button"
                                           onClick={() => handleViewDoc(doc, sugestaoDocs)}
-                                          className="break-all text-left hover:text-primary hover:underline"
+                                          className="min-w-0 flex-1 break-all text-left hover:text-primary hover:underline"
                                         >
                                           {doc.nome_arquivo}
                                         </button>
+                                        {sugestao.status === 'pendente' && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRetirarDocumentoDoGrupo(sugestao, doc.id)}
+                                            title="Retirar este documento do grupo (vai para Não classificáveis)"
+                                            className="shrink-0 text-gray-400 transition-colors hover:text-primary"
+                                          >
+                                            <ArrowRightLeft className="h-3 w-3" />
+                                          </button>
+                                        )}
                                       </li>
                                     ))}
                                     {hiddenCount > 0 && (
@@ -1751,20 +1788,22 @@ export default function Triagem() {
                                           Mesclar ao lançamento existente
                                         </Button>
                                       )}
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                          setEditingSugestaoId(sugestao.id);
-                                          setEditItemRscId(sugestao.item_rsc_id ?? '');
-                                          setEditPeriodos(sugestao.periodos.length > 0 ? [...sugestao.periodos] : [{ inicio: '', fim: '' }]);
-                                          setEditQuantidade(String(sugestao.quantidade_sugerida ?? (sugestao.documentos_ids.length || 1)));
-                                        }}
-                                      >
-                                        <PencilLine className="mr-1 h-3.5 w-3.5" />
-                                        Editar e confirmar
-                                      </Button>
                                     </>
+                                  )}
+                                  {sugestao.status === 'pendente' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setEditingSugestaoId(sugestao.id);
+                                        setEditItemRscId(sugestao.item_rsc_id ?? '');
+                                        setEditPeriodos(sugestao.periodos.length > 0 ? [...sugestao.periodos] : [{ inicio: '', fim: '' }]);
+                                        setEditQuantidade(String(sugestao.quantidade_sugerida ?? (sugestao.documentos_ids.length || 1)));
+                                      }}
+                                    >
+                                      <PencilLine className="mr-1 h-3.5 w-3.5" />
+                                      {sugestao.item_rsc_id ? 'Editar e confirmar' : 'Atribuir item e confirmar'}
+                                    </Button>
                                   )}
                                   {sugestao.status === 'pendente' && (
                                     <Button

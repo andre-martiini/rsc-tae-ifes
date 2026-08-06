@@ -12,3 +12,4 @@ scratch/
 # Temporários e planos de trabalho (não são código-fonte do projeto)
 .codex-tmp/
 docs/
+.vercel
