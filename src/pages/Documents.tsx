@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowRightLeft,
   ChevronDown,
   ChevronRight,
   Database,
@@ -28,11 +29,19 @@ import {
   compareDocumentsByDossierOrder,
   formatDossierDocumentLabel,
   getLancamentoDocumentIds,
+  itemDossierCode,
   sortLancamentosByDossierOrder,
 } from '../lib/documentOrdering';
 import { getDocumentBlob } from '../lib/documentStorage';
 import { prepareViewerBlob, shouldRenderAsPdf } from '../lib/documentViewer';
 import { generateLLMPrompt } from '../lib/llmPrompt';
+import {
+  calcularMesclagemLancamento,
+  calcularNovoLancamento,
+  encontrarLancamentoParaMesclar,
+  type Periodo,
+} from '../lib/lancamentoVinculo';
+import { formatPointValue } from '../lib/points';
 import { analyzePdfTranscription } from '../lib/pdfTranscription';
 import { cn } from '../lib/utils';
 import SingleAuditPromptModal from '../components/SingleAuditPromptModal';
@@ -277,7 +286,7 @@ function alertClass(tone: DocumentAlert['tone']) {
 }
 
 export default function Documents() {
-  const { servidor, itensRSC, documentos, lancamentos, updateLancamento, updateDocumento, deleteDocumento } = useAppContext();
+  const { servidor, itensRSC, documentos, lancamentos, addLancamento, updateLancamento, updateDocumento, deleteDocumento } = useAppContext();
   const navigate = useNavigate();
   const servidorId = servidor?.id ?? '';
   const [query, setQuery] = useState('');
@@ -294,6 +303,8 @@ export default function Documents() {
   const [pendingDeleteRow, setPendingDeleteRow] = useState<InventoryRow | null>(null);
   const [pendingUnlink, setPendingUnlink] = useState<{ row: InventoryRow; usage: DocumentUsage } | null>(null);
   const [unlinking, setUnlinking] = useState(false);
+  const [pendingVincular, setPendingVincular] = useState<{ row: InventoryRow; mode: 'vincular' | 'mover'; origemUsage?: DocumentUsage } | null>(null);
+  const [vinculando, setVinculando] = useState(false);
   const blobUrlsRef = useRef<Record<string, string>>({});
 
   const docsDoServidor = useMemo(
@@ -586,6 +597,74 @@ export default function Documents() {
     }
   };
 
+  const vincularDocumento = (params: { itemId: string; quantidade: number; periodos: Periodo[] }) => {
+    if (!pendingVincular || !servidor) return;
+    const { row, mode, origemUsage } = pendingVincular;
+    const item = itensRSC.find((i) => i.id === params.itemId);
+    if (!item) {
+      toast.error('Item não encontrado.');
+      return;
+    }
+    if (mode === 'mover' && origemUsage?.lancamento.item_rsc_id === params.itemId) {
+      toast.error('Este documento já está vinculado a este item.');
+      return;
+    }
+
+    setVinculando(true);
+    try {
+      if (mode === 'mover' && origemUsage) {
+        const idsAtuais = getLancamentoDocumentIds(origemUsage.lancamento);
+        updateLancamento(origemUsage.lancamento.id, {
+          comprovantes_ids: idsAtuais.filter((id) => id !== row.doc.id),
+        });
+      }
+
+      const alvo = encontrarLancamentoParaMesclar(
+        params.itemId,
+        lancamentosDoServidor,
+        [row.doc.id],
+        mode === 'mover' ? origemUsage?.lancamento.id : undefined,
+      );
+
+      if (alvo) {
+        const resultado = calcularMesclagemLancamento({
+          item,
+          alvo,
+          documentosIds: [row.doc.id],
+          periodosNovos: params.periodos,
+        });
+        updateLancamento(alvo.id, {
+          comprovantes_ids: resultado.comprovantes_ids,
+          periodos: resultado.periodos,
+          quantidade_informada: resultado.quantidade_informada,
+          pontos_calculados: resultado.pontos_calculados,
+          data_inicio: resultado.data_inicio,
+          data_fim: resultado.data_fim,
+        });
+        toast.success(
+          `Documento vinculado ao lançamento existente do item ${itemDossierCode(item)}: ` +
+          `${resultado.deltaPontos >= 0 ? '+' : ''}${formatPointValue(resultado.deltaPontos)} pts.`,
+        );
+      } else {
+        const resultado = calcularNovoLancamento({
+          servidorId: servidor.id,
+          item,
+          documentosIds: [row.doc.id],
+          periodos: params.periodos,
+          quantidadeOverride: params.quantidade,
+          dataReferencia: new Date().toISOString().slice(0, 10),
+        });
+        addLancamento(resultado);
+        toast.success(`Lançamento criado: +${formatPointValue(resultado.pontos_calculados)} pts.`);
+      }
+
+      setSelectedDocId(row.doc.id);
+      setPendingVincular(null);
+    } finally {
+      setVinculando(false);
+    }
+  };
+
   if (!servidor) {
     return <Navigate to="/" replace />;
   }
@@ -803,6 +882,8 @@ export default function Documents() {
                 onDelete={() => setPendingDeleteRow(selectedRow)}
                 onUnlinkUsage={(usage) => setPendingUnlink({ row: selectedRow, usage })}
                 onNavigateToItem={(itemId) => navigate(`/itens?item=${itemId}`)}
+                onVincular={() => setPendingVincular({ row: selectedRow, mode: 'vincular' })}
+                onMover={(usage) => setPendingVincular({ row: selectedRow, mode: 'mover', origemUsage: usage })}
               />
             ) : (
               <div className="flex h-full min-h-[420px] flex-col items-center justify-center gap-3 p-8 text-center">
@@ -850,6 +931,23 @@ export default function Documents() {
           onUnlinkAndDelete={() => void unlinkDocumentFromUsage({ ...pendingUnlink, deleteIfOrphan: true })}
         />
       )}
+      {pendingVincular && (
+        <VincularDocumentoModal
+          doc={pendingVincular.row.doc}
+          mode={pendingVincular.mode}
+          origemLabel={pendingVincular.origemUsage?.item ? `Item ${pendingVincular.origemUsage.item.numero} · Inciso ${pendingVincular.origemUsage.item.inciso}` : undefined}
+          itensRSC={itensRSC}
+          encontrarAlvo={(itemId) => encontrarLancamentoParaMesclar(
+            itemId,
+            lancamentosDoServidor,
+            [pendingVincular.row.doc.id],
+            pendingVincular.mode === 'mover' ? pendingVincular.origemUsage?.lancamento.id : undefined,
+          )}
+          submitting={vinculando}
+          onClose={() => setPendingVincular(null)}
+          onConfirm={vincularDocumento}
+        />
+      )}
     </MainLayout>
   );
 }
@@ -890,6 +988,8 @@ function DocumentDetail({
   onDelete,
   onUnlinkUsage,
   onNavigateToItem,
+  onVincular,
+  onMover,
 }: {
   row: InventoryRow;
   viewerUrl?: string;
@@ -901,6 +1001,8 @@ function DocumentDetail({
   onDelete: () => void;
   onUnlinkUsage: (usage: DocumentUsage) => void;
   onNavigateToItem: (itemId: string) => void;
+  onVincular: () => void;
+  onMover: (usage: DocumentUsage) => void;
 }) {
   const { doc } = row;
   const hash = doc.hash_arquivo ?? getDocumentHashes(doc)[0];
@@ -980,9 +1082,19 @@ function DocumentDetail({
             <div className="flex items-start gap-2">
               <p className="shrink-0 pt-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Vínculos</p>
               {row.usages.length === 0 ? (
-                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">
-                  0 vínculos
-                </span>
+                <div className="flex flex-1 flex-wrap items-center gap-2">
+                  <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-500">
+                    0 vínculos
+                  </span>
+                  <button
+                    type="button"
+                    onClick={onVincular}
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                  >
+                    <Link className="h-3 w-3" />
+                    Vincular a um item
+                  </button>
+                </div>
               ) : (
                 <div className="flex min-w-0 flex-1 flex-wrap gap-1">
                   {row.usages.map((usage) => (
@@ -994,6 +1106,15 @@ function DocumentDetail({
                         title={usage.item?.descricao ?? usage.lancamento.item_rsc_id}
                       >
                         {usage.item ? `Item ${usage.item.numero} · Inciso ${usage.item.inciso}` : 'Item não encontrado'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMover(usage)}
+                        className="inline-flex h-5 w-5 items-center justify-center border-l border-gray-200 text-blue-400 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                        title="Mover este documento para outro item"
+                        aria-label="Mover este documento para outro item"
+                      >
+                        <ArrowRightLeft className="h-3 w-3" />
                       </button>
                       <button
                         type="button"
@@ -1367,6 +1488,154 @@ function UnlinkDocumentModal({
               Este documento ainda é usado em outro vínculo, por isso ele será mantido no inventário.
             </p>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VincularDocumentoModal({
+  doc,
+  mode,
+  origemLabel,
+  itensRSC,
+  encontrarAlvo,
+  submitting,
+  onClose,
+  onConfirm,
+}: {
+  doc: Documento;
+  mode: 'vincular' | 'mover';
+  origemLabel?: string;
+  itensRSC: ItemRSC[];
+  encontrarAlvo: (itemId: string) => Lancamento | null;
+  submitting: boolean;
+  onClose: () => void;
+  onConfirm: (params: { itemId: string; quantidade: number; periodos: Periodo[] }) => void;
+}) {
+  const [itemId, setItemId] = useState('');
+  const [quantidade, setQuantidade] = useState('1');
+  const [periodos, setPeriodos] = useState<Periodo[]>([{ inicio: '', fim: '' }]);
+
+  const item = itensRSC.find((i) => i.id === itemId);
+  const isDateBased = item?.modo_calculo === 'auto_ano_fracao' || item?.modo_calculo === 'auto_mes';
+  const alvoExistente = itemId ? encontrarAlvo(itemId) : null;
+
+  const handleSubmit = () => {
+    if (!itemId) {
+      toast.error('Selecione um item do catálogo.');
+      return;
+    }
+    onConfirm({
+      itemId,
+      quantidade: parseInt(quantidade, 10) || 1,
+      periodos: periodos.filter((p) => p.inicio && p.fim),
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={submitting ? undefined : onClose}>
+      <div
+        className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="p-6">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
+            {mode === 'mover' ? <ArrowRightLeft className="h-5 w-5" /> : <Link className="h-5 w-5" />}
+          </div>
+
+          <h3 className="text-lg font-black tracking-tight text-gray-900">
+            {mode === 'mover' ? 'Mover documento para outro item' : 'Vincular documento a um item'}
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-gray-600">
+            {mode === 'mover'
+              ? `O documento será desvinculado de "${origemLabel ?? 'item atual'}" e vinculado ao item escolhido abaixo.`
+              : 'Escolha o item do rol ao qual este documento comprova. Se o item já tiver um lançamento, o documento é adicionado a ele.'}
+          </p>
+
+          <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3">
+            <p className="break-words text-sm font-bold text-gray-900">{doc.nome_arquivo}</p>
+          </div>
+
+          <div className="mt-4">
+            <label className="text-xs font-bold text-gray-700">Item do catálogo</label>
+            <select
+              value={itemId}
+              onChange={(e) => setItemId(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+              autoFocus
+            >
+              <option value="">— Selecione —</option>
+              {itensRSC.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.inciso}-{i.numero}: {i.descricao}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {itemId && alvoExistente && (
+            <p className="mt-2 text-xs font-semibold text-emerald-700">
+              Este item já tem um lançamento — o documento será adicionado a ele e a pontuação será recalculada.
+            </p>
+          )}
+
+          {itemId && !alvoExistente && !isDateBased && (
+            <div className="mt-3">
+              <label className="text-xs font-bold text-gray-700">
+                Quantidade de {item?.unidade_medida ?? 'unidades'}
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={quantidade}
+                onChange={(e) => setQuantidade(e.target.value)}
+                className="mt-1 w-24 rounded-lg border border-gray-200 px-3 py-1.5 text-sm"
+              />
+            </div>
+          )}
+
+          {itemId && isDateBased && (
+            <div className="mt-3">
+              <label className="text-xs font-bold text-gray-700">Período</label>
+              {periodos.map((p, pi) => (
+                <div key={pi} className="mt-1 flex gap-2">
+                  <input
+                    type="date"
+                    value={p.inicio}
+                    onChange={(e) => setPeriodos((prev) => prev.map((x, xi) => xi === pi ? { ...x, inicio: e.target.value } : x))}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+                  />
+                  <input
+                    type="date"
+                    value={p.fim}
+                    onChange={(e) => setPeriodos((prev) => prev.map((x, xi) => xi === pi ? { ...x, fim: e.target.value } : x))}
+                    className="rounded-lg border border-gray-200 px-2 py-1 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={submitting || !itemId}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting && <LoaderCircle className="h-4 w-4 animate-spin" />}
+              {mode === 'mover' ? 'Mover' : 'Vincular'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
