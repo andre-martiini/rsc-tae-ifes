@@ -29,7 +29,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { normalizeUploadToPdf, toPdfFile, SUPPORTED_UPLOAD_ACCEPT } from '../lib/documentConversion';
 import { computeDocumentHash, getDocumentBlob } from '../lib/documentStorage';
-import { calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
+import { addPointValues, calculateLancamentoPoints, formatPointValue, sumPointValues } from '../lib/points';
+import { comprovantesDoLancamento, mesclarConteudoNoLancamento, mesclarLancamentosDoItem } from '../lib/mesclarLancamentos';
 import { abrangenciaPeriodos, periodosDoLancamento, periodoValido, totalDiasBrutos, totalDiasPeriodos, unidadesAnoFracao, unidadesMes, type Periodo } from '../lib/periodos';
 import { cn, formatarDataSegura } from '../lib/utils';
 import { downloadFileFromUrl } from '../lib/urlDownloader';
@@ -117,6 +118,15 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
     quantidadeNova: number;
     docsNovos: number;
   } | null>(null);
+  // Escolha entre somar o novo conteúdo ao lançamento existente do item
+  // (caminho recomendado — ver lib/mesclarLancamentos.ts) ou criar um
+  // lançamento separado.
+  const [mergeChoice, setMergeChoice] = useState<{
+    lancamentoParaPrompt: any;
+    newDoc?: Documento;
+    alvo: Lancamento;
+  } | null>(null);
+  const [mergeAllOpen, setMergeAllOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const isSubmitted = processo.status === 'Em triagem';
@@ -566,7 +576,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         return;
       }
 
-      finishSave(lancamentoParaPrompt, newDoc);
+      continuarSalvamento(lancamentoParaPrompt, newDoc);
     } catch (error) {
       // Surface duplicate-upload validation and other recoverable messages.
       const message =
@@ -574,6 +584,86 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
       toast.error(message);
       setSaving(false);
     }
+  };
+
+  // Itens fragmentados em vários lançamentos disparam alertas de possível
+  // duplicidade na avaliação — quando o item já tem lançamento, o caminho
+  // recomendado é somar o novo conteúdo a ele, e criar lançamento separado
+  // passa a ser uma escolha explícita.
+  const continuarSalvamento = (lancamentoParaPrompt: any, newDoc?: Documento) => {
+    const alvo = itemLancamentos[itemLancamentos.length - 1];
+    if (alvo) {
+      setMergeChoice({ lancamentoParaPrompt, newDoc, alvo });
+      return;
+    }
+    finishSave(lancamentoParaPrompt, newDoc);
+  };
+
+  // Em itens com quantidade derivada dos períodos, a soma das quantidades não
+  // desconta dias cobertos por mais de um lançamento — só a pessoa pode dizer
+  // se a sobreposição é real, então avisa para recalcular.
+  const avisarSobreposicaoPeriodos = (periodosMesclados?: Periodo[]) => {
+    if (!item.quantidade_automatica || !periodosMesclados || periodosMesclados.length < 2) return;
+    if (totalDiasBrutos(periodosMesclados) > totalDiasPeriodos(periodosMesclados)) {
+      toast.warning(
+        'Os lançamentos somados têm períodos sobrepostos — confira a quantidade em "Editar lançamento" → "Calcular" para não contar dias em dobro.',
+        { duration: 12000 },
+      );
+    }
+  };
+
+  const executarMesclagem = () => {
+    if (!mergeChoice) return;
+    const { lancamentoParaPrompt, alvo } = mergeChoice;
+    const patch = mesclarConteudoNoLancamento(
+      alvo,
+      {
+        comprovantes_ids: lancamentoParaPrompt.comprovantes_ids ?? [],
+        quantidade_informada: lancamentoParaPrompt.quantidade_informada,
+        periodos: lancamentoParaPrompt.periodos,
+        observacao: lancamentoParaPrompt.observacao,
+      },
+      item.pontos_por_unidade,
+    );
+    setMergeChoice(null);
+    if (!updateLancamento(alvo.id, patch)) {
+      toast.error('Não foi possível somar ao lançamento existente.');
+      setSaving(false);
+      return;
+    }
+    avisarSobreposicaoPeriodos(patch.periodos);
+    toast.success(
+      `Comprovantes somados ao lançamento existente — total de ${formatPointValue(patch.quantidade_informada)} ${item.unidade_medida || 'unidade(s)'} (${formatPointValue(patch.pontos_calculados)} pts).`,
+    );
+    resetForm();
+    setTab('history');
+    onSaved();
+    setSaving(false);
+  };
+
+  const criarLancamentoSeparado = () => {
+    if (!mergeChoice) return;
+    const pendente = mergeChoice;
+    setMergeChoice(null);
+    finishSave(pendente.lancamentoParaPrompt, pendente.newDoc);
+  };
+
+  const executarMesclagemTotal = () => {
+    const resultado = mesclarLancamentosDoItem(itemLancamentos, item.pontos_por_unidade);
+    setMergeAllOpen(false);
+    if (!resultado) return;
+    if (!updateLancamento(resultado.alvoId, resultado.patch)) {
+      return void toast.error('Não foi possível mesclar os lançamentos.');
+    }
+    resultado.removerIds.forEach((id) => removeLancamento(id));
+    setEditingLancamentoId(null);
+    setEditingObservationId(null);
+    setPendingDeleteId(null);
+    avisarSobreposicaoPeriodos(resultado.patch.periodos);
+    toast.success(
+      `${resultado.removerIds.length + 1} lançamentos mesclados em um único — ${formatPointValue(resultado.patch.quantidade_informada)} ${item.unidade_medida || 'unidade(s)'} (${formatPointValue(resultado.patch.pontos_calculados)} pts). Nenhum arquivo foi apagado.`,
+    );
+    onSaved();
   };
 
   const finishSave = (lancamentoParaPrompt: any, newDoc?: Documento) => {
@@ -703,6 +793,9 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
   const handleAddFileToLancamento = async (e: React.ChangeEvent<HTMLInputElement>, lancamentoId: string) => {
     const files = e.target.files;
     if (!files || files.length === 0 || !servidor) return;
+    const lancamentoAlvo = lancamentos.find((l) => l.id === lancamentoId);
+    const idsJaAnexados = new Set(lancamentoAlvo ? comprovantesDoLancamento(lancamentoAlvo) : []);
+    const idsNovos = new Set<string>();
     setIsAddingFile(true);
     try {
       for (const f of Array.from(files) as File[]) {
@@ -728,9 +821,32 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
             );
           }
         }
+        if (!idsJaAnexados.has(result.doc.id)) idsNovos.add(result.doc.id);
         addComprovanteToLancamento(lancamentoId, result.doc.id);
       }
-      toast.success(`${files.length === 1 ? 'Arquivo adicionado' : `${files.length} arquivos adicionados`} ao lançamento.`);
+      const docsNovos = idsNovos.size;
+      // Em itens de contagem manual a quantidade não acompanha o anexo — sem
+      // esta oferta, o comprovante entra mas as unidades novas ficam de fora
+      // da pontuação (ou o usuário cria outro lançamento só para isso).
+      if (lancamentoAlvo && docsNovos > 0 && item.modo_calculo === 'manual') {
+        const qtdAtual = lancamentoAlvo.quantidade_informada;
+        const novaQtd = addPointValues(qtdAtual, docsNovos);
+        const novosPontos = calculateLancamentoPoints(novaQtd, item.pontos_por_unidade);
+        toast.success(`${docsNovos === 1 ? 'Arquivo adicionado' : `${docsNovos} arquivos adicionados`} ao lançamento.`, {
+          description: `A quantidade declarada segue ${formatPointValue(qtdAtual)}. Se os novos comprovantes provam unidades ainda não declaradas, some-as.`,
+          action: {
+            label: `Somar +${docsNovos}`,
+            onClick: () => {
+              if (!updateLancamento(lancamentoId, { quantidade_informada: novaQtd, pontos_calculados: novosPontos })) return;
+              toast.success(`Quantidade atualizada para ${formatPointValue(novaQtd)} (${formatPointValue(novosPontos)} pts).`);
+              onSaved();
+            },
+          },
+          duration: 15000,
+        });
+      } else {
+        toast.success(`${files.length === 1 ? 'Arquivo adicionado' : `${files.length} arquivos adicionados`} ao lançamento.`);
+      }
     } catch {
       toast.error('Não foi possível adicionar o arquivo.');
     } finally {
@@ -1044,6 +1160,25 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
         ) : (
           <div className="space-y-3">
             {itemLancamentos.length === 0 && <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">Nenhum lançamento registrado para este item ainda.</div>}
+            {!isSubmitted && itemLancamentos.length >= 2 && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Este item está dividido em {itemLancamentos.length} lançamentos</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-gray-600">
+                      Reunir todos os comprovantes em um lançamento único (quantidades somadas, períodos e observações preservados) facilita a conferência pela comissão e evita alertas de duplicidade na avaliação. Nenhum arquivo é apagado.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMergeAllOpen(true)}
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-white hover:bg-primary/90"
+                  >
+                    <Plus className="h-3.5 w-3.5" />Mesclar em um lançamento único
+                  </button>
+                </div>
+              </div>
+            )}
             {/* Input oculto para adicionar arquivo a lançamento existente */}
             <input
               ref={addFileInputRef}
@@ -1536,7 +1671,11 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
 
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Button
-                    onClick={() => finishSave(duplicateWarning.lancamentoParaPrompt, duplicateWarning.newDoc)}
+                    onClick={() => {
+                      const pendente = duplicateWarning;
+                      setDuplicateWarning(null);
+                      continuarSalvamento(pendente.lancamentoParaPrompt, pendente.newDoc);
+                    }}
                     className="flex-1 bg-amber-600 font-bold text-white hover:bg-amber-700 shadow-lg shadow-amber-200"
                   >
                     Prosseguir mesmo assim
@@ -1607,7 +1746,7 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
                     onClick={() => {
                       const pendente = quantidadeWarning;
                       setQuantidadeWarning(null);
-                      finishSave(pendente.lancamentoParaPrompt, pendente.newDoc);
+                      continuarSalvamento(pendente.lancamentoParaPrompt, pendente.newDoc);
                     }}
                     className="text-gray-500 hover:bg-gray-100"
                   >
@@ -1619,6 +1758,135 @@ export default function ItemDetailPanel({ item, onSaved }: { item: ItemRSC; onSa
           </div>
         )}
       </AnimatePresence>
+
+      {/* Escolha: somar ao lançamento existente ou criar separado */}
+      <AnimatePresence>
+        {mergeChoice && (() => {
+          const qtdAlvo = mergeChoice.alvo.quantidade_informada;
+          const qtdNova = mergeChoice.lancamentoParaPrompt.quantidade_informada as number;
+          const docsNovos = (mergeChoice.lancamentoParaPrompt.comprovantes_ids ?? []).length;
+          const qtdTotal = addPointValues(qtdAlvo, qtdNova);
+          const pontosTotal = calculateLancamentoPoints(qtdTotal, item.pontos_por_unidade);
+          const unidade = item.unidade_medida || 'unidade(s)';
+          return (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+              >
+                <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-blue-50" />
+                <div className="absolute -left-8 -bottom-8 h-24 w-24 rounded-full bg-green-50" />
+
+                <div className="relative p-8">
+                  <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-inner">
+                    <CheckCircle2 className="h-8 w-8" />
+                  </div>
+
+                  <h3 className="mb-3 text-xl font-black tracking-tight text-gray-900">Este item já tem um lançamento</h3>
+
+                  <div className="space-y-4">
+                    <p className="text-sm leading-relaxed text-gray-600">
+                      O total do item é a <strong className="text-gray-900">soma dos lançamentos</strong>. Reunir todos os
+                      comprovantes em um lançamento único facilita a conferência pela comissão e evita alertas de
+                      duplicidade na avaliação.
+                    </p>
+
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+                      <p>Lançamento existente: <strong>{formatPointValue(qtdAlvo)} {unidade}</strong></p>
+                      <p>Novo conteúdo: <strong>{formatPointValue(qtdNova)} {unidade}</strong> · {docsNovos} comprovante(s)</p>
+                      <p className="mt-1 border-t border-gray-200 pt-1">
+                        Resultado da soma: <strong className="text-gray-900">{formatPointValue(qtdTotal)} {unidade} ({formatPointValue(pontosTotal)} pts)</strong>
+                      </p>
+                    </div>
+
+                    {itemLancamentos.length >= 2 && (
+                      <p className="text-xs text-gray-500">
+                        O conteúdo será somado ao lançamento mais recente. Para reunir também os demais, use
+                        "Mesclar em um lançamento único" na aba de lançamentos.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-8 flex flex-col gap-3">
+                    <Button
+                      onClick={executarMesclagem}
+                      className="bg-primary font-bold text-white hover:bg-primary/90 shadow-lg shadow-primary/20"
+                    >
+                      Somar ao lançamento existente (recomendado)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={criarLancamentoSeparado}
+                      className="border-gray-200 text-gray-700 hover:bg-gray-50"
+                    >
+                      Criar lançamento separado
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setMergeChoice(null);
+                        setSaving(false);
+                      }}
+                      className="text-gray-500 hover:bg-gray-100"
+                    >
+                      Cancelar e voltar ao formulário
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* Confirmação da mesclagem de todos os lançamentos do item */}
+      {mergeAllOpen && (() => {
+        const qtdTotal = itemLancamentos.reduce((soma, l) => addPointValues(soma, l.quantidade_informada), 0);
+        const pontosTotal = calculateLancamentoPoints(qtdTotal, item.pontos_por_unidade);
+        const unidade = item.unidade_medida || 'unidade(s)';
+        return (
+          <div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={() => setMergeAllOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="merge-all-title"
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-primary/20 bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="p-6">
+                <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <h3 id="merge-all-title" className="text-lg font-black tracking-tight text-gray-900">Mesclar {itemLancamentos.length} lançamentos em um único?</h3>
+                <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-gray-600">
+                  <li>Todos os comprovantes ficam reunidos no lançamento mais antigo do item.</li>
+                  <li>As quantidades são somadas: <strong className="text-gray-900">{formatPointValue(qtdTotal)} {unidade} ({formatPointValue(pontosTotal)} pts)</strong> — a pontuação total do item não muda.</li>
+                  <li>Períodos e observações de todos os lançamentos são preservados.</li>
+                  <li>Nenhum arquivo é apagado do inventário.</li>
+                </ul>
+                <div className="mt-6 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={executarMesclagemTotal}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-primary/90"
+                  >
+                    Mesclar lançamentos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMergeAllOpen(false)}
+                    className="rounded-lg px-4 py-2 text-sm font-semibold text-gray-500 transition-colors hover:bg-gray-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
