@@ -14,6 +14,20 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '07 de agosto de 2026',
+    title: 'Lançamento único por item: o sistema agora ajuda a reunir todos os comprovantes juntos',
+    description:
+      'Feedback de usuários: quem anexava comprovantes aos poucos acabava com o mesmo item dividido em vários lançamentos — na avaliação, isso dispara alertas de possível duplicidade de quantidade e dificulta a conferência. O total do item é a soma dos lançamentos, então concentrar tudo num lançamento único não muda a pontuação, só elimina a ambiguidade.',
+    features: [
+      'Ao salvar um lançamento de um item que já tem lançamento, o sistema agora pergunta e recomenda "Somar ao lançamento existente" — os comprovantes são reunidos, as quantidades somadas e os períodos preservados. Criar um lançamento separado continua possível, como escolha explícita.',
+      'Itens já divididos ganharam o botão "Mesclar em um lançamento único" na aba de lançamentos: reúne comprovantes, soma quantidades e concatena observações, sem apagar nenhum arquivo.',
+      'Ao usar "Adicionar arquivo" em um lançamento existente (item de contagem manual), o aviso de sucesso agora oferece somar as novas unidades à quantidade declarada com um clique.',
+    ],
+    improvements: [
+      'Em itens com quantidade calculada por períodos, a mesclagem avisa quando os lançamentos somados têm períodos sobrepostos, para recalcular a quantidade e não contar dias em dobro.',
+    ],
+  },
+  {
     date: '06 de agosto de 2026',
     title: 'Novos jeitos de classificar e corrigir documentos, na Triagem e em Documentos',
     description:
