@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Clipboard, X, ChevronLeft, Sparkles, AlertCircle, FileCheck } from 'lucide-react';
+import { AlertTriangle, Clipboard, Download, X, ChevronLeft, Sparkles, AlertCircle, FileCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ItemRSC, Lancamento, Servidor } from '../data/mock';
 import { parseResultadoAuditoria } from '../lib/auditoriaParser';
@@ -17,6 +17,20 @@ type Props = {
   lancamento: Lancamento;
   prompt: string;
 };
+
+function downloadPromptFile(prompt: string, servidor: Servidor | null | undefined, lancamento: Lancamento) {
+  const siape = servidor?.siape?.replace(/\D/g, '') || 'servidor';
+  const date = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([prompt], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `prompt-validacao-rsc-${siape}-${lancamento.id || 'item'}-${date}.txt`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
 
 export default function SingleAuditPromptModal({
   open,
@@ -229,6 +243,16 @@ export default function SingleAuditPromptModal({
                 >
                   <Clipboard className="mr-1.5 h-3.5 w-3.5" />
                   Copiar Prompt
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => downloadPromptFile(prompt, servidor, lancamento)}
+                  disabled={!prompt}
+                >
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                  Baixar
                 </Button>
                 <Button
                   type="button"

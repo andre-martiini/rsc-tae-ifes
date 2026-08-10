@@ -933,6 +933,9 @@ export default function Triagem() {
                   <p className="mt-1 text-xs text-gray-400">
                     PDF, imagens (JPG, PNG) ou texto — todos os formatos suportados
                   </p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    Dica: envie poucos documentos por vez — lotes muito grandes podem falhar a transcrição de alguns arquivos
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
