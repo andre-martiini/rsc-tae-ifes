@@ -14,6 +14,18 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '10 de agosto de 2026',
+    title: 'Dica para evitar falhas na transcrição e novo botão de baixar o prompt de validação',
+    description:
+      'Feedback de usuário: o envio de muitos documentos de uma vez na Triagem podia deixar alguns sem transcrever, e para colar em uma IA externa, copiar e colar era menos confiável do que baixar o texto como arquivo.',
+    features: [
+      'Botão "Baixar" no prompt de validação de um único lançamento (em Documentos e em "Validar com IA"): baixa o prompt como arquivo .txt, ao lado do "Copiar Prompt" já existente — mesmo padrão já usado nos prompts de Auditoria, Memorial e Triagem.',
+    ],
+    improvements: [
+      'A etapa de upload de documentos da Triagem agora exibe a dica "envie poucos documentos por vez" para reduzir o risco de transcrições não concluídas em lotes grandes.',
+    ],
+  },
+  {
     date: '07 de agosto de 2026',
     title: 'Lançamento único por item: o sistema agora ajuda a reunir todos os comprovantes juntos',
     description:
