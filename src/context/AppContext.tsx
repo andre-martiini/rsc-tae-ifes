@@ -11,6 +11,7 @@ import {
 import type { EstadoTriagem, SugestaoTriagem } from '../data/triagem';
 import type { EstadoAuditoria, OperacaoAuditoria, OperacaoParseada, OrigemAuditoria, TipoOperacao } from '../data/auditoria';
 import { mergeOperacoesPorOrigem } from '../lib/auditoriaMerge';
+import { migrarAuditoriaVerificada } from '../lib/migrateAuditoriaVerificada';
 import {
   buildInstitutionReferenceFileName,
   normalizeInstitutionDocumentLink,
@@ -111,7 +112,12 @@ function normalizeAuditoria(estado: EstadoAuditoria | null): EstadoAuditoria | n
       criada_em: op.criada_em ?? agora,
     };
   });
-  return mudou ? { ...estado, operacoes } : estado;
+  const normalizado = mudou ? { ...estado, operacoes } : estado;
+  const migracao = migrarAuditoriaVerificada(normalizado);
+  if (migracao.stats.migradas > 0) {
+    console.info('[migração auditoria/verificada]', migracao.stats);
+  }
+  return migracao.estado;
 }
 
 function loadAuditoria(key: string): EstadoAuditoria | null {
@@ -899,8 +905,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Aplica ao dossiê todas as operações aprovadas, na ordem segura, e as marca
-  // como 'aplicada' (histórico). 'sinalizar' aprovado é apenas registrado e
-  // vira 'rejeitada' (não há auto-fix). Lógica antes duplicada no modal/Triagem.
+  // como 'aplicada' (histórico). `sinalizar` nunca altera lançamento/documento;
+  // um eventual registro legado aprovado vira apenas `verificada`.
   const aplicarOperacoesAuditoria = (): { aplicadas: number; puladas: number } => {
     const aprovadas = (auditoria?.operacoes ?? []).filter((o) => o.status === 'aprovada');
     if (aprovadas.length === 0) return { aplicadas: 0, puladas: 0 };
@@ -987,14 +993,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Marca aplicadas (histórico) e resolve 'sinalizar' aprovado como rejeitado.
+    // Marca aplicadas (histórico) e resolve eventual `sinalizar` legado aprovado.
     setAuditoria((current) => {
       if (!current) return current;
       return {
         ...current,
         operacoes: current.operacoes.map((op) => {
           if (aplicadasIds.has(op.id)) return { ...op, status: 'aplicada' as const, aplicada_em: agora };
-          if (op.tipo === 'sinalizar' && op.status === 'aprovada') return { ...op, status: 'rejeitada' as const };
+          if (op.tipo === 'sinalizar' && op.status === 'aprovada') return { ...op, status: 'verificada' as const };
           return op;
         }),
       };

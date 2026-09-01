@@ -8,7 +8,7 @@ import type {
 /**
  * Mescla as operações recém-extraídas de uma auditoria (Consolidar ou Dossiê
  * Inteligente) no estado persistido do módulo, seguindo a regra "substituir por
- * origem": as pendentes/aprovadas/rejeitadas da MESMA origem são descartadas e
+ * origem": as pendentes/aprovadas/rejeitadas/verificadas da MESMA origem são descartadas e
  * substituídas pelas novas; as já APLICADAS daquela origem (histórico) e todas
  * as operações de OUTRAS origens permanecem intactas.
  */

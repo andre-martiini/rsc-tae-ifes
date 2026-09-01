@@ -170,6 +170,16 @@ describe('validação do JSON de exemplo no prompt de auditoria', () => {
   });
 });
 
+describe('mensagem de falha da leitura automática', () => {
+  it('atribui a limitação à automação e orienta conferência humana', () => {
+    const prompt = gerarPromptAuditoriaEstruturada(makeParams());
+    expect(prompt).toContain('A leitura automática não conseguiu interpretar o documento');
+    expect(prompt).toContain('isso não significa que o arquivo esteja ilegível para uma pessoa');
+    expect(prompt).toContain('se estiver legível, marque como verificado');
+    expect(prompt).not.toContain('A transcrição está ilegível e não foi possível confirmar o conteúdo');
+  });
+});
+
 // ======================== FASE 2 — TESTES ADVERSARIAIS ========================
 
 describe('proteção contra prompt injection (auditoria)', () => {

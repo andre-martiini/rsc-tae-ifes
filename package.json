@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "export-rol": "tsx scripts/export-rol.ts",
-    "check-rol": "tsx scripts/export-rol.ts --check"
+    "check-rol": "tsx scripts/export-rol.ts --check",
+    "migrate:auditoria-verificada": "tsx scripts/migrate-auditoria-verificada.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
