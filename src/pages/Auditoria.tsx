@@ -9,6 +9,7 @@ import {
   Eye,
   ExternalLink,
   Info,
+  HelpCircle,
   RotateCcw,
   Sparkles,
   FileCheck,
@@ -32,6 +33,7 @@ import { getLancamentoDocumentIds, itemDossierCode } from '../lib/documentOrderi
 import { formatPointValue } from '../lib/points';
 import type { Periodo } from '../lib/periodos';
 import { formatarDataSegura } from '../lib/utils';
+import { concluirVerificacao } from '../lib/auditoriaVerificacao';
 
 const SEVERIDADE_LABEL: Record<string, string> = { alta: 'Alta', media: 'Média', baixa: 'Baixa' };
 const SEVERIDADE_CLASS: Record<string, string> = {
@@ -58,6 +60,7 @@ const STATUS_LABEL: Record<StatusOperacao, string> = {
   pendente: 'Pendente',
   aprovada: 'Aprovada',
   rejeitada: 'Rejeitada',
+  verificada: 'Verificada',
   aplicada: 'Aplicada',
 };
 const ORIGEM_ICON: Record<OrigemAuditoria, typeof FileCheck> = {
@@ -169,7 +172,7 @@ export default function Auditoria() {
   const operacoes = auditoria?.operacoes ?? [];
 
   const contadores = useMemo(() => {
-    const c = { pendente: 0, aprovada: 0, rejeitada: 0, aplicada: 0 };
+    const c = { pendente: 0, aprovada: 0, rejeitada: 0, verificada: 0, aplicada: 0 };
     for (const op of operacoes) c[op.status] += 1;
     return c;
   }, [operacoes]);
@@ -184,7 +187,7 @@ export default function Auditoria() {
 
   const opsAprovadas = contadores.aprovada;
   const revisaveis = operacoes.length - contadores.aplicada;
-  const revisadas = contadores.aprovada + contadores.rejeitada;
+  const revisadas = contadores.aprovada + contadores.rejeitada + contadores.verificada;
 
   const projecao = useMemo(
     () => projetarPontuacao(operacoes, lancamentos, itensRSC),
@@ -218,6 +221,7 @@ export default function Auditoria() {
     { key: 'pendente', label: `Pendentes (${contadores.pendente})` },
     { key: 'aprovada', label: `Aprovadas (${contadores.aprovada})` },
     { key: 'rejeitada', label: `Rejeitadas (${contadores.rejeitada})` },
+    { key: 'verificada', label: `Verificadas (${contadores.verificada})` },
     { key: 'aplicada', label: `Aplicadas (${contadores.aplicada})` },
   ];
 
@@ -244,6 +248,19 @@ export default function Auditoria() {
               </p>
             </div>
           </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setGuiaVisivel(true)}
+              className="text-xs font-bold text-blue-700"
+              aria-label="Reabrir guia: como funciona a Auditoria"
+              title="Como funciona esta tela"
+            >
+              <HelpCircle className="mr-1.5 h-3.5 w-3.5" />
+              Como funciona
+            </Button>
           {operacoes.length > 0 && (
             <Button
               type="button"
@@ -259,13 +276,14 @@ export default function Auditoria() {
               Limpar tudo
             </Button>
           )}
+          </div>
         </header>
 
         {operacoes.length === 0 ? (
           <EstadoVazio navigate={navigate} />
         ) : (
           <>
-            {/* Guia didático (fecha e não volta) */}
+            {/* Guia didático — pode ser reaberto pelo botão persistente no cabeçalho */}
             {guiaVisivel && (
               <div className="rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -363,7 +381,7 @@ export default function Auditoria() {
                   const aplicada = op.status === 'aplicada';
                   const isSinalizar = op.tipo === 'sinalizar';
                   const efeito = calcularEfeitoOperacao(op, lanc, itensById);
-                  const statusLabel = isSinalizar && op.status === 'rejeitada' ? 'Verificada' : STATUS_LABEL[op.status];
+                  const statusLabel = STATUS_LABEL[op.status];
                   const docsRemoverIds = new Set(op.documentos_remover ?? []);
                   const docsRemover = docsDaOperacao.filter((d) => docsRemoverIds.has(d.id));
                   // Rede de segurança: a IA reduziu a quantidade abaixo do nº de
@@ -380,7 +398,7 @@ export default function Auditoria() {
                       className={`rounded-2xl border p-4 transition-all ${
                         op.status === 'aprovada'
                           ? 'border-emerald-200 bg-emerald-50/30'
-                          : op.status === 'rejeitada'
+                          : op.status === 'rejeitada' || op.status === 'verificada'
                             ? 'border-gray-100 bg-gray-50/40 opacity-80'
                             : aplicada
                               ? 'border-violet-100 bg-violet-50/30'
@@ -399,11 +417,11 @@ export default function Auditoria() {
                             <OrigemIcon className="h-3 w-3" />
                             {ORIGEM_LABEL[op.origem]}
                           </span>
-                          {(op.status === 'aprovada' || op.status === 'rejeitada' || aplicada) && (
+                          {(op.status === 'aprovada' || op.status === 'rejeitada' || op.status === 'verificada' || aplicada) && (
                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                               op.status === 'aprovada' ? 'bg-emerald-100 text-emerald-700'
                               : aplicada ? 'bg-violet-100 text-violet-700'
-                              : isSinalizar ? 'bg-blue-100 text-blue-700'
+                              : op.status === 'verificada' ? 'bg-blue-100 text-blue-700'
                               : 'bg-gray-200 text-gray-600'
                             }`}>
                               {statusLabel}
@@ -434,6 +452,7 @@ export default function Auditoria() {
                             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                             <div>
                               <p className="font-bold">Nenhuma alteração automática será feita.</p>
+                              <p className="mt-0.5 font-semibold">Concluir a verificação apenas registra sua conferência: não altera nem apaga o lançamento ou seus documentos.</p>
                               <p className="mt-0.5">{op.descricao || 'Confira o(s) documento(s) e o lançamento manualmente.'}</p>
                             </div>
                           </div>
@@ -530,7 +549,7 @@ export default function Auditoria() {
                             {op.status === 'pendente' && isSinalizar && (
                               <button
                                 type="button"
-                                onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'rejeitada' })}
+                                onClick={() => atualizarOperacaoAuditoria(op.id, concluirVerificacao(op))}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100"
                               >
                                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -557,7 +576,7 @@ export default function Auditoria() {
                                 </button>
                               </>
                             )}
-                            {(op.status === 'aprovada' || op.status === 'rejeitada') && (
+                            {(op.status === 'aprovada' || op.status === 'rejeitada' || op.status === 'verificada') && (
                               <button
                                 type="button"
                                 onClick={() => atualizarOperacaoAuditoria(op.id, { status: 'pendente' })}

@@ -14,6 +14,20 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '01 de setembro de 2026',
+    title: 'Auditoria mais clara: guia reabrível e verificação manual sem ambiguidade',
+    description:
+      'Feedback de uma auditora interna do Ifes: depois de fechar o guia da tela, não havia como consultar novamente a explicação de que revisar propostas não apaga documentos e que somente o botão "Aplicar" altera o dossiê.',
+    improvements: [
+      'O guia da Auditoria agora pode ser reaberto a qualquer momento pelo botão "Como funciona" no cabeçalho.',
+      'Os cards de "Verificação manual" explicam no próprio local da decisão que concluir a conferência não altera nem apaga o lançamento ou seus documentos.',
+      'Alertas de leitura automática agora deixam claro que a limitação pode ser da automação e que um documento perfeitamente legível para uma pessoa deve ser conferido manualmente.',
+    ],
+    fixes: [
+      '"Concluir verificação" agora registra o estado correto "Verificada", em vez de reutilizar internamente o estado "Rejeitada". Registros antigos desse tipo são corrigidos automaticamente sem afetar propostas de outros tipos.',
+    ],
+  },
+  {
     date: '10 de agosto de 2026',
     title: 'Dica para evitar falhas na transcrição e novo botão de baixar o prompt de validação',
     description:

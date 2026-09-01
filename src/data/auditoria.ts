@@ -6,7 +6,7 @@ export type TipoOperacao =
   | 'sinalizar';            // apenas sinalizar problema (sem auto-fix)
 
 export type SeveridadeOperacao = 'alta' | 'media' | 'baixa';
-export type StatusOperacao = 'pendente' | 'aprovada' | 'rejeitada' | 'aplicada';
+export type StatusOperacao = 'pendente' | 'aprovada' | 'rejeitada' | 'verificada' | 'aplicada';
 
 /** De qual auditoria a operação veio. */
 export type OrigemAuditoria = 'consolidar' | 'triagem';
