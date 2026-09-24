@@ -14,6 +14,18 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '24 de setembro de 2026',
+    title: 'Servidores aposentados podem montar o dossiê, com aviso de falta de previsão normativa',
+    description:
+      'Solicitação da Gestão de Pessoas: servidores TAE aposentados estão abrindo processos de RSC e não conseguiam concluir o dossiê, porque a base pública lista apenas servidores ativos e a situação "Inativo" bloqueava a geração dos documentos.',
+    improvements: [
+      'A situação funcional "Inativo (aposentado)" deixa de bloquear a geração do dossiê. O checklist da Consolidação mostra um alerta informando que o Decreto nº 13.048/2026 destina o RSC-PCCTAE a servidores ativos e que o pedido está sujeito a indeferimento.',
+      'O Requerimento e o Memorial gerados em PDF passam a identificar a situação "Inativo (aposentado)" junto com esse aviso, para que a comissão veja a condição logo na identificação do servidor.',
+      'A lista de nomes da tela inicial passa a incluir cerca de 61 mil servidores técnico-administrativos aposentados das instituições federais de ensino (cadastro do Portal da Transparência, competência julho/2026), identificados como "Aposentado(a)". Ao escolher um deles, a situação funcional já vem como "Inativo (aposentado)".',
+      'Quem não aparece na lista recebe a orientação de digitar nome e SIAPE manualmente. Nesse caso a situação funcional não é mais presumida: ela deve ser escolhida no Perfil.',
+    ],
+  },
+  {
     date: '01 de setembro de 2026',
     title: 'Auditoria mais clara: guia reabrível e verificação manual sem ambiguidade',
     description:

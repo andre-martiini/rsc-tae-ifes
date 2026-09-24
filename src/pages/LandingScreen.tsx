@@ -38,8 +38,11 @@ import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE } from '../data/tutorialVideo';
 import {
   clearDatabase,
   getServidoresCount,
+  getStoredBaseVersion,
   saveServidoresBatch,
   searchServidorByName,
+  SERVIDORES_BASE_VERSION,
+  setStoredBaseVersion,
   type ServidorBase,
 } from '../lib/servidoresStorage';
 
@@ -63,7 +66,7 @@ export default function LandingScreen() {
 
   React.useEffect(() => {
     getServidoresCount().then(async (count) => {
-      if (count === 0) {
+      if (count === 0 || getStoredBaseVersion() !== SERVIDORES_BASE_VERSION) {
         try {
           const response = await fetch('/cadastro_base.csv');
           if (response.ok) {
@@ -103,6 +106,7 @@ export default function LandingScreen() {
 
               if (parsedRecords.length > 0) {
                 await saveServidoresBatch(parsedRecords);
+                setStoredBaseVersion(SERVIDORES_BASE_VERSION);
               }
             }
           }
@@ -198,7 +202,10 @@ export default function LandingScreen() {
     cargo: selectedServidorBase?.descricao_cargo || '',
     nivel_classificacao: (selectedServidorBase?.classe_cargo as any) || undefined,
     escolaridade_atual: form.escolaridade_atual,
-    situacao_funcional: selectedServidorBase?.situacao_vinculo?.toLowerCase().includes('ativo') ? 'Ativo' : 'Inativo',
+    // Sem registro na base pública (ex.: aposentado), a situação fica em aberto e é definida no Perfil.
+    situacao_funcional: selectedServidorBase
+      ? (selectedServidorBase.situacao_vinculo.toLowerCase().includes('ativo') ? 'Ativo' : 'Inativo')
+      : undefined,
     database_siape_prefix: selectedServidorBase?.matricula || undefined,
     database_cargo: selectedServidorBase?.descricao_cargo || undefined,
     database_classe: selectedServidorBase?.classe_cargo || undefined,
@@ -444,12 +451,17 @@ export default function LandingScreen() {
                               >
                                 <span className="text-sm font-semibold text-gray-900">{item.nome}</span>
                                 <span className="text-[10px] text-gray-500 uppercase font-medium">
-                                  {item.descricao_cargo} · {item.org_lotacao} · Prefixo: {item.matricula}
+                                  {item.descricao_cargo} · {item.org_lotacao} · Prefixo: {item.matricula}{item.situacao_vinculo === 'APOSENTADO' ? ' · Aposentado(a)' : ''}
                                 </span>
                               </button>
                             </li>
                           ))}
                         </ul>
+                      )}
+                      {!selectedServidorBase && form.nome_completo.trim().length >= 3 && (
+                        <p className="text-[11px] font-medium text-gray-500 mt-1 leading-normal">
+                          Não encontrou seu nome na lista? Digite o nome completo e o SIAPE manualmente. Se você é aposentado(a), informe a situação funcional &quot;Inativo (aposentado)&quot; no Perfil.
+                        </p>
                       )}
                     </div>
 

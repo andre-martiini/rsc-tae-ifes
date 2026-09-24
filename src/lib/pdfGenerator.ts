@@ -16,7 +16,7 @@ import {
   sortLancamentosByDossierOrder,
 } from './documentOrdering';
 import { addPointValues, formatPointValue, sumPointValues } from './points';
-import { getDistinctRscCriterionCount } from './rsc';
+import { AVISO_SERVIDOR_INATIVO, getDistinctRscCriterionCount, isServidorInativo } from './rsc';
 import { formatarDataSegura, sanitizeForTag, sanitizeObservacaoForTag } from './utils';
 import { periodosDoLancamento } from './periodos';
 import { parseInlineMarkdown, dividirEmBlocosMarkdown } from './markdownLite';
@@ -989,6 +989,11 @@ export async function generateRequerimentoFormal(
   writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  if (isServidorInativo(servidor)) {
+    writer.keyValue('Situação funcional:', 'Inativo (aposentado)');
+    writer.text(sanitize(AVISO_SERVIDOR_INATIVO), { size: 8, color: COLORS.muted });
+    writer.gap(6);
+  }
 
   const excedente = nivelPleiteado ? Math.max(0, totalPontos - nivelPleiteado.pontosMinimos) : 0;
 
@@ -1185,6 +1190,11 @@ export async function generateMemorialDescritivo(
   writer.keyValue('Nível de Classificação:', nivelClassStr);
   writer.keyValue('Lotação:', sanitize(servidor.lotacao ?? '-'));
   writer.keyValue('Função/Encargo:', sanitize(servidor.funcao_encargo ?? '-'));
+  if (isServidorInativo(servidor)) {
+    writer.keyValue('Situação funcional:', 'Inativo (aposentado)');
+    writer.text(sanitize(AVISO_SERVIDOR_INATIVO), { size: 8, color: COLORS.muted });
+    writer.gap(6);
+  }
   writer.keyValue('Nível de RSC pleiteado:', sanitize(nivelElegivel?.label ?? processo?.nivel_pleiteado_id ?? '-'));
 
   writer.section('2. Trajetória profissional, saberes e competências');
