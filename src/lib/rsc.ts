@@ -147,6 +147,15 @@ export function getDistinctRscCriterionCount(lancamentos: Lancamento[], items: I
 export interface FunctionalEligibility {
   ok: boolean;
   reasons: string[];
+  /** Alertas que não impedem a emissão do pedido (ex.: servidor inativo). */
+  warnings: string[];
+}
+
+export const AVISO_SERVIDOR_INATIVO =
+  'Servidor inativo (aposentado): o Decreto nº 13.048/2026 destina o RSC-PCCTAE a servidores ativos. O sistema permite montar o dossiê, mas o pedido não tem previsão normativa e está sujeito a indeferimento.';
+
+export function isServidorInativo(servidor: Pick<Servidor, 'situacao_funcional'>): boolean {
+  return !!servidor.situacao_funcional && servidor.situacao_funcional !== 'Ativo';
 }
 
 export interface ProbationaryStatus {
@@ -183,10 +192,11 @@ export function getServidorFunctionalEligibility(
   servidor: Pick<Servidor, 'situacao_funcional' | 'data_ingresso_ife' | 'data_ingresso'>,
 ): FunctionalEligibility {
   const reasons: string[] = [];
+  const warnings: string[] = [];
   const probationaryStatus = getServidorProbationaryStatus(servidor);
 
-  if (servidor.situacao_funcional && servidor.situacao_funcional !== 'Ativo') {
-    reasons.push('O RSC-PCCTAE é aplicável apenas a servidor em situação funcional ativa.');
+  if (isServidorInativo(servidor)) {
+    warnings.push(AVISO_SERVIDOR_INATIVO);
   }
 
   if (probationaryStatus.inProbation) {
@@ -196,6 +206,7 @@ export function getServidorFunctionalEligibility(
   return {
     ok: reasons.length === 0,
     reasons,
+    warnings,
   };
 }
 

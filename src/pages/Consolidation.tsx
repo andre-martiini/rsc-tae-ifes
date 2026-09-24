@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { CheckCircle2, Download, AlertCircle, Loader2, Info, SearchCheck, Sparkles, ChevronDown, FileText } from 'lucide-react';
+import { CheckCircle2, Download, AlertCircle, AlertTriangle, Loader2, Info, SearchCheck, Sparkles, ChevronDown, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import AppLogo from '../components/AppLogo';
@@ -226,10 +226,13 @@ export default function Consolidation() {
       },
       {
         ok: functionalEligibility.ok,
+        warning: functionalEligibility.warnings.length > 0,
         label: 'Elegibilidade funcional',
-        detail: functionalEligibility.ok
-          ? 'Situação funcional compatível com a emissão do pedido.'
-          : functionalEligibility.reasons.join(' '),
+        detail: !functionalEligibility.ok
+          ? functionalEligibility.reasons.join(' ')
+          : functionalEligibility.warnings.length > 0
+            ? functionalEligibility.warnings.join(' ')
+            : 'Situação funcional compatível com a emissão do pedido.',
         action: functionalEligibility.ok ? undefined : { label: 'Completar perfil', href: '/perfil' },
       },
       {
@@ -525,17 +528,19 @@ export default function Consolidation() {
                 )}>
                   <div className={cn(
                     "flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-all border-2",
-                    check.ok
-                      ? "bg-emerald-50 border-emerald-200 text-emerald-600"
-                      : "bg-white border-amber-200 text-amber-500 shadow-sm"
+                    check.ok && check.warning
+                      ? "bg-amber-50 border-amber-300 text-amber-600"
+                      : check.ok
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                        : "bg-white border-amber-200 text-amber-500 shadow-sm"
                   )}>
-                    {check.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />}
+                    {check.ok && check.warning ? <AlertTriangle className="h-3.5 w-3.5" /> : check.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <div className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />}
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className={cn("text-[13px] font-black uppercase tracking-tight leading-none", check.ok ? "text-gray-500" : "text-gray-900")}>
                       {check.label}
                     </span>
-                    <p className="mt-0.5 text-[11px] font-medium text-gray-500 leading-tight">{check.detail}</p>
+                    <p className={cn("mt-0.5 text-[11px] font-medium leading-tight", check.ok && check.warning ? "text-amber-700" : "text-gray-500")}>{check.detail}</p>
                   </div>
                   {check.action && (
                     <button

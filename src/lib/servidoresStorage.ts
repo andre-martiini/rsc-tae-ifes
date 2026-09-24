@@ -4,6 +4,26 @@ const DB_NAME = 'rsc-tae-servidores';
 const STORE_NAME = 'servidores';
 const DB_VERSION = 1;
 
+/** Incrementar sempre que public/cadastro_base.csv for substituído, para recarregar a base já salva nos navegadores. */
+export const SERVIDORES_BASE_VERSION = '2026-07-ativos-e-aposentados';
+const BASE_VERSION_KEY = 'rsc-tae-servidores-base-version';
+
+export function getStoredBaseVersion(): string | null {
+  try {
+    return window.localStorage.getItem(BASE_VERSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredBaseVersion(version: string): void {
+  try {
+    window.localStorage.setItem(BASE_VERSION_KEY, version);
+  } catch {
+    // Sem localStorage a base será recarregada na próxima visita; não há prejuízo funcional.
+  }
+}
+
 export interface ServidorBase {
   id: string; // Id_SERVIDOR_PORTAL
   nome: string;

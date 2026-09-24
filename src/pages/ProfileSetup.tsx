@@ -13,7 +13,7 @@ import {
   SITUACOES_FUNCIONAIS,
   type Servidor,
 } from '../data/mock';
-import { getServidorProbationaryStatus } from '../lib/rsc';
+import { AVISO_SERVIDOR_INATIVO, getServidorProbationaryStatus } from '../lib/rsc';
 import InstituicaoCombobox from '../components/InstituicaoCombobox';
 import { normalizeText } from '../lib/utils';
 
@@ -208,10 +208,15 @@ export default function ProfileSetup() {
                 >
                   {SITUACOES_FUNCIONAIS.map((item) => (
                     <option key={item} value={item}>
-                      {item}
+                      {item === 'Inativo' ? 'Inativo (aposentado)' : item}
                     </option>
                   ))}
                 </select>
+                {form.situacao_funcional === 'Inativo' && (
+                  <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
+                    ⚠️ {AVISO_SERVIDOR_INATIVO}
+                  </p>
+                )}
                 {servidor?.database_situacao && !normalizeText(servidor.database_situacao).includes('ativo permanente') && (
                   <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
                     ℹ️ Vínculo oficial na planilha: {servidor.database_situacao}. O RSC é destinado a servidores em efetivo exercício.
