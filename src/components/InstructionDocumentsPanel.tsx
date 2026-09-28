@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import type { Documento } from '../data/mock';
 import {
   getInstructionDocument,
-  INSTRUCTION_DOCUMENT_SLOTS,
+  getInstructionDocumentSlots,
 } from '../lib/instructionDocuments';
 import { cn } from '../lib/utils';
 
@@ -24,6 +24,8 @@ export default function InstructionDocumentsPanel() {
     () => documentos.filter((doc) => doc.servidor_id === servidor?.id),
     [documentos, servidor?.id],
   );
+
+  const slots = getInstructionDocumentSlots(servidor);
 
   if (!servidor) return null;
 
@@ -108,7 +110,7 @@ export default function InstructionDocumentsPanel() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
-          {INSTRUCTION_DOCUMENT_SLOTS.map((slot) => {
+          {slots.map((slot) => {
             const doc = getInstructionDocument(docsDoServidor, slot.categoria);
             const busy = busyCategory === slot.categoria;
 

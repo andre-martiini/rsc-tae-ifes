@@ -13,7 +13,7 @@ import { getDistinctRscCriterionCount, getEligibleRscLevel, getServidorProbation
 import MainLayout from '../components/MainLayout';
 import VideoModal from '../components/VideoModal';
 import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE } from '../data/tutorialVideo';
-import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
+import { getRequiredInstructionCategories } from '../lib/instructionDocuments';
 import {
   readDismissedScoreMarginLevels,
   shouldShowScoreMarginAlert,
@@ -125,7 +125,7 @@ export default function Dashboard() {
     );
   }, [activeSessionId]);
 
-  const requiredInstructionDocumentsComplete = REQUIRED_INSTRUCTION_CATEGORIES.every(
+  const requiredInstructionDocumentsComplete = getRequiredInstructionCategories(servidor).every(
     (categoria) => documentos.some((documento) => documento.categoria_instrucao === categoria),
   );
   const scoreMarginAlertVisible = !!nivelDoAviso && shouldShowScoreMarginAlert({
