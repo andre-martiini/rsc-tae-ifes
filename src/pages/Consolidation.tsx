@@ -23,7 +23,7 @@ import {
 } from '../lib/documentOrdering';
 import { exportExtratoAvulso, exportPacoteRSC } from '../lib/pacoteExport';
 import { getDocumentosExportadosEsperados } from '../lib/instrucaoSipac';
-import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
+import { getRequiredInstructionCategories } from '../lib/instructionDocuments';
 import { addPointValues, formatPointValue, sumPointValues } from '../lib/points';
 import {
   getEligibleRscLevel,
@@ -142,10 +142,14 @@ export default function Consolidation() {
     ),
     [documentos, servidor.id],
   );
-  const requiredInstructionCount = REQUIRED_INSTRUCTION_CATEGORIES.filter((categoria) =>
+  const requiredInstructionCategories = useMemo(
+    () => getRequiredInstructionCategories(servidor),
+    [servidor],
+  );
+  const requiredInstructionCount = requiredInstructionCategories.filter((categoria) =>
     instructionCategories.has(categoria),
   ).length;
-  const instructionDocumentsOk = requiredInstructionCount === REQUIRED_INSTRUCTION_CATEGORIES.length;
+  const instructionDocumentsOk = requiredInstructionCount === requiredInstructionCategories.length;
   const memorialTexto = processo.memorial_texto ?? '';
   const memorialOk = memorialTexto.trim().length > 0;
   const lancamentosOrdenados = useMemo(
@@ -286,8 +290,10 @@ export default function Consolidation() {
         ok: instructionDocumentsOk,
         label: 'Documentos de instrução',
         detail: instructionDocumentsOk
-          ? 'Diploma/certificado, portaria de estabilidade e três extratos SIAPE anexados.'
-          : `${requiredInstructionCount}/${REQUIRED_INSTRUCTION_CATEGORIES.length} documentos obrigatórios anexados.`,
+          ? (requiredInstructionCategories.includes('portaria_estabilidade')
+            ? 'Diploma/certificado, portaria de estabilidade e três extratos SIAPE anexados.'
+            : 'Diploma/certificado e três extratos SIAPE anexados (portaria de estabilidade dispensada para aposentado).')
+          : `${requiredInstructionCount}/${requiredInstructionCategories.length} documentos obrigatórios anexados.`,
         action: instructionDocumentsOk ? undefined : { label: 'Anexar documentos', onClick: () => scrollToSection('instruction-documents-section') },
       },
       {
