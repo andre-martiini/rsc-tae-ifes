@@ -670,7 +670,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
     });
 
-    if (duplicatedDocument) {
+    // O mesmo PDF pode instruir mais de um slot (ex.: o extrato funcional que
+    // também comprova a estabilidade). Reaproveitar o registro existente faria o
+    // arquivo "pular" de um campo para o outro, então nesse caso guardamos uma
+    // cópia independente para o novo slot.
+    const ocupaOutroSlotDeInstrucao =
+      !!duplicatedDocument &&
+      !!categoriaInstrucao &&
+      !!duplicatedDocument.categoria_instrucao &&
+      duplicatedDocument.categoria_instrucao !== categoriaInstrucao;
+
+    if (duplicatedDocument && !ocupaOutroSlotDeInstrucao) {
       // Reclassificar um comprobatório vinculado a lançamento como documento de
       // instrução mudaria sua natureza no dossiê e afetaria os lançamentos que
       // dependem dele — nesse caso, reporta o conflito sem alterar nada.

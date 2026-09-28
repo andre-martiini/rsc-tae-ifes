@@ -14,6 +14,16 @@ export interface UpdateEntry {
 
 export const SYSTEM_UPDATES: UpdateEntry[] = [
   {
+    date: '28 de setembro de 2026',
+    title: 'Aposentado consegue fechar o dossiê: portaria de estabilidade dispensada e arquivo deixa de pular de campo',
+    description:
+      'Relato da Gestão de Pessoas: um servidor aposentado travava na Consolidação com "4/5 documentos obrigatórios anexados", porque não tinha (nem conseguia resgatar) a portaria de estabilidade. Ao tentar contornar usando o extrato CDCOINDFUN nos dois campos, o arquivo sumia do campo de origem.',
+    fixes: [
+      'Para servidor com situação funcional "Inativo (aposentado)", a Portaria de estabilidade passa a ser opcional — a aposentadoria já pressupõe o estágio probatório concluído. O checklist de Documentos de instrução passa a exigir 4 documentos nesse caso, e o dossiê pode ser fechado normalmente.',
+      'O mesmo PDF pode agora ocupar mais de um campo de documento de instrução. Antes, anexar um arquivo já usado em outro campo apenas o movia, fazendo-o desaparecer do campo de origem.',
+    ],
+  },
+  {
     date: '24 de setembro de 2026',
     title: 'Servidores aposentados podem montar o dossiê, com aviso de falta de previsão normativa',
     description:

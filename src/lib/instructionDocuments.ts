@@ -1,4 +1,5 @@
-import type { Documento } from '../data/mock';
+import type { Documento, Servidor } from '../data/mock';
+import { isServidorInativo } from './rsc';
 
 export type InstructionDocumentSlot = {
   categoria: NonNullable<Documento['categoria_instrucao']>;
@@ -54,6 +55,34 @@ export const INSTRUCTION_DOCUMENT_SLOTS: readonly InstructionDocumentSlot[] = [
 export const REQUIRED_INSTRUCTION_CATEGORIES = INSTRUCTION_DOCUMENT_SLOTS
   .filter((slot) => slot.obrigatorio)
   .map((slot) => slot.categoria);
+
+const DESCRICAO_ESTABILIDADE_INATIVO =
+  'Servidor aposentado: a portaria de estabilidade é dispensada, porque a aposentadoria pressupõe o estágio probatório já concluído. Anexe-a apenas se tiver o ato em mãos.';
+
+/**
+ * Slots de instrução ajustados à situação funcional do servidor. O aposentado
+ * costuma não ter (nem conseguir resgatar) a portaria de estabilidade, então o
+ * slot deixa de ser obrigatório para ele e não trava o fechamento do dossiê.
+ */
+export function getInstructionDocumentSlots(
+  servidor?: Pick<Servidor, 'situacao_funcional'> | null,
+): readonly InstructionDocumentSlot[] {
+  if (!servidor || !isServidorInativo(servidor)) return INSTRUCTION_DOCUMENT_SLOTS;
+
+  return INSTRUCTION_DOCUMENT_SLOTS.map((slot) =>
+    slot.categoria === 'portaria_estabilidade'
+      ? { ...slot, obrigatorio: false, descricao: `${slot.descricao} ${DESCRICAO_ESTABILIDADE_INATIVO}` }
+      : slot,
+  );
+}
+
+export function getRequiredInstructionCategories(
+  servidor?: Pick<Servidor, 'situacao_funcional'> | null,
+): NonNullable<Documento['categoria_instrucao']>[] {
+  return getInstructionDocumentSlots(servidor)
+    .filter((slot) => slot.obrigatorio)
+    .map((slot) => slot.categoria);
+}
 
 export function getInstructionDocument(
   documentos: Documento[],
