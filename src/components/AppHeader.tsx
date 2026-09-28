@@ -4,7 +4,7 @@ import { formatPointValue, sumPointValues } from '../lib/points';
 import { useAppContext } from '../context/AppContext';
 import { getDistinctRscCriterionCount, getEligibleRscLevel, validateLevelConstraints } from '../lib/rsc';
 import { RSC_LEVELS } from '../data/mock';
-import { REQUIRED_INSTRUCTION_CATEGORIES } from '../lib/instructionDocuments';
+import { getRequiredInstructionCategories } from '../lib/instructionDocuments';
 import { shouldShowScoreMarginAlert } from '../lib/scoreMarginAlert';
 
 import { useBackup } from '../hooks/useBackup';
@@ -46,7 +46,7 @@ export default function AppHeader({
   const scoreMarginIndicatorVisible = !!nivelDoAviso && shouldShowScoreMarginAlert({
     totalPoints: totalPontos,
     minimumPoints: nivelDoAviso.pontosMinimos,
-    requiredDocumentsComplete: REQUIRED_INSTRUCTION_CATEGORIES.every(
+    requiredDocumentsComplete: getRequiredInstructionCategories(servidor).every(
       (categoria) => documentos.some((documento) => documento.categoria_instrucao === categoria),
     ),
     dismissed: false,
