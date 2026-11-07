@@ -7,7 +7,7 @@ import {
   normalizeName,
   shardOf,
   type ServidorRow,
-} from '../shared/servidorLookup';
+} from '../shared/servidorLookup.js';
 
 // Consulta de UM servidor por nome completo exato. Não lista nem faz busca parcial.
 // A base fica no Firestore (regras fechadas ao cliente), lida só aqui com conta de serviço.
