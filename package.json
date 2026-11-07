@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "export-rol": "tsx scripts/export-rol.ts",
     "check-rol": "tsx scripts/export-rol.ts --check",
+    "deploy:servidor": "bash functions/deploy-servidor.sh",
     "migrate:auditoria-verificada": "tsx scripts/migrate-auditoria-verificada.ts"
   },
   "dependencies": {
