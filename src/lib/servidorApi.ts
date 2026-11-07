@@ -1,3 +1,6 @@
+// Cloud Function no projeto comissao-rsc-tae (functions/servidor.ts); sem chave na Vercel.
+const SERVIDOR_API = 'https://us-central1-comissao-rsc-tae.cloudfunctions.net/consultarServidorBase';
+
 export interface ServidorBase {
   id: string;
   nome: string;
@@ -13,7 +16,7 @@ export interface ServidorBase {
 /** Consulta no backend um servidor pelo nome completo exato. Devolve [] se não achar ou se o serviço falhar. */
 export async function buscarServidorPorNome(nome: string, signal?: AbortSignal): Promise<ServidorBase[]> {
   try {
-    const res = await fetch(`/api/servidor?nome=${encodeURIComponent(nome)}`, { signal });
+    const res = await fetch(`${SERVIDOR_API}?nome=${encodeURIComponent(nome)}`, { signal });
     if (!res.ok) return [];
     const data = (await res.json()) as { matches?: ServidorBase[] };
     return data.matches ?? [];
