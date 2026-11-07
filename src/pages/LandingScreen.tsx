@@ -35,16 +35,7 @@ import type { SessionSummary } from '../context/AppContext';
 import { ESCOLARIDADES, type Servidor } from '../data/mock';
 import { SYSTEM_UPDATES } from '../data/updates';
 import { TUTORIAL_VIDEO_ID, TUTORIAL_VIDEO_TITLE } from '../data/tutorialVideo';
-import {
-  clearDatabase,
-  getServidoresCount,
-  getStoredBaseVersion,
-  saveServidoresBatch,
-  searchServidorByName,
-  SERVIDORES_BASE_VERSION,
-  setStoredBaseVersion,
-  type ServidorBase,
-} from '../lib/servidoresStorage';
+import { buscarServidorPorNome, type ServidorBase } from '../lib/servidorApi';
 
 interface ConflictState {
   existingSession: SessionSummary;
@@ -64,75 +55,26 @@ export default function LandingScreen() {
   const [suggestions, setSuggestions] = useState<ServidorBase[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  React.useEffect(() => {
-    getServidoresCount().then(async (count) => {
-      if (count === 0 || getStoredBaseVersion() !== SERVIDORES_BASE_VERSION) {
-        try {
-          const response = await fetch('/cadastro_base.csv');
-          if (response.ok) {
-            const text = await response.text();
-            const lines = text.split(/\r?\n/);
-            if (lines.length > 0) {
-              const headerLine = lines[0];
-              let separator = ';';
-              if (headerLine.includes('\t')) {
-                separator = '\t';
-              } else if (headerLine.includes(',')) {
-                separator = ',';
-              }
-              const headers = headerLine.split(separator).map((h) => h.trim().replace(/^"|"$/g, ''));
-              const parsedRecords: any[] = [];
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout>>();
+  const searchAbort = React.useRef<AbortController>();
 
-              for (let i = 1; i < lines.length; i++) {
-                const line = lines[i].trim();
-                if (!line) continue;
-
-                let parts: string[] = [];
-                if (line.includes('"')) {
-                  const regex = new RegExp(`\\s*${separator}\\s*(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)`, 'g');
-                  parts = line.split(regex).map((p) => p.trim().replace(/^"|"$/g, ''));
-                } else {
-                  parts = line.split(separator).map((p) => p.trim());
-                }
-
-                if (parts.length >= headers.length) {
-                  const obj: any = {};
-                  headers.forEach((header, index) => {
-                    obj[header] = parts[index] || '';
-                  });
-                  parsedRecords.push(obj);
-                }
-              }
-
-              if (parsedRecords.length > 0) {
-                await saveServidoresBatch(parsedRecords);
-                setStoredBaseVersion(SERVIDORES_BASE_VERSION);
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Falha ao inicializar base de servidores:', err);
-        }
-      }
-    });
-  }, []);
-
-  const handleNameChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setForm((prev) => ({ ...prev, nome_completo: val }));
     setSelectedServidorBase(null);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    clearTimeout(searchTimer.current);
+    searchAbort.current?.abort();
 
-    if (val.trim().length >= 3) {
-      try {
-        const matches = await searchServidorByName(val, 8);
+    // O backend só responde a nome completo exato; espera o usuário parar de digitar.
+    if (val.trim().split(/\s+/).length >= 2 && val.trim().length >= 8) {
+      searchTimer.current = setTimeout(async () => {
+        searchAbort.current = new AbortController();
+        const matches = await buscarServidorPorNome(val, searchAbort.current.signal);
         setSuggestions(matches);
-        setShowSuggestions(true);
-      } catch (err) {
-        console.error(err);
-      }
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
+        setShowSuggestions(matches.length > 0);
+      }, 700);
     }
   };
 
@@ -436,7 +378,7 @@ export default function LandingScreen() {
                         placeholder="Ex.: Joao da Silva"
                         value={form.nome_completo}
                         onChange={handleNameChange}
-                        onFocus={() => form.nome_completo.trim().length >= 3 && setShowSuggestions(true)}
+                        onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                         onBlur={() => setTimeout(() => setShowSuggestions(false), 250)}
                         autoComplete="off"
                       />
@@ -460,7 +402,7 @@ export default function LandingScreen() {
                       )}
                       {!selectedServidorBase && form.nome_completo.trim().length >= 3 && (
                         <p className="text-[11px] font-medium text-gray-500 mt-1 leading-normal">
-                          Não encontrou seu nome na lista? Digite o nome completo e o SIAPE manualmente. Se você é aposentado(a), informe a situação funcional &quot;Inativo (aposentado)&quot; no Perfil.
+                          Digite o nome completo para buscar seus dados oficiais; se não aparecerem, informe o SIAPE manualmente. Se você é aposentado(a), informe a situação funcional &quot;Inativo (aposentado)&quot; no Perfil.
                         </p>
                       )}
                     </div>
@@ -478,7 +420,7 @@ export default function LandingScreen() {
                       />
                       {selectedServidorBase && !form.siape.trim().startsWith(selectedServidorBase.matricula.replace(/\D/g, '')) && (
                         <p className="text-[11px] font-medium text-amber-600 mt-1 leading-normal">
-                          ⚠️ O SIAPE não coincide com o prefixo da base pública (esperado: {selectedServidorBase.matricula.replace(/\D/g, '')}).
+                          ⚠️ O SIAPE não coincide com o prefixo da base oficial (esperado: {selectedServidorBase.matricula.replace(/\D/g, '')}).
                         </p>
                       )}
                     </div>
